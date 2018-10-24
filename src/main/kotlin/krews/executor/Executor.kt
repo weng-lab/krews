@@ -14,12 +14,12 @@ interface EnvironmentExecutor {
     /**
      * Execute task for the environment. Will usually consist of running a docker container.
      */
-    fun executeTask(workflowRun: WorkflowRun, taskConfig: TaskConfig, image: String, script: String?, inputItem: Any, outputItem: Any?)
+    fun executeTask(workflowRunDir: String, taskConfig: TaskConfig, image: String, script: String?, inputItem: Any, outputItem: Any?)
 
     /**
-     * Copy cached output files from given TaskRun from previous into current workflow run directory
+     * Copy cached output files from one workflow run directory to another
      */
-    fun copyCachedOutputs(workflowRun: WorkflowRun, cachedOutputTask: TaskRun)
+    fun copyCachedOutputs(fromWorkflowDir: String, toWorkflowDir: String, outputFiles: Set<File>)
 
     /**
      * Download the database file and return path if remote, otherwise just return path
@@ -38,7 +38,7 @@ fun getFilesForObject(obj: Any?): Set<File> {
         is Array<*> -> obj.flatMap { getFilesForObject(it) }.toSet()
         is Collection<*> -> obj.flatMap { getFilesForObject(it) }.toSet()
         is Map<*,*> -> obj.values.flatMap { getFilesForObject(it) }.toSet()
-        else -> obj::class.memberProperties.flatMap { getFilesForObject((it as KProperty1<Any, *>).get(it)) }.toSet()
+        else -> obj::class.memberProperties.flatMap { getFilesForObject((it as KProperty1<Any, *>).get(obj)) }.toSet()
     }
 }
 

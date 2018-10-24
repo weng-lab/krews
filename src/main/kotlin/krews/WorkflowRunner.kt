@@ -6,6 +6,7 @@ import krews.config.WorkflowConfig
 import krews.db.*
 import krews.executor.EnvironmentExecutor
 import krews.executor.LocalExecutor
+import krews.executor.getFilesForObject
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -16,6 +17,8 @@ import reactor.core.scheduler.Schedulers
 import java.util.stream.Collectors
 
 val outputMapper = jacksonObjectMapper()
+
+private fun getWorkflowRunDir(workflowRun: WorkflowRun) = workflowRun.startTime.millis.toString()
 
 class WorkflowRunner(private val workflow: Workflow, private val workflowConfig: WorkflowConfig) {
 
@@ -30,7 +33,7 @@ class WorkflowRunner(private val workflow: Workflow, private val workflowConfig:
     }
 
     fun run() {
-
+        // Create the workflow run in the database
         transaction(db) {
             workflowRun = WorkflowRun.new {
                 workflowName = workflow.name
@@ -41,7 +44,7 @@ class WorkflowRunner(private val workflow: Workflow, private val workflowConfig:
         // Set execute function for each task.
         workflow.tasks.forEach { task ->
             task.executeFn = { script, inputItem, outputItem ->
-                runTask(workflowRun, task.name, workflowConfig.tasks[task.name]!!, task.image, script, inputItem, outputItem)
+                runTask(workflowRun, task.name, workflowConfig.tasks[task.name]!!, task.image, script, inputItem, outputItem, task.outputClass)
             }
             task.connect()
         }
@@ -63,7 +66,7 @@ class WorkflowRunner(private val workflow: Workflow, private val workflowConfig:
     }
 
     private fun runTask(workflowRun: WorkflowRun, taskName: String, taskConfig: TaskConfig,
-                        image: String, script: String?, inputItem: Any, outputItem: Any?) {
+                        image: String, script: String?, inputItem: Any, outputItem: Any?, outputClass: Class<*>) {
         val inputHash = inputItem.hashCode()
         val scriptHash = script?.hashCode()
 
@@ -91,20 +94,20 @@ class WorkflowRunner(private val workflow: Workflow, private val workflowConfig:
             }
         }
 
-        // If we have a cached output we can use for this task that's not from this run, copy the files over.
-        // If it is from this run, the file should already exist, so it shouldn't need to be copied.
-        if (latestCachedOutputTask != null && latestCachedOutputTask.workflowRun.id.value != workflowRun.id.value) {
-            executor.copyCachedOutputs(workflowRun, latestCachedOutputTask)
-        }
-
-        // Only execute if we aren't using the cached value
-        if (latestCachedOutputTask == null) {
-            transaction(db) {
-                executor.executeTask(workflowRun, taskConfig, image, script, inputItem, outputItem)
-            }
-        }
-
         transaction(db) {
+            // If we have a cached output we can use for this task that's not from this run, copy the files over.
+            // If it is from this run, the file should already exist, so it shouldn't need to be copied.
+            if (latestCachedOutputTask != null && latestCachedOutputTask.workflowRun.id.value != workflowRun.id.value) {
+                val cachedOutput = outputMapper.readValue(latestCachedOutputTask.outputJson, outputClass)
+                val outputFiles = getFilesForObject(cachedOutput)
+                executor.copyCachedOutputs(getWorkflowRunDir(latestCachedOutputTask.workflowRun), getWorkflowRunDir(workflowRun), outputFiles)
+            }
+
+            // Only execute if we aren't using the cached value
+            if (latestCachedOutputTask == null) {
+                executor.executeTask(getWorkflowRunDir(workflowRun), taskConfig, image, script, inputItem, outputItem)
+            }
+
             taskRun!!.completedSuccessfully = true
             taskRun!!.completedTime = DateTime.now()
         }

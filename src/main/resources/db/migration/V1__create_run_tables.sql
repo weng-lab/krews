@@ -15,8 +15,8 @@ CREATE TABLE task_run (
     start_time INTEGER NOT NULL,
     completed_successfully INTEGER DEFAULT 0,
     completed_time INTEGER,
-    input_hash TEXT NOT NULL,
-    script_hash TEXT,
+    input_hash INTEGER NOT NULL,
+    script_hash INTEGER,
     image TEXT NOT NULL,
     output_json TEXT,
     FOREIGN KEY(workflow_run) REFERENCES workflow_run(id)

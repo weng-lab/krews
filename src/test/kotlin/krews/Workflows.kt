@@ -8,8 +8,13 @@ object SimpleWorkflow : Workflow("config-sample") {
     val base64 = task<Pair<Int, String>, File>("sample") {
         image("alpine:3.8")
         input { messages }
-        outputFn { File("${inputItem.first}.txt") }
-        scriptFn { "echo ${inputItem.second} | base64 > ${inputItem.first}.txt" }
+        outputFn { File("base64/${inputItem.first}.txt") }
+        scriptFn {
+            """
+            mkdir base64
+            echo "${inputItem.second}" | base64 > base64/${inputItem.first}.txt
+            """.trimIndent()
+        }
     }
 
     val gzip = task<File, File>("sample2") {

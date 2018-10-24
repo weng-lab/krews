@@ -14,8 +14,8 @@ open class Workflow {
         this.name = name
     }
 
-    fun <I : Any, O : Any> task(name: String, init: TaskBuilder<I, O>.() -> Unit): Task<I, O> {
-        val builder = TaskBuilder<I, O>(this, name)
+    inline fun <I : Any, reified O : Any> task(name: String, init: TaskBuilder<I, O>.() -> Unit): Task<I, O> {
+        val builder = TaskBuilder<I, O>(this, name, O::class.java)
         builder.init()
         val task = builder.build()
         tasks.add(task)

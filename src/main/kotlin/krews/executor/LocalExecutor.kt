@@ -8,9 +8,10 @@ import krews.File
 import krews.config.DockerConfig
 import krews.config.TaskConfig
 import krews.config.WorkflowConfig
-import krews.db.TaskRun
-import krews.db.WorkflowRun
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
+import java.io.BufferedOutputStream
+import java.io.FileOutputStream
+import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -30,24 +31,26 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : EnvironmentExecutor {
         return workflowBasePath.resolve(DB_FILENAME).toString()
     }
 
-    override fun copyCachedOutputs(workflowRun: WorkflowRun, cachedOutputTask: TaskRun) {
-        val runBasePath = Paths.get(workflowBasePath.toString(), RUN_DIR, workflowRun.startTime.millis.toString())
-        val previousRunBasePath = Paths.get(workflowBasePath.toString(), RUN_DIR, cachedOutputTask.workflowRun.startTime.millis.toString())
-        val outputFiles = getFilesForObject(cachedOutputTask)
+    override fun copyCachedOutputs(fromWorkflowDir: String, toWorkflowDir: String, outputFiles: Set<File>) {
+        val fromBasePath = Paths.get(workflowBasePath.toString(), RUN_DIR, fromWorkflowDir)
+        val toBasePath = Paths.get(workflowBasePath.toString(), RUN_DIR, toWorkflowDir)
         outputFiles.forEach {
-            Files.copy(previousRunBasePath.resolve(it.path), runBasePath.resolve(it.path))
+            Files.copy(fromBasePath.resolve(it.path), toBasePath.resolve(it.path))
         }
     }
 
-    override fun executeTask(workflowRun: WorkflowRun, taskConfig: TaskConfig, image: String, script: String?, inputItem: Any, outputItem: Any?) {
-        val runBasePath = Paths.get(workflowBasePath.toString(), RUN_DIR, workflowRun.startTime.millis.toString())
+    override fun executeTask(workflowRunDir: String, taskConfig: TaskConfig, image: String, script: String?, inputItem: Any, outputItem: Any?) {
+        val runBasePath = Paths.get(workflowBasePath.toString(), RUN_DIR, workflowRunDir)
 
         // Create container configuration
         val containerConfig = ContainerConfig.builder().image(image)
         if (script != null) {
-            containerConfig.entrypoint("/bin/sh -c")
+            containerConfig.entrypoint("/bin/sh", "-c")
             containerConfig.cmd(script)
         }
+
+        // Pull image from remote
+        dockerClient.pull(image)
 
         // Create the docker container from config
         val containerCreation = dockerClient.createContainer(containerConfig.build())
@@ -87,12 +90,32 @@ private fun copyInputFiles(dockerClient: DockerClient, runBasePath: Path, contai
 
 private fun copyOutputFiles(dockerClient: DockerClient, runBasePath: Path, containerId: String, outputFiles: Set<File>) {
     if (outputFiles.isEmpty()) return
+    Files.createDirectories(runBasePath)
     outputFiles.forEach { outputFile ->
-        TarArchiveInputStream(dockerClient.archiveContainer(containerId, outputFile.path)).use { tarStream ->
-            while (true) {
-                val tarEntry = tarStream.nextTarEntry?: break
-                val outputPath = runBasePath.resolve(outputFile.path)
-                tarEntry.file?.copyTo(outputPath.toFile())
+        extractTarStream(dockerClient.archiveContainer(containerId, outputFile.path), runBasePath.resolve(outputFile.path).parent)
+    }
+}
+
+private fun extractTarStream(tarInputStream: InputStream, outBasePath: Path) {
+    Files.createDirectories(outBasePath)
+    TarArchiveInputStream(tarInputStream).use { tarStream ->
+        while (true) {
+            val tarEntry = tarStream.nextEntry?: break
+            val tarFileName = outBasePath.resolve(tarEntry.name)
+            if (tarEntry.isDirectory) {
+                Files.createDirectories(tarFileName)
+                continue
+            }
+
+            BufferedOutputStream(FileOutputStream(tarFileName.toString())).use { outStream ->
+                val size = tarEntry.size.toInt()
+                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                var remaining = size
+                while (remaining > 0) {
+                    val len = tarInputStream.read(buffer, 0, Math.min(remaining, buffer.size))
+                    outStream.write(buffer, 0, len)
+                    remaining -= len
+                }
             }
         }
     }

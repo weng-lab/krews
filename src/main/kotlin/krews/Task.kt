@@ -13,7 +13,8 @@ class Task<I : Any, O : Any> internal constructor(
         val image: String,
         val input: Flux<I>,
         private val outputFn: (inputItem: I) -> O,
-        private val scriptFn: (inputItem: I) -> String) {
+        private val scriptFn: (inputItem: I) -> String,
+        internal val outputClass: Class<O>) {
 
     val output: Flux<O> = TopicProcessor.create<O>()
 
@@ -34,9 +35,12 @@ class Task<I : Any, O : Any> internal constructor(
 
 val workflow = Workflow()
 
-fun <I : Any, O : Any> task(name: String, init: TaskBuilder<I, O>.() -> Unit): Task<I, O> = workflow.task(name, init)
+inline fun <I : Any, reified O : Any> task(name: String, noinline init: TaskBuilder<I, O>.() -> Unit): Task<I, O> = workflow.task(name, init)
 
-class TaskBuilder<I : Any, O : Any> internal constructor(private val workflow: Workflow, private val name: String) {
+class TaskBuilder<I : Any, O : Any> @PublishedApi internal constructor(
+        private val workflow: Workflow,
+        private val name: String,
+        private val outputClass: Class<O>) {
 
     private var input: Publisher<I>? = null
     private var outputFn: ((inputItem: I) -> O)? = null
@@ -68,6 +72,7 @@ class TaskBuilder<I : Any, O : Any> internal constructor(private val workflow: W
         }
     }
 
+    @PublishedApi
     internal fun build(): Task<I, O> {
         val inputNN: Publisher<I> = checkNotNull(input)
         val inFlux: Flux<I> = if (inputNN is Flux) inputNN else Flux.from(inputNN)
@@ -78,7 +83,8 @@ class TaskBuilder<I : Any, O : Any> internal constructor(private val workflow: W
             labels = this.labels,
             input = inFlux,
             outputFn = checkNotNull(outputFn),
-            scriptFn = checkNotNull(scriptFn)
+            scriptFn = checkNotNull(scriptFn),
+            outputClass = outputClass
         )
     }
 
