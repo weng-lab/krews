@@ -1,25 +1,33 @@
 package krews.executor
 
-import com.spotify.docker.client.DefaultDockerClient
-import com.spotify.docker.client.DockerCertificates
-import com.spotify.docker.client.DockerClient
-import com.spotify.docker.client.messages.ContainerConfig
+import com.github.dockerjava.api.DockerClient
+import com.github.dockerjava.core.DefaultDockerClientConfig
+import com.github.dockerjava.core.DockerClientBuilder
+import com.github.dockerjava.core.command.PullImageResultCallback
+import com.github.dockerjava.core.command.WaitContainerResultCallback
+import com.github.dockerjava.jaxrs.JerseyDockerCmdExecFactory
 import krews.File
 import krews.config.DockerConfig
 import krews.config.TaskConfig
 import krews.config.WorkflowConfig
+import mu.KotlinLogging
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
-import java.io.BufferedOutputStream
-import java.io.FileOutputStream
-import java.io.InputStream
+import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream
+import org.apache.commons.io.FilenameUtils
+import org.apache.commons.io.IOUtils
+import java.io.*
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.util.zip.GZIPOutputStream
 
 
 val DEFAULT_LOCAL_BASE_DIR = "workflow-out"
 val RUN_DIR = "run"
 val DB_FILENAME = "metadata.db"
+
+private val log = KotlinLogging.logger {}
 
 class LocalExecutor(workflowConfig: WorkflowConfig) : EnvironmentExecutor {
 
@@ -35,56 +43,98 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : EnvironmentExecutor {
         val fromBasePath = Paths.get(workflowBasePath.toString(), RUN_DIR, fromWorkflowDir)
         val toBasePath = Paths.get(workflowBasePath.toString(), RUN_DIR, toWorkflowDir)
         outputFiles.forEach {
-            Files.copy(fromBasePath.resolve(it.path), toBasePath.resolve(it.path))
+            val fromPath = fromBasePath.resolve(it.path)
+            val toPath = toBasePath.resolve(it.path)
+            log.info { "Copying cached file from $fromPath to $toPath" }
+            Files.createDirectories(toPath)
+            Files.copy(fromPath, toPath)
         }
     }
 
     override fun executeTask(workflowRunDir: String, taskConfig: TaskConfig, image: String, script: String?, inputItem: Any, outputItem: Any?) {
         val runBasePath = Paths.get(workflowBasePath.toString(), RUN_DIR, workflowRunDir)
 
-        // Create container configuration
-        val containerConfig = ContainerConfig.builder().image(image)
-        if (script != null) {
-            containerConfig.entrypoint("/bin/sh", "-c")
-            containerConfig.cmd(script)
-        }
-
         // Pull image from remote
-        dockerClient.pull(image)
+        log.info { "Pulling image \"$image\" from remote..." }
+        dockerClient.pullImageCmd(image).exec(PullImageResultCallback()).awaitSuccess()
 
         // Create the docker container from config
-        val containerCreation = dockerClient.createContainer(containerConfig.build())
-        val containerId = containerCreation.id()!!
+        log.info { "Creating container from image \"$image\"" }
+        val containerCreationCmd = dockerClient.createContainerCmd(image)
+        if (script != null) {
+            containerCreationCmd.withEntrypoint("/bin/sh", "-c")
+            containerCreationCmd.withCmd(script)
+        }
+        val createContainerResponse = containerCreationCmd.exec()
+        val containerId = createContainerResponse.id!!
 
         // Copy input files into the docker container
-        copyInputFiles(dockerClient, runBasePath, containerId, getFilesForObject(inputItem))
+        val inputFiles = getFilesForObject(inputItem)
+        if (!inputFiles.isEmpty()) {
+            log.info { "Copying input files $inputFiles into newly created container $containerId" }
+            copyInputFiles(dockerClient, runBasePath, containerId, inputFiles)
+        }
 
         // Start the container and wait for it to finish processing
-        dockerClient.startContainer(containerId)
-        dockerClient.waitContainer(containerId)
+        log.info { "Starting container $containerId" }
+        dockerClient.startContainerCmd(containerId).exec()
+        log.info { "Waiting for container $containerId to finish..." }
+        dockerClient.waitContainerCmd(containerId).exec(WaitContainerResultCallback()).awaitCompletion()
 
         // Copy output files out of docker container
         if (outputItem != null) {
-            copyOutputFiles(dockerClient, runBasePath, containerId, getFilesForObject(outputItem))
+            val outputFiles = getFilesForObject(outputItem)
+            log.info { "Copying output files $outputFiles out of container $containerId" }
+            copyOutputFiles(dockerClient, runBasePath, containerId, outputFiles)
         }
     }
 
 }
 
 private fun buildDockerClient(config: DockerConfig): DockerClient {
-    val builder = DefaultDockerClient.fromEnv()
-    if (config.uri != null) builder.uri(config.uri)
-    if (config.certificatesPath != null) builder.dockerCertificates(DockerCertificates(Paths.get(config.certificatesPath)))
-    builder.readTimeoutMillis(config.readTimeout)
-    builder.connectTimeoutMillis(config.connectTimeout)
-    builder.connectionPoolSize(config.connectionPoolSize)
-    return builder.build()
+    val configBuilder = DefaultDockerClientConfig.createDefaultConfigBuilder()
+    if (config.uri != null) configBuilder.withDockerHost(config.uri)
+    if (config.certificatesPath != null) configBuilder.withDockerCertPath(config.certificatesPath)
+    val dockerConfig = configBuilder.build()
+
+    val dockerCmdExecFactory = JerseyDockerCmdExecFactory()
+        .withReadTimeout(config.readTimeout)
+        .withConnectTimeout(config.connectTimeout)
+        .withMaxTotalConnections(config.connectionPoolSize)
+
+    return DockerClientBuilder.getInstance(dockerConfig)
+        .withDockerCmdExecFactory(dockerCmdExecFactory)
+        .build()
 }
 
 private fun copyInputFiles(dockerClient: DockerClient, runBasePath: Path, containerId: String, inputFiles: Set<File>) {
     if (inputFiles.isEmpty()) return
     inputFiles.forEach { inputFile ->
-        dockerClient.copyToContainer(runBasePath.resolve(inputFile.path), containerId, inputFile.path)
+        val tarInputStream = createTarStream(runBasePath, Paths.get(inputFile.path))
+        dockerClient.copyArchiveToContainerCmd(containerId)
+            .withTarInputStream(tarInputStream)
+            //.withRemotePath(inputFile.path)
+            .exec()
+    }
+}
+
+private fun createTarStream(basePath: Path, filePath: Path): InputStream {
+    val archivePath = Files.createTempFile("docker-client-", ".tar.gz")
+    try {
+        TarArchiveOutputStream(GZIPOutputStream(BufferedOutputStream(Files.newOutputStream(archivePath)))).use { archiveOutStream ->
+            val fullFilePath = basePath.resolve(filePath)
+            val tarEntry = TarArchiveEntry(filePath.toString())
+            tarEntry.size = Files.size(fullFilePath)
+            archiveOutStream.putArchiveEntry(tarEntry)
+            BufferedInputStream(Files.newInputStream(fullFilePath)).use { fileInStream ->
+                IOUtils.copy(fileInStream, archiveOutStream)
+            }
+            archiveOutStream.closeArchiveEntry()
+        }
+        return Files.newInputStream(archivePath)
+    } catch (e: Exception) {
+        Files.delete(archivePath)
+        throw e
     }
 }
 
@@ -92,7 +142,8 @@ private fun copyOutputFiles(dockerClient: DockerClient, runBasePath: Path, conta
     if (outputFiles.isEmpty()) return
     Files.createDirectories(runBasePath)
     outputFiles.forEach { outputFile ->
-        extractTarStream(dockerClient.archiveContainer(containerId, outputFile.path), runBasePath.resolve(outputFile.path).parent)
+        val tarStream = dockerClient.copyArchiveFromContainerCmd(containerId, outputFile.path.toString()).exec()
+        extractTarStream(tarStream, runBasePath.resolve(outputFile.path).parent)
     }
 }
 

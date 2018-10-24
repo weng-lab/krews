@@ -8,7 +8,7 @@ data class LocalExecConfig (
 data class DockerConfig (
     val uri: String? = null,
     val certificatesPath: String? = null,
-    val connectTimeout: Long = 5_000,
-    val readTimeout: Long = 30_000,
+    val connectTimeout: Int = 5_000,
+    val readTimeout: Int = 30_000,
     val connectionPoolSize: Int = 100
 )

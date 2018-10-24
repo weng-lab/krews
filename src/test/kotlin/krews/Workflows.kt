@@ -3,7 +3,7 @@ package krews
 import reactor.core.publisher.toFlux
 
 object SimpleWorkflow : Workflow("config-sample") {
-    val messages = IntArray(100) { it }.map { it to "I am message #$it" }.toFlux()
+    val messages = IntArray(10) { it }.map { it to "I am message #$it" }.toFlux()
 
     val base64 = task<Pair<Int, String>, File>("sample") {
         image("alpine:3.8")
