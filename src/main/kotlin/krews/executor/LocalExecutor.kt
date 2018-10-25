@@ -6,7 +6,7 @@ import com.github.dockerjava.core.DockerClientBuilder
 import com.github.dockerjava.core.command.PullImageResultCallback
 import com.github.dockerjava.core.command.WaitContainerResultCallback
 import com.github.dockerjava.jaxrs.JerseyDockerCmdExecFactory
-import krews.File
+import krews.WFile
 import krews.config.DockerConfig
 import krews.config.TaskConfig
 import krews.config.WorkflowConfig
@@ -14,9 +14,11 @@ import mu.KotlinLogging
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream
-import org.apache.commons.io.FilenameUtils
 import org.apache.commons.io.IOUtils
-import java.io.*
+import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
+import java.io.FileOutputStream
+import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -39,14 +41,14 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : EnvironmentExecutor {
         return workflowBasePath.resolve(DB_FILENAME).toString()
     }
 
-    override fun copyCachedOutputs(fromWorkflowDir: String, toWorkflowDir: String, outputFiles: Set<File>) {
+    override fun copyCachedOutputs(fromWorkflowDir: String, toWorkflowDir: String, outputFiles: Set<WFile>) {
         val fromBasePath = Paths.get(workflowBasePath.toString(), RUN_DIR, fromWorkflowDir)
         val toBasePath = Paths.get(workflowBasePath.toString(), RUN_DIR, toWorkflowDir)
         outputFiles.forEach {
             val fromPath = fromBasePath.resolve(it.path)
             val toPath = toBasePath.resolve(it.path)
             log.info { "Copying cached file from $fromPath to $toPath" }
-            Files.createDirectories(toPath)
+            Files.createDirectories(toPath.parent)
             Files.copy(fromPath, toPath)
         }
     }
@@ -107,7 +109,7 @@ private fun buildDockerClient(config: DockerConfig): DockerClient {
         .build()
 }
 
-private fun copyInputFiles(dockerClient: DockerClient, runBasePath: Path, containerId: String, inputFiles: Set<File>) {
+private fun copyInputFiles(dockerClient: DockerClient, runBasePath: Path, containerId: String, inputFiles: Set<WFile>) {
     if (inputFiles.isEmpty()) return
     inputFiles.forEach { inputFile ->
         val tarInputStream = createTarStream(runBasePath, Paths.get(inputFile.path))
@@ -138,7 +140,7 @@ private fun createTarStream(basePath: Path, filePath: Path): InputStream {
     }
 }
 
-private fun copyOutputFiles(dockerClient: DockerClient, runBasePath: Path, containerId: String, outputFiles: Set<File>) {
+private fun copyOutputFiles(dockerClient: DockerClient, runBasePath: Path, containerId: String, outputFiles: Set<WFile>) {
     if (outputFiles.isEmpty()) return
     Files.createDirectories(runBasePath)
     outputFiles.forEach { outputFile ->

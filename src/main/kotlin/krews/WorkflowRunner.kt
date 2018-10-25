@@ -17,11 +17,12 @@ import reactor.core.publisher.Flux
 import reactor.core.scheduler.Schedulers
 import java.util.stream.Collectors
 
+
+private val log = KotlinLogging.logger {}
+
 val outputMapper = jacksonObjectMapper()
 
 private fun getWorkflowRunDir(workflowRun: WorkflowRun) = workflowRun.startTime.millis.toString()
-
-private val log = KotlinLogging.logger {}
 
 class WorkflowRunner(private val workflow: Workflow, private val workflowConfig: WorkflowConfig) {
 

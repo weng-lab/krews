@@ -1,9 +1,7 @@
 package krews.executor
 
-import krews.File
+import krews.WFile
 import krews.config.TaskConfig
-import krews.db.TaskRun
-import krews.db.WorkflowRun
 import kotlin.reflect.KProperty1
 import kotlin.reflect.full.memberProperties
 
@@ -19,7 +17,7 @@ interface EnvironmentExecutor {
     /**
      * Copy cached output files from one workflow run directory to another
      */
-    fun copyCachedOutputs(fromWorkflowDir: String, toWorkflowDir: String, outputFiles: Set<File>)
+    fun copyCachedOutputs(fromWorkflowDir: String, toWorkflowDir: String, outputFiles: Set<WFile>)
 
     /**
      * Download the database file and return path if remote, otherwise just return path
@@ -28,13 +26,13 @@ interface EnvironmentExecutor {
 }
 
 /**
- * Finds all Krews File objects in the given object by recursively looking through the given object graph.
+ * Finds all Krews WFile objects in the given object by recursively looking through the given object graph.
  */
 @Suppress("UNCHECKED_CAST")
-fun getFilesForObject(obj: Any?): Set<File> {
+fun getFilesForObject(obj: Any?): Set<WFile> {
     return when (obj) {
         null, is String, is Number, is Boolean, is Char -> setOf()
-        is File -> setOf(obj)
+        is WFile -> setOf(obj)
         is Array<*> -> obj.flatMap { getFilesForObject(it) }.toSet()
         is Collection<*> -> obj.flatMap { getFilesForObject(it) }.toSet()
         is Map<*,*> -> obj.values.flatMap { getFilesForObject(it) }.toSet()

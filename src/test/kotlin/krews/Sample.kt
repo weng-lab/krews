@@ -2,20 +2,20 @@ package krews
 
 import reactor.core.publisher.toMono
 
-val sample = task<String, File>("Sample") {
+val sample = task<String, WFile>("Sample") {
     image("test")
     input {
         "".toMono()
     }
     outputFn {
-        File("")
+        WFile("")
     }
     scriptFn {
         "testcmd $inputItem"
     }
 }
 
-val sample2 = task<File, String>("Sample2") {
+val sample2 = task<WFile, String>("Sample2") {
     labels("small", "fast")
     image("test")
     input {

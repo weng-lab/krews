@@ -4,8 +4,6 @@ import org.reactivestreams.Publisher
 import reactor.core.publisher.Flux
 import reactor.core.publisher.TopicProcessor
 
-data class File(val path: String)
-
 class Task<I : Any, O : Any> internal constructor(
         val workflow: Workflow,
         val name: String,
