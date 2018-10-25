@@ -5,6 +5,9 @@ import krews.config.TaskConfig
 import kotlin.reflect.KProperty1
 import kotlin.reflect.full.memberProperties
 
+val RUN_DIR = "run"
+val DB_FILENAME = "metadata.db"
+
 /**
  * Interface that deals with environment specific functionality, ie. moving files around and running containers.
  */

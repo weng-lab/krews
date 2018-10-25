@@ -3,12 +3,13 @@ package krews
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import krews.config.TaskConfig
 import krews.config.WorkflowConfig
-import krews.db.*
+import krews.db.TaskRun
+import krews.db.TaskRuns
+import krews.db.WorkflowRun
+import krews.db.migrateAndConnectDb
 import krews.executor.EnvironmentExecutor
-import krews.executor.LocalExecutor
 import krews.executor.getFilesForObject
 import mu.KotlinLogging
-import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.joda.time.DateTime
@@ -24,17 +25,10 @@ val outputMapper = jacksonObjectMapper()
 
 private fun getWorkflowRunDir(workflowRun: WorkflowRun) = workflowRun.startTime.millis.toString()
 
-class WorkflowRunner(private val workflow: Workflow, private val workflowConfig: WorkflowConfig) {
+class WorkflowRunner(private val workflow: Workflow, private val workflowConfig: WorkflowConfig, private val executor: EnvironmentExecutor) {
 
-    private val executor: EnvironmentExecutor
-    private val db: Database
+    private val db = migrateAndConnectDb(executor.prepareDatabaseFile())
     private lateinit var workflowRun: WorkflowRun
-
-    init {
-        //TODO: Add logic to pick environment here when we have more than just local
-        executor = LocalExecutor(workflowConfig)
-        db = migrateAndConnectDb(executor.prepareDatabaseFile())
-    }
 
     fun run() {
         // Create the workflow run in the database

@@ -7,5 +7,6 @@ data class TaskConfig (
 data class WorkflowConfig (
     val params: Map<String, Any>,
     val localExec: LocalExecConfig?,
+    val googleExec: GoogleExecConfig?,
     val tasks: Map<String, TaskConfig>
 )

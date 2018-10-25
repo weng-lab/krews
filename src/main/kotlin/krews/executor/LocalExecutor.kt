@@ -26,8 +26,6 @@ import java.util.zip.GZIPOutputStream
 
 
 val DEFAULT_LOCAL_BASE_DIR = "workflow-out"
-val RUN_DIR = "run"
-val DB_FILENAME = "metadata.db"
 
 private val log = KotlinLogging.logger {}
 

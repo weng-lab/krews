@@ -26,6 +26,8 @@ dependencies {
     compile("org.jetbrains.exposed", "exposed", "0.10.5")
     compile("org.xerial", "sqlite-jdbc", "3.25.2")
     compile("org.flywaydb", "flyway-core", "5.2.0")
+    compile("com.google.apis", "google-api-services-genomics", "v2alpha1-rev20181017-1.26.0")
+    compile("com.google.apis", "google-api-services-storage", "v1-rev20180905-1.26.0")
     testCompile("io.kotlintest", "kotlintest-runner-junit5", "3.1.10")
 }
 
