@@ -18,4 +18,6 @@ Thumbs.db
 .classpath
 .project
 
+.gradle/
+
 /workflow-out
