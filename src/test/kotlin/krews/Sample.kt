@@ -1,32 +1,39 @@
 package krews
 
-import reactor.core.publisher.toMono
+import reactor.core.publisher.toFlux
 
-val sample = task<String, WFile>("Sample") {
-    image("test")
-    input {
-        "".toMono()
+val messages = IntArray(5) { it }.map { it to "I am message #$it" }.toFlux()
+
+val base64 = task<Pair<Int, String>, WFile>("base64") {
+    docker {
+        image = "alpine:3.8"
+        dataDir = "/data"
     }
-    outputFn {
-        WFile("")
-    }
+
+    input = messages
+    outputFn { WFile("base64/${inputItem.first}.txt") }
     scriptFn {
-        "testcmd $inputItem"
+        """
+        mkdir /data/base64
+        echo "${inputItem.second}" | base64 > /data/base64/${inputItem.first}.txt
+        """.trimIndent()
     }
 }
 
-val sample2 = task<WFile, String>("Sample2") {
-    labels("small", "fast")
-    image("test")
-    input {
-        sample.output
+val gzip = task<WFile, WFile>("gzip") {
+    docker {
+        image = "alpine:3.8"
+        dataDir = "/data"
     }
-    outputFn {
-        ""
-    }
+
+    input = base64.output
+    outputFn { WFile("gzip/${inputItem.filename()}.gz") }
     scriptFn {
-        "testcmd ${inputItem.path}"
+        """
+        mkdir gzip
+        gzip /data/${inputItem.path} > /data/gzip/${inputItem.filename()}.gz
+        """.trimIndent()
     }
 }
 
-fun main(args: List<String>) = run("my-workflow", args)
+fun main(args: List<String>) = run("sample-workflow", args)

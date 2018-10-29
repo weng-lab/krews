@@ -1,6 +1,5 @@
 package krews
 
-import org.reactivestreams.Publisher
 import reactor.core.publisher.Flux
 import reactor.core.publisher.TopicProcessor
 
@@ -8,8 +7,9 @@ class Task<I : Any, O : Any> internal constructor(
         val workflow: Workflow,
         val name: String,
         val labels: List<String> = listOf(),
-        val image: String,
         val input: Flux<I>,
+        val docker: TaskDocker,
+        val requirements: TaskRequirements?,
         private val outputFn: (inputItem: I) -> O,
         private val scriptFn: (inputItem: I) -> String,
         internal val outputClass: Class<O>) {
@@ -31,61 +31,27 @@ class Task<I : Any, O : Any> internal constructor(
     }
 }
 
-val workflow = Workflow()
+data class TaskDocker(val image: String, val dataDir: String)
 
-inline fun <I : Any, reified O : Any> task(name: String, noinline init: TaskBuilder<I, O>.() -> Unit): Task<I, O> = workflow.task(name, init)
+data class TaskRequirements(val cpus: Int? = null, val mem: Capacity? = null, val disk: Capacity? = null)
 
-class TaskBuilder<I : Any, O : Any> @PublishedApi internal constructor(
-        private val workflow: Workflow,
-        private val name: String,
-        private val outputClass: Class<O>) {
-
-    private var input: Publisher<I>? = null
-    private var outputFn: ((inputItem: I) -> O)? = null
-    private var scriptFn: ((inputItem: I) -> String)? = null
-    var image: String? = null
-    var labels: List<String> = listOf()
-
-    fun image(image: String) {
-        this.image = image
-    }
-
-    fun labels(vararg labels: String) {
-        this.labels = listOf(*labels)
-    }
-
-    fun input(init: () -> Publisher<I>) {
-        input = init()
-    }
-
-    fun outputFn(init: InputItemContext<I>.() -> O) {
-        outputFn = { inputItem ->
-            InputItemContext(inputItem).init()
-        }
-    }
-
-    fun scriptFn(init: InputItemContext<I>.() -> String) {
-        scriptFn = { inputItem ->
-            InputItemContext(inputItem).init()
-        }
-    }
-
-    @PublishedApi
-    internal fun build(): Task<I, O> {
-        val inputNN: Publisher<I> = checkNotNull(input)
-        val inFlux: Flux<I> = if (inputNN is Flux) inputNN else Flux.from(inputNN)
-        return Task(
-            workflow = workflow,
-            name = name,
-            image = checkNotNull(image),
-            labels = this.labels,
-            input = inFlux,
-            outputFn = checkNotNull(outputFn),
-            scriptFn = checkNotNull(scriptFn),
-            outputClass = outputClass
-        )
-    }
-
+enum class CapacityType(val bytesMultiplier: Long) {
+    B(1),
+    KB(1024),
+    MB(KB.bytesMultiplier*1024),
+    GB(MB.bytesMultiplier*1024),
+    TB(GB.bytesMultiplier*1024)
 }
 
-data class InputItemContext<I : Any>(val inputItem: I)
+data class Capacity(val value: Long, val type: CapacityType) {
+    val bytes: Long get() = value * type.bytesMultiplier
+}
+
+internal fun String.toCapacity(): Capacity {
+    val regex = """(\d+)\s*([KMGT]?B)""".toRegex()
+    val matchResult = regex.find(this)
+    val (value, type) = matchResult!!.destructured
+    return Capacity(value.toLong(), CapacityType.valueOf(type))
+}
+
+inline fun <I : Any, reified O : Any> task(name: String, noinline init: TaskBuilder<I, O>.() -> Unit): Task<I, O> = defaultWorkflow.task(name, init)

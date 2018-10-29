@@ -1,21 +1,28 @@
 package krews.executor
 
+import krews.TaskDocker
 import krews.WFile
 import krews.config.TaskConfig
 import kotlin.reflect.KProperty1
 import kotlin.reflect.full.memberProperties
 
-val RUN_DIR = "run"
-val DB_FILENAME = "metadata.db"
+const val RUN_DIR = "run"
+const val DB_FILENAME = "metadata.db"
 
 /**
  * Interface that deals with environment specific functionality, ie. moving files around and running containers.
  */
 interface EnvironmentExecutor {
+
     /**
-     * Execute task for the environment. Will usually consist of running a docker container.
+     * Download the database file if remote and return path
      */
-    fun executeTask(workflowRunDir: String, taskConfig: TaskConfig, image: String, script: String?, inputItem: Any, outputItem: Any?)
+    fun prepareDatabaseFile(): String
+
+    /**
+     * Upload the database file if remote
+     */
+    fun pushDatabaseFile()
 
     /**
      * Copy cached output files from one workflow run directory to another
@@ -23,9 +30,10 @@ interface EnvironmentExecutor {
     fun copyCachedOutputs(fromWorkflowDir: String, toWorkflowDir: String, outputFiles: Set<WFile>)
 
     /**
-     * Download the database file and return path if remote, otherwise just return path
+     * Execute task for the environment. Will usually consist of running a docker container.
      */
-    fun prepareDatabaseFile(): String
+    fun executeTask(workflowRunDir: String, taskConfig: TaskConfig, taskDocker: TaskDocker,
+                    script: String?, inputItem: Any, outputItem: Any?)
 }
 
 /**

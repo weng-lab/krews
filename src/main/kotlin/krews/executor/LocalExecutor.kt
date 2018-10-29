@@ -6,6 +6,7 @@ import com.github.dockerjava.core.DockerClientBuilder
 import com.github.dockerjava.core.command.PullImageResultCallback
 import com.github.dockerjava.core.command.WaitContainerResultCallback
 import com.github.dockerjava.jaxrs.JerseyDockerCmdExecFactory
+import krews.TaskDocker
 import krews.WFile
 import krews.config.DockerConfig
 import krews.config.TaskConfig
@@ -25,7 +26,7 @@ import java.nio.file.Paths
 import java.util.zip.GZIPOutputStream
 
 
-val DEFAULT_LOCAL_BASE_DIR = "workflow-out"
+const val DEFAULT_LOCAL_BASE_DIR = "workflow-out"
 
 private val log = KotlinLogging.logger {}
 
@@ -39,6 +40,8 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : EnvironmentExecutor {
         return workflowBasePath.resolve(DB_FILENAME).toString()
     }
 
+    override fun pushDatabaseFile() {}
+
     override fun copyCachedOutputs(fromWorkflowDir: String, toWorkflowDir: String, outputFiles: Set<WFile>) {
         val fromBasePath = Paths.get(workflowBasePath.toString(), RUN_DIR, fromWorkflowDir)
         val toBasePath = Paths.get(workflowBasePath.toString(), RUN_DIR, toWorkflowDir)
@@ -51,16 +54,17 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : EnvironmentExecutor {
         }
     }
 
-    override fun executeTask(workflowRunDir: String, taskConfig: TaskConfig, image: String, script: String?, inputItem: Any, outputItem: Any?) {
+    override fun executeTask(workflowRunDir: String, taskConfig: TaskConfig, taskDocker: TaskDocker, script: String?,
+                             inputItem: Any, outputItem: Any?) {
         val runBasePath = Paths.get(workflowBasePath.toString(), RUN_DIR, workflowRunDir)
 
         // Pull image from remote
-        log.info { "Pulling image \"$image\" from remote..." }
-        dockerClient.pullImageCmd(image).exec(PullImageResultCallback()).awaitSuccess()
+        log.info { "Pulling image \"${taskDocker.image}\" from remote..." }
+        dockerClient.pullImageCmd(taskDocker.image).exec(PullImageResultCallback()).awaitSuccess()
 
         // Create the docker container from config
-        log.info { "Creating container from image \"$image\"" }
-        val containerCreationCmd = dockerClient.createContainerCmd(image)
+        log.info { "Creating container from image \"${taskDocker.image}\"" }
+        val containerCreationCmd = dockerClient.createContainerCmd(taskDocker.image)
         if (script != null) {
             containerCreationCmd.withEntrypoint("/bin/sh", "-c")
             containerCreationCmd.withCmd(script)
@@ -72,7 +76,7 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : EnvironmentExecutor {
         val inputFiles = getFilesForObject(inputItem)
         if (!inputFiles.isEmpty()) {
             log.info { "Copying input files $inputFiles into newly created container $containerId" }
-            copyInputFiles(dockerClient, runBasePath, containerId, inputFiles)
+            copyInputFiles(dockerClient, runBasePath, taskDocker.dataDir, containerId, inputFiles)
         }
 
         // Start the container and wait for it to finish processing
@@ -85,12 +89,15 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : EnvironmentExecutor {
         if (outputItem != null) {
             val outputFiles = getFilesForObject(outputItem)
             log.info { "Copying output files $outputFiles out of container $containerId" }
-            copyOutputFiles(dockerClient, runBasePath, containerId, outputFiles)
+            copyOutputFiles(dockerClient, runBasePath, taskDocker.dataDir, containerId, outputFiles)
         }
     }
 
 }
 
+/**
+ * Build a DockerClient from a given DockerConfig
+ */
 private fun buildDockerClient(config: DockerConfig): DockerClient {
     val configBuilder = DefaultDockerClientConfig.createDefaultConfigBuilder()
     if (config.uri != null) configBuilder.withDockerHost(config.uri)
@@ -107,17 +114,33 @@ private fun buildDockerClient(config: DockerConfig): DockerClient {
         .build()
 }
 
-private fun copyInputFiles(dockerClient: DockerClient, runBasePath: Path, containerId: String, inputFiles: Set<WFile>) {
+/**
+ * Copy input files from the local file system into the docker container
+ *
+ * @param dockerClient: DockerClient used to push the files
+ * @param runBasePath: Local file system path where the current run data and therefor input files can be found.
+ * @param dockerDataDir: Directory the input files will be copied to in the docker container
+ * @param containerId: ID for the container the files will be copied to.
+ * @param inputFiles: Input files as WFiles, which contain partial paths only.
+ */
+private fun copyInputFiles(dockerClient: DockerClient, runBasePath: Path, dockerDataDir: String, containerId: String,
+                           inputFiles: Set<WFile>) {
     if (inputFiles.isEmpty()) return
     inputFiles.forEach { inputFile ->
         val tarInputStream = createTarStream(runBasePath, Paths.get(inputFile.path))
         dockerClient.copyArchiveToContainerCmd(containerId)
             .withTarInputStream(tarInputStream)
-            //.withRemotePath(inputFile.path)
+            .withRemotePath("$dockerDataDir/${inputFile.path}")
             .exec()
     }
 }
 
+/**
+ * Creates a Tar Archive as an InputStream for the given file.
+ *
+ * @param basePath: Directory the file can be found in. This will not be part of the path in the tar archive.
+ * @param filePath: Partial path for the file that will be archived. This is the only part that will be in the archive.
+ */
 private fun createTarStream(basePath: Path, filePath: Path): InputStream {
     val archivePath = Files.createTempFile("docker-client-", ".tar.gz")
     try {
@@ -138,15 +161,31 @@ private fun createTarStream(basePath: Path, filePath: Path): InputStream {
     }
 }
 
-private fun copyOutputFiles(dockerClient: DockerClient, runBasePath: Path, containerId: String, outputFiles: Set<WFile>) {
+/**
+ * Copy output files from the given docker container to the local file system
+ *
+ * @param dockerClient: DockerClient used to push the files
+ * @param runBasePath: Local file system path for the current run. Output files will be copied here.
+ * @param dockerDataDir: Directory the output files will be copied from in the docker container
+ * @param containerId: ID for the container the files will be copied from.
+ * @param outputFiles: Output files as WFiles, which contain partial paths only.
+ */
+private fun copyOutputFiles(dockerClient: DockerClient, runBasePath: Path, dockerDataDir: String, containerId: String,
+                            outputFiles: Set<WFile>) {
     if (outputFiles.isEmpty()) return
     Files.createDirectories(runBasePath)
     outputFiles.forEach { outputFile ->
-        val tarStream = dockerClient.copyArchiveFromContainerCmd(containerId, outputFile.path.toString()).exec()
+        val tarStream = dockerClient.copyArchiveFromContainerCmd(containerId, "$dockerDataDir/${outputFile.path}").exec()
         extractTarStream(tarStream, runBasePath.resolve(outputFile.path).parent)
     }
 }
 
+/**
+ * Extracts a tar archive InputStream to files in the given output directory
+ *
+ * @param tarInputStream: The tar archive InputStream
+ * @param outBasePath: The directory the files will be extracted to.
+ */
 private fun extractTarStream(tarInputStream: InputStream, outBasePath: Path) {
     Files.createDirectories(outBasePath)
     TarArchiveInputStream(tarInputStream).use { tarStream ->

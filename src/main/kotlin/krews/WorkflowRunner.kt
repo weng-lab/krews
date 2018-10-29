@@ -60,10 +60,16 @@ class WorkflowRunner(private val workflow: Workflow, private val workflowConfig:
             leafOutputs.removeAll(taskParents)
         }
 
-        // Trigger workflow by subscribing to leaf task outputs
-        val leavesFlux = Flux.merge(leafOutputs)
-        leavesFlux.subscribeOn(Schedulers.elastic()).subscribe()
-        leavesFlux.blockLast()
+        try {
+            // Trigger workflow by subscribing to leaf task outputs...
+            val leavesFlux = Flux.merge(leafOutputs)
+            leavesFlux.subscribeOn(Schedulers.elastic()).subscribe()
+
+            // and block until it's done
+            leavesFlux.blockLast()
+        } finally {
+            executor.pushDatabaseFile()
+        }
     }
 
     private fun runTask(workflowRun: WorkflowRun, taskName: String, taskConfig: TaskConfig,

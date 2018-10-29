@@ -23,3 +23,5 @@ open class Workflow {
     }
 
 }
+
+@PublishedApi internal val defaultWorkflow = Workflow()
