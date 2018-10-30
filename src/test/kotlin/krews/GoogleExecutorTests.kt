@@ -7,9 +7,14 @@ import krews.executor.GoogleExecutor
 
 val googleConfig =
     """
-    google-exec {
+    google {
         storage-bucket = "wenglab-data-common"
         storage-base-dir = "workflow-tests"
+        local-storage-base-dir = "workflow-out"
+        project-id = "devenv-215523"
+        regions = ["us-east1", "us-east4"]
+        job-completion-poll-interval = 5
+        log-upload-interval = 5
     }
     """.trimIndent()
 

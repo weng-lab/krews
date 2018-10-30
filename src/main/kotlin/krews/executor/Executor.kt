@@ -6,6 +6,7 @@ import kotlin.reflect.KProperty1
 import kotlin.reflect.full.memberProperties
 
 const val RUN_DIR = "run"
+const val OUTPUTS_DIR = "outputs"
 const val LOGS_DIR = "logs"
 const val DB_FILENAME = "metadata.db"
 

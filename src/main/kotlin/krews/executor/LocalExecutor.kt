@@ -45,8 +45,8 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : EnvironmentExecutor {
     override fun pushDatabaseFile() {}
 
     override fun copyCachedOutputs(fromWorkflowDir: String, toWorkflowDir: String, outputFiles: Set<WFile>) {
-        val fromBasePath = Paths.get(workflowBasePath.toString(), RUN_DIR, fromWorkflowDir)
-        val toBasePath = Paths.get(workflowBasePath.toString(), RUN_DIR, toWorkflowDir)
+        val fromBasePath = Paths.get(workflowBasePath.toString(), RUN_DIR, fromWorkflowDir, OUTPUTS_DIR)
+        val toBasePath = Paths.get(workflowBasePath.toString(), RUN_DIR, toWorkflowDir, OUTPUTS_DIR)
         outputFiles.forEach {
             val fromPath = fromBasePath.resolve(it.path)
             val toPath = toBasePath.resolve(it.path)
@@ -145,7 +145,7 @@ private fun copyInputFiles(dockerClient: DockerClient, runBasePath: Path, docker
                            inputFiles: Set<WFile>) {
     if (inputFiles.isEmpty()) return
     inputFiles.forEach { inputFile ->
-        val tarInputStream = createTarStream(runBasePath.resolve(inputFile.path), "$dockerDataDir/${inputFile.path}")
+        val tarInputStream = createTarStream(runBasePath.resolve(OUTPUTS_DIR).resolve(inputFile.path), "$dockerDataDir/${inputFile.path}")
         dockerClient.copyArchiveToContainerCmd(containerId)
             .withTarInputStream(tarInputStream)
             .withRemotePath("/")
@@ -193,7 +193,7 @@ private fun copyOutputFiles(dockerClient: DockerClient, runBasePath: Path, docke
     Files.createDirectories(runBasePath)
     outputFiles.forEach { outputFile ->
         val tarStream = dockerClient.copyArchiveFromContainerCmd(containerId, "$dockerDataDir/${outputFile.path}").exec()
-        extractTarStream(tarStream, runBasePath.resolve(outputFile.path).parent)
+        extractTarStream(tarStream, runBasePath.resolve(OUTPUTS_DIR).resolve(outputFile.path).parent)
     }
 }
 

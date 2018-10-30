@@ -93,10 +93,8 @@ class WorkflowRunner(private val workflow: Workflow, private val workflowConfig:
         val latestCachedOutputTask: TaskRun? = cachedOutputTasks.maxBy { it.startTime }
 
         val now = DateTime.now()
-        log.info { "Creating task run with timestamp ${now.millis}" }
-        var taskRun: TaskRun? = null
-        transaction(db) {
-            taskRun = TaskRun.new {
+        var taskRun: TaskRun = transaction(db) {
+            TaskRun.new {
                 this.workflowRun = this@WorkflowRunner.workflowRun
                 this.startTime = now
                 this.taskName = taskName
@@ -106,12 +104,13 @@ class WorkflowRunner(private val workflow: Workflow, private val workflowConfig:
                 this.outputJson = outputMapper.writeValueAsString(outputItem)
             }
         }
+        log.info { "Task run created with id ${taskRun.id.value} and timestamp ${now.millis}" }
 
         transaction(db) {
             // If we have a cached output we can use for this task that's not from this run, copy the files over.
             // If it is from this run, the file should already exist, so it shouldn't need to be copied.
             if (latestCachedOutputTask != null && latestCachedOutputTask.workflowRun.id.value != workflowRun.id.value) {
-                log.info { "Cached outputs found for task run with name \"$taskName\" and timestamp \"${now.millis}\". Copying..." }
+                log.info { "Cached outputs found. Copying..." }
                 val cachedOutput = outputMapper.readValue(latestCachedOutputTask.outputJson, outputClass)
                 val outputFiles = getFilesForObject(cachedOutput)
                 executor.copyCachedOutputs(getWorkflowRunDir(latestCachedOutputTask.workflowRun), getWorkflowRunDir(workflowRun), outputFiles)
@@ -119,14 +118,14 @@ class WorkflowRunner(private val workflow: Workflow, private val workflowConfig:
 
             // Only execute if we aren't using the cached value
             if (latestCachedOutputTask == null) {
-                log.info { "Cached outputs not found for task run with name \"$taskName\" and timestamp \"${now.millis}\". Executing..." }
-                executor.executeTask(getWorkflowRunDir(workflowRun), taskRun!!.id.value , taskConfig, dockerImage,
+                log.info { "Cached outputs not found. Executing..." }
+                executor.executeTask(getWorkflowRunDir(workflowRun), taskRun.id.value , taskConfig, dockerImage,
                     dockerDataDir, command, inputItem, outputItem)
             }
 
             log.info { "Task completed successfully. Saving status..." }
-            taskRun!!.completedSuccessfully = true
-            taskRun!!.completedTime = DateTime.now()
+            taskRun.completedSuccessfully = true
+            taskRun.completedTime = DateTime.now()
         }
     }
 }

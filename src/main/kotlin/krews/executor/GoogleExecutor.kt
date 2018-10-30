@@ -17,13 +17,17 @@ import mu.KotlinLogging
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.nio.file.StandardCopyOption
 
 
 private val log = KotlinLogging.logger {}
 
+const val APPLICATION_NAME = "krews"
 const val CLOUD_SDK_IMAGE = "google/cloud-sdk:alpine"
 const val DISK_NAME = "data"
-const val DEFAULT_LOG_UPLOAD_FREQ = 60
+
+// Default VM machine type if not define in task configuration
+const val DEFAULT_MACHINE_TYPE = "n1-standard-1"
 
 class GoogleExecutor(workflowConfig: WorkflowConfig) : EnvironmentExecutor {
 
@@ -39,8 +43,12 @@ class GoogleExecutor(workflowConfig: WorkflowConfig) : EnvironmentExecutor {
         val transport = NetHttpTransport()
         val jsonFactory = JacksonFactory.getDefaultInstance()
         val credentials = GoogleCredential.getApplicationDefault()
-        genomicsClient = Genomics.Builder(transport, jsonFactory, credentials).build()
-        storageClient = Storage.Builder(transport, jsonFactory, credentials).build()
+        genomicsClient = Genomics.Builder(transport, jsonFactory, credentials)
+            .setApplicationName(APPLICATION_NAME)
+            .build()
+        storageClient = Storage.Builder(transport, jsonFactory, credentials)
+            .setApplicationName(APPLICATION_NAME)
+            .build()
     }
 
     override fun prepareDatabaseFile(): String {
@@ -62,8 +70,8 @@ class GoogleExecutor(workflowConfig: WorkflowConfig) : EnvironmentExecutor {
     override fun copyCachedOutputs(fromWorkflowDir: String, toWorkflowDir: String, outputFiles: Set<WFile>) {
         log.info { "Copying cached outputs $outputFiles from workflow run dir $fromWorkflowDir to $toWorkflowDir" }
         outputFiles.forEach { outputFile ->
-            val fromObject = "$gcsBase/$RUN_DIR/$fromWorkflowDir/${outputFile.path}"
-            val toObject = "$gcsBase/$RUN_DIR/$fromWorkflowDir/${outputFile.path}"
+            val fromObject = gcsObjectPath(gcsBase, RUN_DIR, fromWorkflowDir, outputFile.path)
+            val toObject = gcsObjectPath(gcsBase, RUN_DIR, toWorkflowDir, outputFile.path)
             copyObject(storageClient, bucket, fromObject, bucket, toObject)
         }
     }
@@ -76,12 +84,21 @@ class GoogleExecutor(workflowConfig: WorkflowConfig) : EnvironmentExecutor {
 
         val resources = Resources()
         pipeline.resources = resources
+        if (!googleConfig.zones.isEmpty()) {
+            resources.zones = googleConfig.zones
+        } else if (!googleConfig.regions.isEmpty()) {
+            resources.regions = googleConfig.regions
+        }
+
+        resources.projectId = googleConfig.projectId
 
         val virtualMachine = VirtualMachine()
         resources.virtualMachine = virtualMachine
-        if (taskConfig.google?.machineType != null) {
-            virtualMachine.machineType = taskConfig.google.machineType
-        }
+        virtualMachine.machineType = taskConfig.google?.machineType ?: DEFAULT_MACHINE_TYPE
+
+        val serviceAccount = ServiceAccount()
+        virtualMachine.serviceAccount = serviceAccount
+        serviceAccount.scopes = listOf("https://www.googleapis.com/auth/devstorage.read_write")
 
         val disk = Disk()
         virtualMachine.disks = listOf(disk)
@@ -93,26 +110,39 @@ class GoogleExecutor(workflowConfig: WorkflowConfig) : EnvironmentExecutor {
         val actions = mutableListOf<Action>()
         pipeline.actions = actions
 
+        // Create action to periodically copy logs to GCS
+        val logsAction = createLogsAction(bucket, gcsBase, workflowRunDir, taskRunId, googleConfig.logUploadInterval)
+        actions.add(logsAction)
+
         // Create actions to download each input file
         val inputFiles = getFilesForObject(inputItem)
-        val downloadActions = inputFiles.map { createDownloadAction(bucket, gcsBase, dockerDataDir, it) }
+        val downloadActions = inputFiles.map { createDownloadAction(bucket, gcsBase, workflowRunDir, dockerDataDir, it) }
         actions.addAll(downloadActions)
 
         // Create the action that runs the task
-        val executeAction = createExecuteAction(dockerImage, command)
+        val executeAction = createExecuteAction(dockerImage, dockerDataDir, command)
         actions.add(executeAction)
 
         // Create the actions to upload each output file
         val outputFiles = getFilesForObject(outputItem)
-        val uploadActions = outputFiles.map { createUploadAction(bucket, gcsBase, dockerDataDir, it) }
+        val uploadActions = outputFiles.map { createUploadAction(bucket, gcsBase, workflowRunDir, dockerDataDir, it) }
         actions.addAll(uploadActions)
 
-        // Create action to periodically copy logs to GCS
-        val logCopyFrequency = taskConfig.google?.logUploadFrequency ?: DEFAULT_LOG_UPLOAD_FREQ
-        val logsAction = createLogsAction(bucket, gcsBase, taskRunId, logCopyFrequency)
-        actions.add(logsAction)
+        log.info { "Submitting pipeline job for task run $taskRunId:\n$run" }
+        genomicsClient.projects().operations()
+        val initialOp: Operation = genomicsClient.pipelines().run(run).execute()
 
-        genomicsClient.pipelines().run(run)
+        log.info { "Pipeline job submitted. Operation returned: \"${initialOp.name}\". " +
+                "Will check for completion every ${googleConfig.jobCompletionPollInterval} seconds" }
+        do {
+            Thread.sleep(googleConfig.jobCompletionPollInterval * 1000L)
+            val op: Operation = genomicsClient.projects().operations().get(initialOp.name).execute()
+            if (op.done) {
+                log.info { "Pipeline job \"${op.name}\" complete! Complete results: ${op.toPrettyString()}" }
+            } else {
+                log.info { "Pipeline job \"${op.name}\" still running..." }
+            }
+        } while (!op.done)
     }
 
 }
@@ -120,9 +150,10 @@ class GoogleExecutor(workflowConfig: WorkflowConfig) : EnvironmentExecutor {
 /**
  * Create a pipeline action that will execute the task
  */
-fun createExecuteAction(dockerImage: String, command: String?): Action {
+fun createExecuteAction(dockerImage: String, dataDir: String, command: String?): Action {
     val action = Action()
     action.imageUri = dockerImage
+    action.mounts = listOf(createDataDirMount(dataDir))
     if (command != null) action.commands = listOf("/bin/sh", "-c", command)
     return action
 }
@@ -132,12 +163,12 @@ fun createExecuteAction(dockerImage: String, command: String?): Action {
  *
  * @param frequency: Frequency that logs will be copied into GCS in seconds
  */
-fun createLogsAction(bucket: String, gcsBase: String?, taskRunId: Int, frequency: Int): Action {
+fun createLogsAction(bucket: String, gcsBase: String?, workflowRunDir: String, taskRunId: Int, frequency: Int): Action {
     val action = Action()
     action.imageUri = CLOUD_SDK_IMAGE
 
-    val logPath = gcsPath(bucket, gcsBase, taskRunId.toString())
-    action.commands = listOf("sh", "-c", "while true; sleep $frequency; gsutil cp /google/logs/output $logPath; done")
+    val logPath = gcsPath(bucket, gcsBase, RUN_DIR, workflowRunDir, LOGS_DIR, taskRunId.toString(), "google.txt")
+    action.commands = listOf("sh", "-c", "while true; do sleep $frequency; gsutil cp /google/logs/output $logPath; done")
     action.flags = listOf("RUN_IN_BACKGROUND")
     return action
 }
@@ -145,11 +176,11 @@ fun createLogsAction(bucket: String, gcsBase: String?, taskRunId: Int, frequency
 /**
  * Create a pipeline action that will download a file from Google Cloud Storage to the Pipelines VM
  */
-fun createDownloadAction(bucket: String, gcsBase: String?, dataDir: String, file: WFile): Action {
+fun createDownloadAction(bucket: String, gcsBase: String?, workflowRunDir: String, dataDir: String, file: WFile): Action {
     val action = Action()
     action.imageUri = CLOUD_SDK_IMAGE
 
-    val inputFile = gcsPath(bucket, gcsBase, file.path)
+    val inputFile = gcsPath(bucket, gcsBase, RUN_DIR, workflowRunDir, OUTPUTS_DIR, file.path)
     action.commands = listOf("sh", "-c", "gsutil cp $inputFile $dataDir/${file.path}")
     action.mounts = listOf(createDataDirMount(dataDir))
     return action
@@ -158,11 +189,11 @@ fun createDownloadAction(bucket: String, gcsBase: String?, dataDir: String, file
 /**
  * Create a pipeline action that will upload a file from the Pipelines VM to the
  */
-fun createUploadAction(bucket: String, gcsBase: String?, dataDir: String, file: WFile): Action {
+fun createUploadAction(bucket: String, gcsBase: String?, workflowRunDir: String, dataDir: String, file: WFile): Action {
     val action = Action()
     action.imageUri = CLOUD_SDK_IMAGE
 
-    val outputFile = gcsPath(bucket, gcsBase, file.path)
+    val outputFile = gcsPath(bucket, gcsBase, RUN_DIR, workflowRunDir, OUTPUTS_DIR, file.path)
     action.commands = listOf("sh", "-c", "gsutil cp $dataDir/${file.path} $outputFile")
     action.mounts = listOf(createDataDirMount(dataDir))
     action.flags = listOf("ALWAYS_RUN")
@@ -170,15 +201,25 @@ fun createUploadAction(bucket: String, gcsBase: String?, dataDir: String, file: 
 }
 
 /**
- * Create a GCS path for the given GCS bucket, base directory, and path
+ * Utility function to create a GCS path for the given GCS bucket and path components
  */
-fun gcsPath(bucket: String, gcsBase: String?, path: String): String {
-    var gcsFile = "gs://$bucket"
-    if (gcsBase != null) {
-        gcsFile += "/$gcsBase"
+fun gcsPath(bucket: String, vararg pathParts: String?): String {
+    var gcsPath = "gs://$bucket"
+    pathParts.forEach {
+        if (it != null) gcsPath += "/$it"
     }
-    gcsFile += "/$path"
-    return gcsFile
+    return gcsPath
+}
+
+/**
+ * Utility method to create a GCS object path without a bucket / URI for path components
+ */
+fun gcsObjectPath(vararg pathParts: String?): String {
+    var gcsObject = ""
+    pathParts.forEach {
+        if (it != null) gcsObject += "/$it"
+    }
+    return gcsObject
 }
 
 /**
@@ -215,7 +256,7 @@ private fun copyObject(storageClient: Storage, fromBucket: String, fromObject: S
 private fun downloadObject(storageClient: Storage, bucket: String, obj: String, downloadPath: Path): Boolean {
     try {
         val objectInputStream = storageClient.objects().get(bucket, obj).executeMediaAsInputStream()
-        Files.copy(objectInputStream, downloadPath)
+        Files.copy(objectInputStream, downloadPath, StandardCopyOption.REPLACE_EXISTING)
         return true
     } catch (e: GoogleJsonResponseException) {
         if (e.statusCode == 404) {

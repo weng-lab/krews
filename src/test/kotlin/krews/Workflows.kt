@@ -7,7 +7,6 @@ object SimpleWorkflow : Workflow("config-sample") {
 
     val base64 = task<Pair<Int, String>, WFile>("base64") {
         dockerImage = "alpine:3.8"
-        //entrypoint = "/bin/sh -c"
 
         input = messages
         outputFn { WFile("base64/${inputItem.first}.txt") }
@@ -22,7 +21,6 @@ object SimpleWorkflow : Workflow("config-sample") {
 
     val gzip = task<WFile, WFile>("gzip") {
         dockerImage = "alpine:3.8"
-        //entrypoint = "/bin/sh -c"
 
         input = base64.output
         outputFn { WFile("gzip/${inputItem.filename()}.gz") }
