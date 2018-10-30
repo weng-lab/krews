@@ -44,8 +44,9 @@ class WorkflowRunner(private val workflow: Workflow, private val workflowConfig:
 
         // Set execute function for each task.
         workflow.tasks.forEach { task ->
-            task.executeFn = { script, inputItem, outputItem ->
-                runTask(workflowRun, task.name, workflowConfig.tasks[task.name]!!, task.image, script, inputItem, outputItem, task.outputClass)
+            task.executeFn = { command, inputItem, outputItem ->
+                runTask(workflowRun, task.name, workflowConfig.tasks[task.name]!!, task.dockerImage, task.dockerDataDir,
+                    command, inputItem, outputItem, task.outputClass)
             }
             task.connect()
         }
@@ -72,20 +73,20 @@ class WorkflowRunner(private val workflow: Workflow, private val workflowConfig:
         }
     }
 
-    private fun runTask(workflowRun: WorkflowRun, taskName: String, taskConfig: TaskConfig,
-                        image: String, script: String?, inputItem: Any, outputItem: Any?, outputClass: Class<*>) {
-        log.info { "Running task \"$taskName\" for image \"$image\" input \"$inputItem\" output \"$outputItem\" script:\n$script" }
+    private fun runTask(workflowRun: WorkflowRun, taskName: String, taskConfig: TaskConfig, dockerImage: String, dockerDataDir: String,
+                        command: String?, inputItem: Any, outputItem: Any?, outputClass: Class<*>) {
+        log.info { "Running task \"$taskName\" for dockerImage \"$dockerImage\" input \"$inputItem\" output \"$outputItem\" command:\n$command" }
 
         val inputHash = inputItem.hashCode()
-        val scriptHash = script?.hashCode()
+        val commandHash = command?.hashCode()
 
         log.info { "Checking cache..."}
         val cachedOutputTasks: List<TaskRun> = transaction(db) {
             TaskRun.find {
                 TaskRuns.taskName eq taskName and
-                        (TaskRuns.image eq image) and
+                        (TaskRuns.image eq dockerImage) and
                         (TaskRuns.inputHash eq inputHash) and
-                        (TaskRuns.scriptHash eq scriptHash) and
+                        (TaskRuns.commandHash eq commandHash) and
                         (TaskRuns.completedSuccessfully eq true)
             }.toList()
         }
@@ -100,8 +101,8 @@ class WorkflowRunner(private val workflow: Workflow, private val workflowConfig:
                 this.startTime = now
                 this.taskName = taskName
                 this.inputHash = inputHash
-                this.scriptHash = scriptHash
-                this.image = image
+                this.commandHash = commandHash
+                this.image = dockerImage
                 this.outputJson = outputMapper.writeValueAsString(outputItem)
             }
         }
@@ -119,7 +120,8 @@ class WorkflowRunner(private val workflow: Workflow, private val workflowConfig:
             // Only execute if we aren't using the cached value
             if (latestCachedOutputTask == null) {
                 log.info { "Cached outputs not found for task run with name \"$taskName\" and timestamp \"${now.millis}\". Executing..." }
-                executor.executeTask(getWorkflowRunDir(workflowRun), taskConfig, image, script, inputItem, outputItem)
+                executor.executeTask(getWorkflowRunDir(workflowRun), taskRun!!.id.value , taskConfig, dockerImage,
+                    dockerDataDir, command, inputItem, outputItem)
             }
 
             log.info { "Task completed successfully. Saving status..." }

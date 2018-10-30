@@ -1,12 +1,14 @@
 package krews.executor
 
 import com.github.dockerjava.api.DockerClient
+import com.github.dockerjava.api.model.Frame
+import com.github.dockerjava.api.model.StreamType
 import com.github.dockerjava.core.DefaultDockerClientConfig
 import com.github.dockerjava.core.DockerClientBuilder
+import com.github.dockerjava.core.command.LogContainerResultCallback
 import com.github.dockerjava.core.command.PullImageResultCallback
 import com.github.dockerjava.core.command.WaitContainerResultCallback
 import com.github.dockerjava.jaxrs.JerseyDockerCmdExecFactory
-import krews.TaskDocker
 import krews.WFile
 import krews.config.DockerConfig
 import krews.config.TaskConfig
@@ -32,8 +34,8 @@ private val log = KotlinLogging.logger {}
 
 class LocalExecutor(workflowConfig: WorkflowConfig) : EnvironmentExecutor {
 
-    private val dockerClient = buildDockerClient(workflowConfig.localExec?.docker?: DockerConfig())
-    private val workflowBasePath = Paths.get(workflowConfig.localExec?.localBaseDir ?: DEFAULT_LOCAL_BASE_DIR).toAbsolutePath()!!
+    private val dockerClient = buildDockerClient(workflowConfig.local?.docker?: DockerConfig())
+    private val workflowBasePath = Paths.get(workflowConfig.local?.localBaseDir ?: DEFAULT_LOCAL_BASE_DIR).toAbsolutePath()!!
 
     override fun prepareDatabaseFile(): String {
         Files.createDirectories(workflowBasePath)
@@ -54,21 +56,18 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : EnvironmentExecutor {
         }
     }
 
-    override fun executeTask(workflowRunDir: String, taskConfig: TaskConfig, taskDocker: TaskDocker, script: String?,
-                             inputItem: Any, outputItem: Any?) {
+    override fun executeTask(workflowRunDir: String, taskRunId: Int, taskConfig: TaskConfig, dockerImage: String,
+                             dockerDataDir: String, command: String?, inputItem: Any, outputItem: Any?) {
         val runBasePath = Paths.get(workflowBasePath.toString(), RUN_DIR, workflowRunDir)
 
         // Pull image from remote
-        log.info { "Pulling image \"${taskDocker.image}\" from remote..." }
-        dockerClient.pullImageCmd(taskDocker.image).exec(PullImageResultCallback()).awaitSuccess()
+        log.info { "Pulling image \"$dockerImage\" from remote..." }
+        dockerClient.pullImageCmd(dockerImage).exec(PullImageResultCallback()).awaitSuccess()
 
         // Create the docker container from config
-        log.info { "Creating container from image \"${taskDocker.image}\"" }
-        val containerCreationCmd = dockerClient.createContainerCmd(taskDocker.image)
-        if (script != null) {
-            containerCreationCmd.withEntrypoint("/bin/sh", "-c")
-            containerCreationCmd.withCmd(script)
-        }
+        log.info { "Creating container from image \"$dockerImage\"" }
+        val containerCreationCmd = dockerClient.createContainerCmd(dockerImage)
+        if (command != null) containerCreationCmd.withCmd("/bin/sh", "-c", command)
         val createContainerResponse = containerCreationCmd.exec()
         val containerId = createContainerResponse.id!!
 
@@ -76,7 +75,7 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : EnvironmentExecutor {
         val inputFiles = getFilesForObject(inputItem)
         if (!inputFiles.isEmpty()) {
             log.info { "Copying input files $inputFiles into newly created container $containerId" }
-            copyInputFiles(dockerClient, runBasePath, taskDocker.dataDir, containerId, inputFiles)
+            copyInputFiles(dockerClient, runBasePath, dockerDataDir, containerId, inputFiles)
         }
 
         // Start the container and wait for it to finish processing
@@ -89,8 +88,27 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : EnvironmentExecutor {
         if (outputItem != null) {
             val outputFiles = getFilesForObject(outputItem)
             log.info { "Copying output files $outputFiles out of container $containerId" }
-            copyOutputFiles(dockerClient, runBasePath, taskDocker.dataDir, containerId, outputFiles)
+            copyOutputFiles(dockerClient, runBasePath, dockerDataDir, containerId, outputFiles)
         }
+
+        // Copy logs from container
+        log.info { "Copying logs from container $containerId" }
+        val logBasePath = runBasePath.resolve(LOGS_DIR).resolve(taskRunId.toString())
+        Files.createDirectories(logBasePath)
+        val logCallback = object : LogContainerResultCallback() {
+            override fun onNext(item: Frame?) {
+                if (item?.streamType == StreamType.STDOUT) {
+                    Files.newOutputStream(logBasePath.resolve("stdout.txt")).use { it.write(item.payload) }
+                }
+                if (item?.streamType == StreamType.STDERR) {
+                    Files.newOutputStream(logBasePath.resolve("stderr.txt")).use { it.write(item.payload) }
+                }
+            }
+        }
+        dockerClient.logContainerCmd(containerId)
+            .withStdOut(true)
+            .withStdErr(true)
+            .exec(logCallback).awaitCompletion()
     }
 
 }
@@ -127,10 +145,10 @@ private fun copyInputFiles(dockerClient: DockerClient, runBasePath: Path, docker
                            inputFiles: Set<WFile>) {
     if (inputFiles.isEmpty()) return
     inputFiles.forEach { inputFile ->
-        val tarInputStream = createTarStream(runBasePath, Paths.get(inputFile.path))
+        val tarInputStream = createTarStream(runBasePath.resolve(inputFile.path), "$dockerDataDir/${inputFile.path}")
         dockerClient.copyArchiveToContainerCmd(containerId)
             .withTarInputStream(tarInputStream)
-            .withRemotePath("$dockerDataDir/${inputFile.path}")
+            .withRemotePath("/")
             .exec()
     }
 }
@@ -141,15 +159,14 @@ private fun copyInputFiles(dockerClient: DockerClient, runBasePath: Path, docker
  * @param basePath: Directory the file can be found in. This will not be part of the path in the tar archive.
  * @param filePath: Partial path for the file that will be archived. This is the only part that will be in the archive.
  */
-private fun createTarStream(basePath: Path, filePath: Path): InputStream {
+private fun createTarStream(localPath: Path, dockerPath: String): InputStream {
     val archivePath = Files.createTempFile("docker-client-", ".tar.gz")
     try {
         TarArchiveOutputStream(GZIPOutputStream(BufferedOutputStream(Files.newOutputStream(archivePath)))).use { archiveOutStream ->
-            val fullFilePath = basePath.resolve(filePath)
-            val tarEntry = TarArchiveEntry(filePath.toString())
-            tarEntry.size = Files.size(fullFilePath)
+            val tarEntry = TarArchiveEntry(dockerPath)
+            tarEntry.size = Files.size(localPath)
             archiveOutStream.putArchiveEntry(tarEntry)
-            BufferedInputStream(Files.newInputStream(fullFilePath)).use { fileInStream ->
+            BufferedInputStream(Files.newInputStream(localPath)).use { fileInStream ->
                 IOUtils.copy(fileInStream, archiveOutStream)
             }
             archiveOutStream.closeArchiveEntry()

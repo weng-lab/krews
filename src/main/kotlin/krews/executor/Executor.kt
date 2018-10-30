@@ -1,12 +1,12 @@
 package krews.executor
 
-import krews.TaskDocker
 import krews.WFile
 import krews.config.TaskConfig
 import kotlin.reflect.KProperty1
 import kotlin.reflect.full.memberProperties
 
 const val RUN_DIR = "run"
+const val LOGS_DIR = "logs"
 const val DB_FILENAME = "metadata.db"
 
 /**
@@ -32,8 +32,8 @@ interface EnvironmentExecutor {
     /**
      * Execute task for the environment. Will usually consist of running a docker container.
      */
-    fun executeTask(workflowRunDir: String, taskConfig: TaskConfig, taskDocker: TaskDocker,
-                    script: String?, inputItem: Any, outputItem: Any?)
+    fun executeTask(workflowRunDir: String, taskRunId: Int, taskConfig: TaskConfig, dockerImage: String,
+                    dockerDataDir: String, command: String?, inputItem: Any, outputItem: Any?)
 }
 
 /**

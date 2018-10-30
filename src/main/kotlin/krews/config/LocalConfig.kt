@@ -1,6 +1,6 @@
 package krews.config
 
-data class LocalExecConfig (
+data class LocalWorkflowConfig (
     val docker: DockerConfig? = DockerConfig(),
     val localBaseDir: String
 )

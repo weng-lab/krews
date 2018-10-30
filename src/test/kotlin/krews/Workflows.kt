@@ -5,33 +5,31 @@ import reactor.core.publisher.toFlux
 object SimpleWorkflow : Workflow("config-sample") {
     val messages = IntArray(5) { it }.map { it to "I am message #$it" }.toFlux()
 
-    val base64 = krews.task<Pair<Int, String>, WFile>("base64") {
-        docker {
-            image = "alpine:3.8"
-            dataDir = "/data"
-        }
+    val base64 = task<Pair<Int, String>, WFile>("base64") {
+        dockerImage = "alpine:3.8"
+        //entrypoint = "/bin/sh -c"
 
-        input = krews.messages
+        input = messages
         outputFn { WFile("base64/${inputItem.first}.txt") }
-        scriptFn {
+        commandFn {
             """
-            mkdir /data/base64
+            echo "executing base64 on ${inputItem.first}"
+            mkdir -p /data/base64
             echo "${inputItem.second}" | base64 > /data/base64/${inputItem.first}.txt
             """.trimIndent()
         }
     }
 
-    val gzip = krews.task<WFile, WFile>("gzip") {
-        docker {
-            image = "alpine:3.8"
-            dataDir = "/data"
-        }
+    val gzip = task<WFile, WFile>("gzip") {
+        dockerImage = "alpine:3.8"
+        //entrypoint = "/bin/sh -c"
 
         input = base64.output
         outputFn { WFile("gzip/${inputItem.filename()}.gz") }
-        scriptFn {
+        commandFn {
             """
-            mkdir gzip
+            echo "executing gzip on ${inputItem.filename()}"
+            mkdir -p /data/gzip
             gzip /data/${inputItem.path} > /data/gzip/${inputItem.filename()}.gz
             """.trimIndent()
         }

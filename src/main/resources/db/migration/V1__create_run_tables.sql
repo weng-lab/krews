@@ -16,10 +16,10 @@ CREATE TABLE task_run (
     completed_successfully INTEGER DEFAULT 0,
     completed_time INTEGER,
     input_hash INTEGER NOT NULL,
-    script_hash INTEGER,
+    command_hash INTEGER,
     image TEXT NOT NULL,
     output_json TEXT,
     FOREIGN KEY(workflow_run) REFERENCES workflow_run(id)
 );
 
-CREATE INDEX task_run_by_inputs ON task_run(input_hash, image, task_name, script_hash);
+CREATE INDEX task_run_by_inputs ON task_run(input_hash, image, task_name, command_hash);

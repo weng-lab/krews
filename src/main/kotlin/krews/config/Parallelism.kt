@@ -1,4 +1,4 @@
-package krews.executor
+package krews.config
 
 import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.core.TreeNode
