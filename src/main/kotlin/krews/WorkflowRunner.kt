@@ -7,7 +7,7 @@ import krews.db.TaskRun
 import krews.db.TaskRuns
 import krews.db.WorkflowRun
 import krews.db.migrateAndConnectDb
-import krews.executor.EnvironmentExecutor
+import krews.executor.LocallyDirectedExecutor
 import krews.executor.getFilesForObject
 import mu.KotlinLogging
 import org.jetbrains.exposed.sql.and
@@ -23,21 +23,22 @@ private val log = KotlinLogging.logger {}
 
 val outputMapper = jacksonObjectMapper()
 
-private fun getWorkflowRunDir(workflowRun: WorkflowRun) = workflowRun.startTime.millis.toString()
-
-class WorkflowRunner(private val workflow: Workflow, private val workflowConfig: WorkflowConfig, private val executor: EnvironmentExecutor) {
+class WorkflowRunner(private val workflow: Workflow,
+                     private val workflowConfig: WorkflowConfig,
+                     private val executor: LocallyDirectedExecutor,
+                     private val runTimestampOverride: Long? = null) {
 
     private val db = migrateAndConnectDb(executor.prepareDatabaseFile())
     private lateinit var workflowRun: WorkflowRun
 
     fun run() {
         // Create the workflow run in the database
-        val now = DateTime.now()
-        log.info { "Creating workflow run for workflow ${workflow.name} with timestamp ${now.millis}" }
+        val workflowTime = if (runTimestampOverride != null) DateTime(runTimestampOverride) else DateTime.now()
+        log.info { "Creating workflow run for workflow ${workflow.name} with timestamp ${workflowTime.millis}" }
         transaction(db) {
             workflowRun = WorkflowRun.new {
                 workflowName = workflow.name
-                startTime = now
+                startTime = workflowTime
             }
         }
         log.info { "Workflow run created successfully!" }
@@ -75,7 +76,8 @@ class WorkflowRunner(private val workflow: Workflow, private val workflowConfig:
 
     private fun runTask(workflowRun: WorkflowRun, taskName: String, taskConfig: TaskConfig, dockerImage: String, dockerDataDir: String,
                         command: String?, inputItem: Any, outputItem: Any?, outputClass: Class<*>) {
-        log.info { "Running task \"$taskName\" for dockerImage \"$dockerImage\" input \"$inputItem\" output \"$outputItem\" command:\n$command" }
+        log.info { "Running task \"$taskName\" for dockerImage \"$dockerImage\" input \"$inputItem\" " +
+                "output \"$outputItem\" command:\n$command" }
 
         val inputHash = inputItem.hashCode()
         val commandHash = command?.hashCode()
@@ -93,7 +95,7 @@ class WorkflowRunner(private val workflow: Workflow, private val workflowConfig:
         val latestCachedOutputTask: TaskRun? = cachedOutputTasks.maxBy { it.startTime }
 
         val now = DateTime.now()
-        var taskRun: TaskRun = transaction(db) {
+        val taskRun: TaskRun = transaction(db) {
             TaskRun.new {
                 this.workflowRun = this@WorkflowRunner.workflowRun
                 this.startTime = now
@@ -119,7 +121,7 @@ class WorkflowRunner(private val workflow: Workflow, private val workflowConfig:
             // Only execute if we aren't using the cached value
             if (latestCachedOutputTask == null) {
                 log.info { "Cached outputs not found. Executing..." }
-                executor.executeTask(getWorkflowRunDir(workflowRun), taskRun.id.value , taskConfig, dockerImage,
+                executor.executeTask(getWorkflowRunDir(workflowRun), taskRun.id.value, taskConfig, dockerImage,
                     dockerDataDir, command, inputItem, outputItem)
             }
 
@@ -129,3 +131,5 @@ class WorkflowRunner(private val workflow: Workflow, private val workflowConfig:
         }
     }
 }
+
+private fun getWorkflowRunDir(workflowRun: WorkflowRun) = workflowRun.startTime.millis.toString()

@@ -3,7 +3,7 @@ package krews
 import com.typesafe.config.ConfigFactory
 import io.kotlintest.specs.StringSpec
 import krews.config.createWorkflowConfig
-import krews.executor.GoogleExecutor
+import krews.executor.google.GoogleLocalExecutor
 
 val googleConfig =
     """
@@ -14,14 +14,14 @@ val googleConfig =
         project-id = "devenv-215523"
         regions = ["us-east1", "us-east4"]
         job-completion-poll-interval = 5
-        log-upload-interval = 5
+        log-upload-interval = 10
     }
     """.trimIndent()
 
 class GoogleExecutorTests : StringSpec({
     "Can run a simple workflow locally" {
         val workflowConfig = createWorkflowConfig(ConfigFactory.parseString(googleConfig), SimpleWorkflow)
-        val executor = GoogleExecutor(workflowConfig)
+        val executor = GoogleLocalExecutor(workflowConfig)
         val runner = WorkflowRunner(SimpleWorkflow, workflowConfig, executor)
         runner.run()
     }

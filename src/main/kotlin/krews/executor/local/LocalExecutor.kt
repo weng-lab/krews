@@ -1,4 +1,4 @@
-package krews.executor
+package krews.executor.local
 
 import com.github.dockerjava.api.DockerClient
 import com.github.dockerjava.api.model.Frame
@@ -13,6 +13,7 @@ import krews.WFile
 import krews.config.DockerConfig
 import krews.config.TaskConfig
 import krews.config.WorkflowConfig
+import krews.executor.*
 import mu.KotlinLogging
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
@@ -32,14 +33,14 @@ const val DEFAULT_LOCAL_BASE_DIR = "workflow-out"
 
 private val log = KotlinLogging.logger {}
 
-class LocalExecutor(workflowConfig: WorkflowConfig) : EnvironmentExecutor {
+class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
 
-    private val dockerClient = buildDockerClient(workflowConfig.local?.docker?: DockerConfig())
+    private val dockerClient = buildDockerClient(workflowConfig.local?.docker ?: DockerConfig())
     private val workflowBasePath = Paths.get(workflowConfig.local?.localBaseDir ?: DEFAULT_LOCAL_BASE_DIR).toAbsolutePath()!!
 
     override fun prepareDatabaseFile(): String {
         Files.createDirectories(workflowBasePath)
-        return workflowBasePath.resolve(DB_FILENAME).toString()
+        return workflowBasePath.resolve(STATE_DIR).resolve(DB_FILENAME).toString()
     }
 
     override fun pushDatabaseFile() {}
@@ -145,7 +146,10 @@ private fun copyInputFiles(dockerClient: DockerClient, runBasePath: Path, docker
                            inputFiles: Set<WFile>) {
     if (inputFiles.isEmpty()) return
     inputFiles.forEach { inputFile ->
-        val tarInputStream = createTarStream(runBasePath.resolve(OUTPUTS_DIR).resolve(inputFile.path), "$dockerDataDir/${inputFile.path}")
+        val tarInputStream = createTarStream(
+            runBasePath.resolve(OUTPUTS_DIR).resolve(inputFile.path),
+            "$dockerDataDir/${inputFile.path}"
+        )
         dockerClient.copyArchiveToContainerCmd(containerId)
             .withTarInputStream(tarInputStream)
             .withRemotePath("/")
@@ -193,7 +197,10 @@ private fun copyOutputFiles(dockerClient: DockerClient, runBasePath: Path, docke
     Files.createDirectories(runBasePath)
     outputFiles.forEach { outputFile ->
         val tarStream = dockerClient.copyArchiveFromContainerCmd(containerId, "$dockerDataDir/${outputFile.path}").exec()
-        extractTarStream(tarStream, runBasePath.resolve(OUTPUTS_DIR).resolve(outputFile.path).parent)
+        extractTarStream(
+            tarStream,
+            runBasePath.resolve(OUTPUTS_DIR).resolve(outputFile.path).parent
+        )
     }
 }
 

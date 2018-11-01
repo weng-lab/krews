@@ -8,9 +8,10 @@ import java.sql.Connection
 
 fun migrateAndConnectDb(dbFile: String): Database {
     val dataSource = SQLiteDataSource()
-    dataSource.url = "jdbc:sqlite:$dbFile"
+    val dbUrl = "jdbc:sqlite:$dbFile"
+    dataSource.url = dbUrl
     Flyway.configure().dataSource(dataSource).load().migrate()
-    val db = Database.connect(dataSource)
+    val db = Database.connect(dbUrl, "org.sqlite.JDBC")
     TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_SERIALIZABLE
     return db
 }

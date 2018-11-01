@@ -3,7 +3,7 @@ package krews
 import com.typesafe.config.ConfigFactory
 import io.kotlintest.specs.StringSpec
 import krews.config.createWorkflowConfig
-import krews.executor.LocalExecutor
+import krews.executor.local.LocalExecutor
 
 class LocalExecutorTests : StringSpec({
     "Can run a simple workflow locally" {

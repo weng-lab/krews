@@ -2,18 +2,22 @@ package krews.executor
 
 import krews.WFile
 import krews.config.TaskConfig
+import java.nio.file.Path
 import kotlin.reflect.KProperty1
 import kotlin.reflect.full.memberProperties
 
 const val RUN_DIR = "run"
 const val OUTPUTS_DIR = "outputs"
 const val LOGS_DIR = "logs"
+const val STATE_DIR = "state"
 const val DB_FILENAME = "metadata.db"
 
+
 /**
- * Interface that deals with environment specific functionality, ie. moving files around and running containers.
+ * Interface that deals with environment specific functionality when directing a workflow locally - from the current process,
+ * ie. moving files around and running containers.
  */
-interface EnvironmentExecutor {
+interface LocallyDirectedExecutor {
 
     /**
      * Download the database file if remote and return path
@@ -35,6 +39,14 @@ interface EnvironmentExecutor {
      */
     fun executeTask(workflowRunDir: String, taskRunId: Int, taskConfig: TaskConfig, dockerImage: String,
                     dockerDataDir: String, command: String?, inputItem: Any, outputItem: Any?)
+}
+
+/**
+ * Interface that deals with environment specific functionality when directing a workflow remotely.
+ * This will involve shipping the current executable off somewhere else where it will run with a LocallyDirectedExecutor
+ */
+interface RemoteDirectedExecutor {
+    fun execute(executablePath: Path, configPath: Path)
 }
 
 /**

@@ -1,0 +1,152 @@
+package krews.executor.google
+
+import com.google.api.client.googleapis.json.GoogleJsonResponseException
+import com.google.api.client.http.InputStreamContent
+import com.google.api.services.genomics.v2alpha1.model.Action
+import com.google.api.services.genomics.v2alpha1.model.Mount
+import com.google.api.services.storage.Storage
+import com.google.api.services.storage.model.StorageObject
+import mu.KotlinLogging
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.StandardCopyOption
+
+private val log = KotlinLogging.logger {}
+
+const val APPLICATION_NAME = "krews"
+const val STORAGE_READ_WRITE_SCOPE = "https://www.googleapis.com/auth/devstorage.read_write"
+const val LOG_FILE_NAME = "out.txt"
+const val DISK_NAME = "disk"
+
+/**
+ * Create a pipeline action that will periodically copy logs to GCS
+ *
+ * @param frequency: Frequency that logs will be copied into GCS in seconds
+ */
+internal fun createPeriodicLogsAction(logPath: String, frequency: Int): Action {
+    val action = Action()
+    action.imageUri = CLOUD_SDK_IMAGE
+    action.commands = listOf("sh", "-c", "while true; do sleep $frequency; gsutil cp /google/logs/output $logPath; done")
+    action.flags = listOf("RUN_IN_BACKGROUND")
+    return action
+}
+
+/**
+ * Create a pipeline action that will copy logs to GCS after other actions are complete
+ */
+internal fun createLogsAction(logPath: String): Action {
+    val action = Action()
+    action.imageUri = CLOUD_SDK_IMAGE
+    action.commands = listOf("sh", "-c", "gsutil cp /google/logs/output $logPath")
+    action.flags = listOf("ALWAYS_RUN")
+    return action
+}
+
+/**
+ * Create a pipeline action that will download a file from Google Cloud Storage to the Pipelines VM
+ */
+internal fun createDownloadAction(objectToDownload: String, dataDir: String, file: String): Action {
+    val action = Action()
+    action.imageUri = CLOUD_SDK_IMAGE
+    action.commands = listOf("sh", "-c", "gsutil cp $objectToDownload $dataDir/$file; chmod 755 $dataDir/$file")
+    action.mounts = listOf(createMount(dataDir))
+    return action
+}
+
+/**
+ * Create a pipeline action that will upload a file from the Pipelines VM to the
+ */
+internal fun createUploadAction(objectToUpload: String, dataDir: String, file: String): Action {
+    val action = Action()
+    action.imageUri = CLOUD_SDK_IMAGE
+    action.commands = listOf("sh", "-c", "gsutil cp $dataDir/$file $objectToUpload")
+    action.mounts = listOf(createMount(dataDir))
+    action.flags = listOf("ALWAYS_RUN")
+    return action
+}
+
+/**
+ * Utility function to create a GCS path for the given GCS bucket and path components
+ */
+internal fun gcsPath(bucket: String, vararg pathParts: String?): String {
+    var gcsPath = "gs://$bucket"
+    pathParts.forEach {
+        if (it != null) gcsPath += "/$it"
+    }
+    return gcsPath
+}
+
+/**
+ * Utility method to create a GCS object path without a bucket / URI for path components
+ */
+internal fun gcsObjectPath(vararg pathParts: String?): String {
+    var gcsObject = ""
+    var first = true
+    pathParts.forEach {
+        if (it != null) {
+            if (first) {
+                first = false
+            } else {
+                gcsObject += "/"
+            }
+            gcsObject += it
+        }
+    }
+    return gcsObject
+}
+
+/**
+ * Convenience function to create a Mount object for a Pipeline Action with our standard data disk name
+ */
+internal fun createMount(mountDir: String): Mount {
+    val mount = Mount()
+    mount.disk = DISK_NAME
+    mount.path = mountDir
+    return mount
+}
+
+/**
+ * Copies an object from one location in Google Cloud Storage to Another
+ */
+internal fun copyObject(storageClient: Storage, fromBucket: String, fromObject: String, toBucket: String, toObject: String) {
+    log.info { "Copying Google Cloud Storage object $fromObject in bucket $fromBucket to $toObject in bucket $toBucket..." }
+    var rewriteToken: String? = null
+    do {
+        val rewrite = storageClient.objects().rewrite(fromBucket, fromObject, toBucket, toObject, null)
+        rewrite.rewriteToken = rewriteToken
+        val rewriteResponse = rewrite.execute()
+        rewriteToken = rewriteResponse.rewriteToken
+        if (!rewriteResponse.done) {
+            log.info { "${rewriteResponse.totalBytesRewritten} bytes copied" }
+        }
+    } while (!rewriteResponse.done)
+    log.info { "Copy complete!" }
+}
+
+/**
+ * Downloads an "object" from Google Cloud Storage to local file system
+ */
+internal fun downloadObject(storageClient: Storage, bucket: String, obj: String, downloadPath: Path): Boolean {
+    try {
+        log.info { "Downloading file $downloadPath from object $obj in bucket $bucket" }
+        val objectInputStream = storageClient.objects().get(bucket, obj).executeMediaAsInputStream()
+        Files.copy(objectInputStream, downloadPath, StandardCopyOption.REPLACE_EXISTING)
+        return true
+    } catch (e: GoogleJsonResponseException) {
+        if (e.statusCode == 404) {
+            return false
+        }
+        throw e
+    }
+}
+
+/**
+ * Uploads a file from a local file system to Google Cloud Storage
+ */
+internal fun uploadObject(storageClient: Storage, bucket: String, obj: String, uploadFromPath: Path) {
+    log.info { "Uploading file $uploadFromPath to object $obj in bucket $bucket" }
+    val contentStream = InputStreamContent(Files.probeContentType(uploadFromPath), Files.newInputStream(uploadFromPath))
+    contentStream.length = Files.size(uploadFromPath)
+    val objectMetadata = StorageObject().setName(obj)
+    storageClient.objects().insert(bucket, objectMetadata, contentStream).execute()
+}
