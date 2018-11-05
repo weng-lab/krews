@@ -1,8 +1,11 @@
+import com.jfrog.bintray.gradle.BintrayExtension
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     kotlin("jvm") version "1.3.0"
     id("maven")
+    id("maven-publish")
+    id("com.jfrog.bintray") version "1.8.1"
 }
 
 group = "io.krews"
@@ -36,4 +39,36 @@ dependencies {
 
 tasks.withType<KotlinCompile> {
     kotlinOptions.jvmTarget = "1.8"
+}
+
+val sourcesJar by tasks.creating(Jar::class) {
+    classifier = "sources"
+    from(java.sourceSets["main"].allSource)
+}
+
+
+val publicationName = "krews"
+publishing {
+    publications.invoke {
+        publicationName(MavenPublication::class) {
+            from(components["java"])
+            artifact(sourcesJar)
+        }
+    }
+}
+
+bintray {
+    user = System.getProperty("BINTRAY_USER")
+    key = System.getProperty("BINTRAY_KEY")
+    setPublications(publicationName)
+    publish = true
+    override = true
+    pkg(delegateClosureOf<BintrayExtension.PackageConfig> {
+        repo = "maven"
+        name = "krews"
+        githubRepo = "weng-lab/krews"
+        vcsUrl = "https://github.com/weng-lab/krews"
+        setLabels("kotlin")
+        setLicenses("MIT")
+    })
 }
