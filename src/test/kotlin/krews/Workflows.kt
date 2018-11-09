@@ -1,29 +1,31 @@
 package krews
 
+import krews.core.Workflow
+import krews.file.OutputFile
 import reactor.core.publisher.toFlux
 
 object SimpleWorkflow : Workflow("config-sample") {
-    val messages = IntArray(5) { it }.map { it to "I am message #$it" }.toFlux()
+    val messages = (1..5).toFlux()
 
-    val base64 = task<Pair<Int, String>, WFile>("base64") {
+    val base64 = task<Int, OutputFile>("base64") {
         dockerImage = "alpine:3.8"
 
         input = messages
-        outputFn { WFile("base64/${inputItem.first}.txt") }
+        outputFn { OutputFile("base64/${inputItem}.txt") }
         commandFn {
             """
-            echo "executing base64 on ${inputItem.first}"
+            echo "executing base64 on ${inputItem}"
             mkdir -p /data/base64
-            echo "${inputItem.second}" | base64 > /data/base64/${inputItem.first}.txt
+            echo "I am number ${inputItem}" | base64 > /data/base64/${inputItem}.txt
             """.trimIndent()
         }
     }
 
-    val gzip = task<WFile, WFile>("gzip") {
+    val gzip = task<OutputFile, OutputFile>("gzip") {
         dockerImage = "alpine:3.8"
 
         input = base64.output
-        outputFn { WFile("gzip/${inputItem.filename()}.gz") }
+        outputFn { OutputFile("gzip/${inputItem.filename()}.gz") }
         commandFn {
             """
             echo "executing gzip on ${inputItem.filename()}"

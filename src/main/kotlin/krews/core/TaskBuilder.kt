@@ -1,14 +1,14 @@
-package krews
+package krews.core
 
 import org.reactivestreams.Publisher
 import reactor.core.publisher.Flux
 
 class TaskBuilder<I : Any, O : Any> @PublishedApi internal constructor(
-        private val workflow: Workflow,
-        private val name: String,
-        private val outputClass: Class<O>) {
+    private val workflow: Workflow,
+    private val name: String,
+    private val outputClass: Class<O>) {
     lateinit var dockerImage: String
-    var dockerDataDir: String = "/data"
+    var dockerDataDir: String = DEFAULT_DOCKER_DATA_DIR
     lateinit var input: Publisher<I>
     private lateinit var outputFn: ((inputItem: I) -> O)
     private lateinit var commandFn: ((inputItem: I) -> String)
@@ -39,7 +39,8 @@ class TaskBuilder<I : Any, O : Any> @PublishedApi internal constructor(
             dockerDataDir = dockerDataDir,
             outputFn = outputFn,
             commandFn = commandFn,
-            outputClass = outputClass)
+            outputClass = outputClass
+        )
 
     }
 }

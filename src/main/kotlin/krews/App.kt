@@ -4,10 +4,12 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.convert
 import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.option
-import com.github.ajalt.clikt.parameters.options.required
 import com.github.ajalt.clikt.parameters.types.choice
 import com.typesafe.config.ConfigFactory
 import krews.config.createWorkflowConfig
+import krews.core.Workflow
+import krews.core.WorkflowRunner
+import krews.core.defaultWorkflow
 import krews.executor.google.GoogleExecutor
 import krews.executor.google.GoogleLocalExecutor
 import krews.executor.local.LocalExecutor

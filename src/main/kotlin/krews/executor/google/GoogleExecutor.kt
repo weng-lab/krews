@@ -1,8 +1,5 @@
 package krews.executor.google
 
-import com.google.api.client.googleapis.auth.oauth2.GoogleCredential
-import com.google.api.client.http.javanet.NetHttpTransport
-import com.google.api.client.json.jackson2.JacksonFactory
 import com.google.api.services.genomics.v2alpha1.Genomics
 import com.google.api.services.genomics.v2alpha1.model.*
 import com.google.api.services.storage.Storage
@@ -33,15 +30,9 @@ class GoogleExecutor(workflowConfig: WorkflowConfig) : RemoteDirectedExecutor {
     private val gcsBase = googleConfig.storageBaseDir
 
     init {
-        val transport = NetHttpTransport()
-        val jsonFactory = JacksonFactory.getDefaultInstance()
-        val credentials = GoogleCredential.getApplicationDefault()
-        genomicsClient = Genomics.Builder(transport, jsonFactory, credentials)
-            .setApplicationName(APPLICATION_NAME)
-            .build()
-        storageClient = Storage.Builder(transport, jsonFactory, credentials)
-            .setApplicationName(APPLICATION_NAME)
-            .build()
+        val googleClients = createGoogleClients()
+        genomicsClient = googleClients.first
+        storageClient = googleClients.second
     }
 
     override fun execute(executablePath: Path, configPath: Path) {
@@ -117,6 +108,6 @@ internal fun createExecuteWorkflowAction(executableFilename: String, configFilen
     action.imageUri = MASTER_IMAGE
     action.mounts = listOf(createMount(MASTER_RUN_DIR))
     action.environment = mapOf(WORKFLOW_RUN_TIMESTAMP_ENV_VAR to "${workflowTime.millis}")
-    action.commands = listOf("sh", "-c", "set -x; $MASTER_RUN_DIR/$executableFilename --on google-local --config $MASTER_RUN_DIR/$configFilename")
+    action.commands = listOf("sh", "-c", "$MASTER_RUN_DIR/$executableFilename --on google-local --config $MASTER_RUN_DIR/$configFilename")
     return action
 }

@@ -1,16 +1,14 @@
 package krews.executor.google
 
-import com.google.api.client.googleapis.auth.oauth2.GoogleCredential
-import com.google.api.client.http.javanet.NetHttpTransport
-import com.google.api.client.json.jackson2.JacksonFactory
 import com.google.api.services.genomics.v2alpha1.Genomics
 import com.google.api.services.genomics.v2alpha1.model.*
 import com.google.api.services.storage.Storage
-import krews.WFile
 import krews.config.CapacityType
 import krews.config.TaskConfig
 import krews.config.WorkflowConfig
 import krews.executor.*
+import krews.file.InputFile
+import krews.file.OutputFile
 import mu.KotlinLogging
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -35,15 +33,9 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
     private val dbStorageObject = gcsObjectPath(gcsBase, STATE_DIR, DB_FILENAME)
 
     init {
-        val transport = NetHttpTransport()
-        val jsonFactory = JacksonFactory.getDefaultInstance()
-        val credentials = GoogleCredential.getApplicationDefault()
-        genomicsClient = Genomics.Builder(transport, jsonFactory, credentials)
-            .setApplicationName(APPLICATION_NAME)
-            .build()
-        storageClient = Storage.Builder(transport, jsonFactory, credentials)
-            .setApplicationName(APPLICATION_NAME)
-            .build()
+        val googleClients = createGoogleClients()
+        genomicsClient = googleClients.first
+        storageClient = googleClients.second
     }
 
     override fun prepareDatabaseFile(): String {
@@ -65,33 +57,22 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
         uploadObject(storageClient, bucket, dbStorageObject, dbFilePath)
     }
 
-    override fun copyCachedOutputs(fromWorkflowDir: String, toWorkflowDir: String, outputFiles: Set<WFile>) {
-        log.info { "Copying cached outputs $outputFiles from workflow run dir $fromWorkflowDir to $toWorkflowDir" }
-        outputFiles.forEach { outputFile ->
-            val fromObject = gcsObjectPath(gcsBase, RUN_DIR, fromWorkflowDir, OUTPUTS_DIR, outputFile.path)
-            val toObject = gcsObjectPath(gcsBase, RUN_DIR, toWorkflowDir, OUTPUTS_DIR, outputFile.path)
+    override fun copyCachedFiles(fromDir: String, toDir: String, files: Set<String>) {
+        for (file in files) {
+            val fromObject = gcsObjectPath(fromDir, file)
+            val toObject = gcsObjectPath(toDir, file)
             copyObject(storageClient, bucket, fromObject, bucket, toObject)
         }
     }
 
     override fun executeTask(workflowRunDir: String, taskRunId: Int, taskConfig: TaskConfig, dockerImage: String,
-                             dockerDataDir: String, command: String?, inputItem: Any, outputItem: Any?) {
-        val run = RunPipelineRequest()
-        val pipeline = Pipeline()
-        run.pipeline = pipeline
-
-        val resources = Resources()
-        pipeline.resources = resources
-        if (!googleConfig.zones.isEmpty()) {
-            resources.zones = googleConfig.zones
-        } else if (!googleConfig.regions.isEmpty()) {
-            resources.regions = googleConfig.regions
-        }
-
-        resources.projectId = googleConfig.projectId
+                             dockerDataDir: String, command: String?, outputFilesIn: Set<OutputFile>, outputFilesOut: Set<OutputFile>,
+                             localInputFiles: Set<LocalInputFile>, remoteInputFiles: Set<InputFile>) {
+        val run = createRunPipelineRequest(googleConfig)
+        val actions = run.pipeline.actions
 
         val virtualMachine = VirtualMachine()
-        resources.virtualMachine = virtualMachine
+        run.pipeline.resources.virtualMachine = virtualMachine
         virtualMachine.machineType = taskConfig.google?.machineType ?: DEFAULT_MACHINE_TYPE
 
         val serviceAccount = ServiceAccount()
@@ -105,28 +86,41 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
             disk.sizeGb = taskConfig.google.diskSize.toType(CapacityType.GB).toInt()
         }
 
-        val actions = mutableListOf<Action>()
-        pipeline.actions = actions
-
         // Create action to periodically copy logs to GCS
-        val logPath = gcsPath(bucket, gcsBase, RUN_DIR, workflowRunDir, LOGS_DIR, taskRunId.toString(), LOG_FILE_NAME)
+        val logPath = gcsPath(bucket, gcsBase, workflowRunDir, LOGS_DIR, taskRunId.toString(), LOG_FILE_NAME)
         actions.add(createPeriodicLogsAction(logPath, googleConfig.logUploadInterval))
 
-        // Create actions to download each input file
-        val inputFiles = getFilesForObject(inputItem)
-        val downloadActions = inputFiles.map {
-            val inputFileObject = gcsPath(bucket, gcsBase, RUN_DIR, workflowRunDir, OUTPUTS_DIR, it.path)
+        // Create actions to download InputFiles from remote sources
+        val downloadRemoteInputFileActions = remoteInputFiles.map { createDownloadRemoteFileAction(it, dockerDataDir) }
+        actions.addAll(downloadRemoteInputFileActions)
+
+        // Create actions to download InputFiles from our GCS run directories
+        val downloadLocalInputFileActions = localInputFiles.map {
+            val inputFileObject = gcsPath(bucket, gcsBase, it.workflowInputsDir, it.path)
             createDownloadAction(inputFileObject, dockerDataDir, it.path)
         }
-        actions.addAll(downloadActions)
+        actions.addAll(downloadLocalInputFileActions)
+
+        // Create actions to download each task input OutputFile from the current GCS run directory
+        val downloadOutputFileActions = outputFilesIn.map {
+            val outputFileObject = gcsPath(bucket, gcsBase, workflowRunDir, OUTPUTS_DIR, it.path)
+            createDownloadAction(outputFileObject, dockerDataDir, it.path)
+        }
+        actions.addAll(downloadOutputFileActions)
 
         // Create the action that runs the task
         actions.add(createExecuteTaskAction(dockerImage, dockerDataDir, command))
 
-        // Create the actions to upload each output file
-        val outputFiles = getFilesForObject(outputItem)
-        val uploadActions = outputFiles.map {
-            val outputFileObject = gcsPath(bucket, gcsBase, RUN_DIR, workflowRunDir, OUTPUTS_DIR, it.path)
+        // Create the actions to upload each downloaded remote InputFile
+        val uploadInputFileActions = remoteInputFiles.map {
+            val inputFileObject = gcsPath(bucket, gcsBase, workflowRunDir, INPUTS_DIR, it.path)
+            createUploadAction(inputFileObject, dockerDataDir, it.path)
+        }
+        actions.addAll(uploadInputFileActions)
+
+        // Create the actions to upload each task output OutputFile
+        val uploadActions = outputFilesOut.map {
+            val outputFileObject = gcsPath(bucket, gcsBase, workflowRunDir, OUTPUTS_DIR, it.path)
             createUploadAction(outputFileObject, dockerDataDir, it.path)
         }
         actions.addAll(uploadActions)
@@ -134,21 +128,22 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
         // Create action to copy logs to GCS after everything else is complete
         actions.add(createLogsAction(logPath))
 
-        log.info { "Submitting pipeline job for task run $taskRunId:\n$run" }
-        genomicsClient.projects().operations()
-        val initialOp: Operation = genomicsClient.pipelines().run(run).execute()
+        submitJobAndWait(genomicsClient, run, googleConfig.jobCompletionPollInterval)
+    }
 
-        log.info { "Pipeline job submitted. Operation returned: \"${initialOp.name}\". " +
-                "Will check for completion every ${googleConfig.jobCompletionPollInterval} seconds" }
-        do {
-            Thread.sleep(googleConfig.jobCompletionPollInterval * 1000L)
-            val op: Operation = genomicsClient.projects().operations().get(initialOp.name).execute()
-            if (op.done) {
-                log.info { "Pipeline job \"${op.name}\" complete! Complete results: ${op.toPrettyString()}" }
-            } else {
-                log.info { "Pipeline job \"${op.name}\" still running..." }
-            }
-        } while (!op.done)
+    override fun downloadRemoteInputFiles(inputFiles: Set<InputFile>, dockerDataDir: String, workflowInputsDir: String) {
+        val run = createRunPipelineRequest(googleConfig)
+        val actions = inputFiles.map { createDownloadRemoteFileAction(it, dockerDataDir) }
+        run.pipeline.actions.addAll(actions)
+
+        // Create the actions to upload each downloaded remote InputFile
+        val uploadInputFileActions = inputFiles.map {
+            val inputFileObject = gcsPath(bucket, gcsBase, workflowInputsDir, it.path)
+            createUploadAction(inputFileObject, dockerDataDir, it.path)
+        }
+        run.pipeline.actions.addAll(uploadInputFileActions)
+
+        submitJobAndWait(genomicsClient, run, googleConfig.jobCompletionPollInterval)
     }
 
 }
@@ -156,10 +151,43 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
 /**
  * Create a pipeline action that will execute the task
  */
-internal fun createExecuteTaskAction(dockerImage: String, dataDir: String, command: String?): Action {
+internal fun createExecuteTaskAction(dockerImage: String, dockerDataDir: String, command: String?): Action {
     val action = Action()
     action.imageUri = dockerImage
-    action.mounts = listOf(createMount(dataDir))
+    action.mounts = listOf(createMount(dockerDataDir))
     if (command != null) action.commands = listOf("/bin/sh", "-c", command)
     return action
+}
+
+/**
+ * Create pipeline actions that will download input files from remote sources
+ */
+internal fun createDownloadRemoteFileAction(inputFile: InputFile, dataDir: String): Action {
+    val action = Action()
+    action.imageUri = inputFile.downloadFileImage()
+    action.mounts = listOf(createMount(dataDir))
+    action.commands = listOf("/bin/sh", "-c", inputFile.downloadFileCommand(dataDir))
+    return action
+}
+
+/**
+ * Submits a job to the pipelines api and polls periodically until the job is complete.
+ * The current thread will be blocked until the job is complete.
+ */
+internal fun submitJobAndWait(genomicsClient: Genomics, run: RunPipelineRequest, jobCompletionPollInterval: Int) {
+    log.info { "Submitting pipeline job for task run: $run" }
+    genomicsClient.projects().operations()
+    val initialOp: Operation = genomicsClient.pipelines().run(run).execute()
+
+    log.info { "Pipeline job submitted. Operation returned: \"${initialOp.name}\". " +
+            "Will check for completion every $jobCompletionPollInterval seconds" }
+    do {
+        Thread.sleep(jobCompletionPollInterval * 1000L)
+        val op: Operation = genomicsClient.projects().operations().get(initialOp.name).execute()
+        if (op.done) {
+            log.info { "Pipeline job \"${op.name}\" complete! Complete results: ${op.toPrettyString()}" }
+        } else {
+            log.info { "Pipeline job \"${op.name}\" still running..." }
+        }
+    } while (!op.done)
 }

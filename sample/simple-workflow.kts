@@ -4,7 +4,7 @@
 import krews.*
 import reactor.core.publisher.*
 
-val messages: Flux<Int> = IntArray(5) { it }.toFlux()
+val messages: Flux<Int> = (1..5).toFlux()
 
 val base64 = task<Int, WFile>("base64") {
     dockerImage = "alpine:3.8"

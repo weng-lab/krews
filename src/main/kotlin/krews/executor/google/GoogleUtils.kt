@@ -1,11 +1,15 @@
 package krews.executor.google
 
+import com.google.api.client.googleapis.auth.oauth2.GoogleCredential
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.api.client.http.InputStreamContent
-import com.google.api.services.genomics.v2alpha1.model.Action
-import com.google.api.services.genomics.v2alpha1.model.Mount
+import com.google.api.client.http.javanet.NetHttpTransport
+import com.google.api.client.json.jackson2.JacksonFactory
+import com.google.api.services.genomics.v2alpha1.Genomics
+import com.google.api.services.genomics.v2alpha1.model.*
 import com.google.api.services.storage.Storage
 import com.google.api.services.storage.model.StorageObject
+import krews.config.GoogleWorkflowConfig
 import mu.KotlinLogging
 import java.nio.file.Files
 import java.nio.file.Path
@@ -17,6 +21,41 @@ const val APPLICATION_NAME = "krews"
 const val STORAGE_READ_WRITE_SCOPE = "https://www.googleapis.com/auth/devstorage.read_write"
 const val LOG_FILE_NAME = "out.txt"
 const val DISK_NAME = "disk"
+
+internal fun createGoogleClients(): Pair<Genomics, Storage> {
+    val transport = NetHttpTransport()
+    val jsonFactory = JacksonFactory.getDefaultInstance()
+    val credentials = GoogleCredential.getApplicationDefault()
+    val genomics = Genomics.Builder(transport, jsonFactory, credentials)
+        .setApplicationName(APPLICATION_NAME)
+        .build()
+    val storage = Storage.Builder(transport, jsonFactory, credentials)
+        .setApplicationName(APPLICATION_NAME)
+        .build()
+    return Pair(genomics, storage)
+}
+
+internal fun createRunPipelineRequest(googleConfig: GoogleWorkflowConfig): RunPipelineRequest {
+    val run = RunPipelineRequest()
+    val pipeline = Pipeline()
+    run.pipeline = pipeline
+
+    val resources = Resources()
+    pipeline.resources = resources
+    if (!googleConfig.zones.isEmpty()) {
+        resources.zones = googleConfig.zones
+    } else if (!googleConfig.regions.isEmpty()) {
+        resources.regions = googleConfig.regions
+    }
+
+    resources.projectId = googleConfig.projectId
+
+    val actions = mutableListOf<Action>()
+    run.pipeline.actions = actions
+
+    return run
+}
+
 
 /**
  * Create a pipeline action that will periodically copy logs to GCS
@@ -54,12 +93,13 @@ internal fun createDownloadAction(objectToDownload: String, dataDir: String, fil
 }
 
 /**
- * Create a pipeline action that will upload a file from the Pipelines VM to the
+ * Create a pipeline action that will upload a file from the Pipelines VM to the specified google storage object.
  */
 internal fun createUploadAction(objectToUpload: String, dataDir: String, file: String): Action {
     val action = Action()
     action.imageUri = CLOUD_SDK_IMAGE
-    action.commands = listOf("sh", "-c", "gsutil cp $dataDir/$file $objectToUpload")
+    // -n flag make sure it does not try to upload objects that already exist
+    action.commands = listOf("sh", "-c", "gsutil cp -n $dataDir/$file $objectToUpload")
     action.mounts = listOf(createMount(dataDir))
     action.flags = listOf("ALWAYS_RUN")
     return action

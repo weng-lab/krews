@@ -1,18 +1,20 @@
-package krews
+package krews.core
 
 import reactor.core.publisher.Flux
 import reactor.core.publisher.TopicProcessor
 
+const val DEFAULT_DOCKER_DATA_DIR = "/data"
+
 class Task<I : Any, O : Any> internal constructor(
-        val workflow: Workflow,
-        val name: String,
-        val labels: List<String> = listOf(),
-        val input: Flux<I>,
-        val dockerImage: String,
-        val dockerDataDir: String,
-        private val outputFn: (inputItem: I) -> O,
-        private val commandFn: (inputItem: I) -> String,
-        internal val outputClass: Class<O>) {
+    val workflow: Workflow,
+    val name: String,
+    val labels: List<String> = listOf(),
+    val input: Flux<I>,
+    val dockerImage: String,
+    val dockerDataDir: String,
+    private val outputFn: (inputItem: I) -> O,
+    private val commandFn: (inputItem: I) -> String,
+    internal val outputClass: Class<O>) {
 
     val output: Flux<O> = TopicProcessor.create<O>()
 

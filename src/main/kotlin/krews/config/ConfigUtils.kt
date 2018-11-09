@@ -5,8 +5,8 @@ import com.fasterxml.jackson.module.kotlin.convertValue
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigValue
-import krews.Task
-import krews.Workflow
+import krews.core.Task
+import krews.core.Workflow
 
 const val DEFAULT_TASK_CONFIG_NAME = "default"
 const val NAME_TASK_CONFIG_PREFIX = "name-"
