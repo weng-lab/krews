@@ -11,12 +11,12 @@ object SimpleWorkflow : Workflow("config-sample") {
         dockerImage = "alpine:3.8"
 
         input = messages
-        outputFn { OutputFile("base64/${inputItem}.txt") }
+        outputFn { OutputFile("base64/$inputItem.txt") }
         commandFn {
             """
-            echo "executing base64 on ${inputItem}"
+            echo "executing base64 on $inputItem"
             mkdir -p /data/base64
-            echo "I am number ${inputItem}" | base64 > /data/base64/${inputItem}.txt
+            echo "I am number $inputItem" | base64 > /data/base64/$inputItem.txt
             """.trimIndent()
         }
     }

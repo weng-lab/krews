@@ -6,21 +6,21 @@ import reactor.core.publisher.*
 
 val messages: Flux<Int> = (1..5).toFlux()
 
-val base64 = task<Int, WFile>("base64") {
+val base64 = task<Int, OutputFile>("base64") {
     dockerImage = "alpine:3.8"
 
     input = messages
-    outputFn { WFile("base64/${inputItem}.txt") }
+    outputFn { WFile("base64/$inputItem.txt") }
     commandFn {
         """
-        echo "executing base64 on ${inputItem}"
+        echo "executing base64 on $inputItem"
         mkdir -p /data/base64
-        echo "I am number ${inputItem}" | base64 > /data/base64/${inputItem}.txt
+        echo "I am number $inputItem" | base64 > /data/base64/$inputItem.txt
         """.trimIndent()
     }
 }
 
-task<WFile, WFile>("gzip") {
+task<OutputFile, OutputFile>("gzip") {
     dockerImage = "alpine:3.8"
 
     input = base64.output
