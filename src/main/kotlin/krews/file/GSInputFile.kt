@@ -25,5 +25,5 @@ class GSInputFile(val bucket: String, val objectPath: String, path: String = obj
     override fun fetchLastModified() = DateTime(storageClient.objects().get(bucket, objectPath).execute().updated.value)
     override fun downloadFileImage() = CLOUD_SDK_IMAGE
     override fun downloadFileCommand(containerBaseDir: String) =
-        "gsutil cp gs://$bucket/$objectPath $containerBaseDir/$objectPath"
+        "gsutil cp gs://$bucket/$objectPath $containerBaseDir/$path"
 }

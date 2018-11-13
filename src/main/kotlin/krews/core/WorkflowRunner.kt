@@ -89,7 +89,6 @@ class WorkflowRunner(private val workflow: Workflow,
                 this.inputJson = inputJson
                 this.command = command
                 this.image = task.dockerImage
-                this.outputJson = mapper.writeValueAsString(outputItem)
             }
         }
         log.info { "Task run created with id ${taskRun.id.value}. Checking cache..." }
@@ -105,8 +104,8 @@ class WorkflowRunner(private val workflow: Workflow,
         val latestCachedOutputTask: TaskRun? = cachedOutputTasks.maxBy { it.startTime }
 
         val inputFilesBySource = transaction(db) { inputFilesBySource(inputItem) }
-        val toInputDir = getWorkflowInputsDir(workflowRun)
-        val prevRunInputFiles = inputFilesBySource.local.filter { it.workflowInputsDir == toInputDir }
+        val toInputDir = transaction(db) { getWorkflowInputsDir(workflowRun) }
+        val prevRunInputFiles = inputFilesBySource.cached.filter { it.workflowInputsDir == toInputDir }
         if (prevRunInputFiles.isNotEmpty()) {
             log.info { "Copying input files $prevRunInputFiles from previous run input directories to $toInputDir" }
             for (inputFile in prevRunInputFiles) {
@@ -129,7 +128,7 @@ class WorkflowRunner(private val workflow: Workflow,
             val outputFilesOut = getOutputFilesForObject(outputItem)
             executor.executeTask(
                 getWorkflowRunDir(workflowRun), taskRun.id.value, taskConfig, task.dockerImage,
-                task.dockerDataDir, command, outputFilesIn, outputFilesOut, inputFilesBySource.local, inputFilesBySource.remote
+                task.dockerDataDir, command, outputFilesIn, outputFilesOut, inputFilesBySource.cached, inputFilesBySource.download
             )
         } else {
             log.info { "Valid cached outputs found. Skipping execution." }
@@ -149,7 +148,7 @@ class WorkflowRunner(private val workflow: Workflow,
             log.info { "Task completed successfully. Saving status..." }
 
             // Create new input file records in db for files copied from remote sources during execution
-            for (remoteInputFile in inputFilesBySource.remote) {
+            for (remoteInputFile in inputFilesBySource.download) {
                 InputFileRecord.new {
                     this.path = remoteInputFile.path
                     this.lastModifiedTime = remoteInputFile.lastModified
@@ -157,6 +156,13 @@ class WorkflowRunner(private val workflow: Workflow,
                 }
             }
 
+            // Add last modified timestamps to output files in task output
+            val outputFilesOut = getOutputFilesForObject(outputItem)
+            for (outputFile in outputFilesOut) {
+                outputFile.lastModified = executor.outputFileLastModified(getWorkflowOutputsDir(workflowRun), outputFile)
+            }
+
+            taskRun.outputJson = mapper.writeValueAsString(outputItem)
             taskRun.completedSuccessfully = true
             taskRun.completedTime = DateTime.now()
         }
@@ -165,7 +171,8 @@ class WorkflowRunner(private val workflow: Workflow,
     private fun runFileImport(inputItem: Any, dockerDataDir: String) {
         log.info { "Running file import for inputItem $inputItem" }
         val (_, remoteInputFiles) = transaction(db) { inputFilesBySource(inputItem) }
-        executor.downloadRemoteInputFiles(remoteInputFiles, dockerDataDir)
+        val workflowInputsDir = getWorkflowInputsDir(workflowRun)
+        executor.downloadRemoteInputFiles(remoteInputFiles, dockerDataDir, workflowInputsDir)
     }
 }
 
@@ -175,16 +182,16 @@ private fun getWorkflowInputsDir(workflowRun: WorkflowRun) = "${getWorkflowRunDi
 
 /**
  * Gets a set of InputFiles out of the given inputItem, and splits them up into two categories: those that need to be
- * downloaded from local (executor) storage and remote sources.
+ * downloaded from cached (executor) storage and original sources.
  *
  * @param inputItem The item being processed, which may contain one or many input files.
- * @return Object containing "local" input files (as records) that we will download from the record's run directory
- * and "remote" input files that we need to download from remote source
+ * @return Object containing "cached" input files (as records) that we will download from the record's run directory
+ * and "download" input files that we need to download from the original input source
  */
 private fun inputFilesBySource(inputItem: Any): InputFilesBySource {
     val inputFiles = getInputFilesForObject(inputItem)
-    val local = mutableSetOf<LocalInputFile>()
-    val remote = mutableSetOf<InputFile>()
+    val cached = mutableSetOf<CachedInputFile>()
+    val download = mutableSetOf<InputFile>()
 
     for (inputFile in inputFiles) {
         val inputFileRecord = InputFileRecord
@@ -194,14 +201,14 @@ private fun inputFilesBySource(inputItem: Any): InputFilesBySource {
 
         // If the latest record exists and has the same lastModified time as remote, use the record's local copy
         if (inputFileRecord != null && inputFileRecord.lastModifiedTime == inputFile.lastModified) {
-            val localInputFile = LocalInputFile(inputFileRecord.path, getWorkflowInputsDir(inputFileRecord.workflowRun),
+            val localInputFile = CachedInputFile(inputFileRecord.path, getWorkflowInputsDir(inputFileRecord.workflowRun),
                 inputFileRecord.lastModifiedTime.millis)
-            local.add(localInputFile)
+            cached.add(localInputFile)
         } else {
-            remote.add(inputFile)
+            download.add(inputFile)
         }
     }
-    return InputFilesBySource(local, remote)
+    return InputFilesBySource(cached, download)
 }
 
-private data class InputFilesBySource(val local: Set<LocalInputFile>, val remote: Set<InputFile>)
+private data class InputFilesBySource(val cached: Set<CachedInputFile>, val download: Set<InputFile>)

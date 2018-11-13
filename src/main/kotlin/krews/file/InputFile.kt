@@ -11,7 +11,7 @@ import org.joda.time.DateTime
  * @param path The relative path for this input file. It will be used as the storage path under the
  *      /run/$run-timestamp/inputs directory, as well as the local task docker container path.
  */
-abstract class InputFile(val path: String) {
+abstract class InputFile(path: String) : BaseFile(path) {
     val lastModified: DateTime by lazy { fetchLastModified() }
 
     /**

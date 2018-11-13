@@ -4,6 +4,7 @@ import krews.config.TaskConfig
 import krews.db.InputFileRecord
 import krews.file.InputFile
 import krews.file.OutputFile
+import org.joda.time.DateTime
 import java.nio.file.Path
 import kotlin.reflect.KProperty1
 import kotlin.reflect.full.memberProperties
@@ -33,6 +34,11 @@ interface LocallyDirectedExecutor {
     fun pushDatabaseFile()
 
     /**
+     * @return The last modified date for the given output file as timestamp
+     */
+    fun outputFileLastModified(runOutputsDir: String, outputFile: OutputFile): DateTime
+
+    /**
      * Copy cached output files from one workflow run directory to another
      */
     fun copyCachedFiles(fromDir: String, toDir: String, files: Set<String>)
@@ -45,12 +51,12 @@ interface LocallyDirectedExecutor {
      * current environment's storage.
      * @param outputFilesOut: Output files coming from a task's current "Output Item." These need to end up in the
      * current environment's storage.
-     * @param localInputFiles: Input files that exist in the current environment's storage.
-     * @param remoteInputFiles: Input files that need to be downloaded from remote sources.
+     * @param cachedInputFiles: Input files that exist in the current environment's storage.
+     * @param downloadInputFiles: Input files that need to be downloaded from original sources.
      */
     fun executeTask(workflowRunDir: String, taskRunId: Int, taskConfig: TaskConfig, dockerImage: String,
                     dockerDataDir: String, command: String?, outputFilesIn: Set<OutputFile>, outputFilesOut: Set<OutputFile>,
-                    localInputFiles: Set<LocalInputFile>, remoteInputFiles: Set<InputFile>)
+                    cachedInputFiles: Set<CachedInputFile>, downloadInputFiles: Set<InputFile>)
 
     /**
      * Download input files from remote sources and load them into /run/$run-timestamp/inputs directory.
@@ -71,7 +77,7 @@ interface LocallyDirectedExecutor {
  * @param workflowInputsDir: The executor specific /run/$run-timestamp/inputs directory where the file lives
  * @param lastModified: last modified date of file
  */
-data class LocalInputFile(val path: String, val workflowInputsDir: String, val lastModified: Long)
+data class CachedInputFile(val path: String, val workflowInputsDir: String, val lastModified: Long)
 
 /**
  * Interface that deals with environment specific functionality when directing a workflow remotely.

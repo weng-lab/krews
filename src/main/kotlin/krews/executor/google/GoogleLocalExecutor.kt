@@ -10,6 +10,7 @@ import krews.executor.*
 import krews.file.InputFile
 import krews.file.OutputFile
 import mu.KotlinLogging
+import org.joda.time.DateTime
 import java.nio.file.Files
 import java.nio.file.Paths
 
@@ -57,6 +58,11 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
         uploadObject(storageClient, bucket, dbStorageObject, dbFilePath)
     }
 
+    override fun outputFileLastModified(runOutputsDir: String, outputFile: OutputFile): DateTime {
+        val objectPath = gcsObjectPath(gcsBase, runOutputsDir, outputFile.path)
+        return DateTime(storageClient.objects().get(bucket, objectPath).execute().updated.value)
+    }
+
     override fun copyCachedFiles(fromDir: String, toDir: String, files: Set<String>) {
         for (file in files) {
             val fromObject = gcsObjectPath(fromDir, file)
@@ -67,7 +73,7 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
 
     override fun executeTask(workflowRunDir: String, taskRunId: Int, taskConfig: TaskConfig, dockerImage: String,
                              dockerDataDir: String, command: String?, outputFilesIn: Set<OutputFile>, outputFilesOut: Set<OutputFile>,
-                             localInputFiles: Set<LocalInputFile>, remoteInputFiles: Set<InputFile>) {
+                             cachedInputFiles: Set<CachedInputFile>, downloadInputFiles: Set<InputFile>) {
         val run = createRunPipelineRequest(googleConfig)
         val actions = run.pipeline.actions
 
@@ -91,11 +97,11 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
         actions.add(createPeriodicLogsAction(logPath, googleConfig.logUploadInterval))
 
         // Create actions to download InputFiles from remote sources
-        val downloadRemoteInputFileActions = remoteInputFiles.map { createDownloadRemoteFileAction(it, dockerDataDir) }
+        val downloadRemoteInputFileActions = downloadInputFiles.map { createDownloadRemoteFileAction(it, dockerDataDir) }
         actions.addAll(downloadRemoteInputFileActions)
 
         // Create actions to download InputFiles from our GCS run directories
-        val downloadLocalInputFileActions = localInputFiles.map {
+        val downloadLocalInputFileActions = cachedInputFiles.map {
             val inputFileObject = gcsPath(bucket, gcsBase, it.workflowInputsDir, it.path)
             createDownloadAction(inputFileObject, dockerDataDir, it.path)
         }
@@ -112,7 +118,7 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
         actions.add(createExecuteTaskAction(dockerImage, dockerDataDir, command))
 
         // Create the actions to upload each downloaded remote InputFile
-        val uploadInputFileActions = remoteInputFiles.map {
+        val uploadInputFileActions = downloadInputFiles.map {
             val inputFileObject = gcsPath(bucket, gcsBase, workflowRunDir, INPUTS_DIR, it.path)
             createUploadAction(inputFileObject, dockerDataDir, it.path)
         }

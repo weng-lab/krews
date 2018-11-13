@@ -6,6 +6,7 @@ import krews.config.createWorkflowConfig
 import krews.core.WorkflowRunner
 import krews.executor.google.GoogleLocalExecutor
 
+/*
 val googleConfig =
     """
     google {
@@ -27,3 +28,4 @@ class GoogleExecutorTests : StringSpec({
         runner.run()
     }
 })
+*/

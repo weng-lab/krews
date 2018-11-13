@@ -17,17 +17,8 @@ import org.joda.time.DateTime
  * For example, an input type of `data class MyData(val myMap: Map<String, WFile>)` would copy all WFiles in
  * MyData.myMap values.
  */
-class OutputFile(val path: String) {
+class OutputFile(path: String) : BaseFile(path) {
     lateinit var lastModified: DateTime internal set
-
-    fun parentDir(): String {
-        val pathParts = path.split("/")
-        return pathParts.joinToString("/", limit = pathParts.size - 1)
-    }
-
-    fun filename(): String {
-        return path.split("/").last()
-    }
 }
 
 /* TODO: finish implementing

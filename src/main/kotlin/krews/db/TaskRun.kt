@@ -9,10 +9,10 @@ object TaskRuns : IntIdTable("task_run") {
     val startTime = datetime("start_time")
     val completedSuccessfully = bool("completed_successfully")
     val completedTime = datetime("completed_time").nullable()
-    val inputJson = text("input_hash")
-    val command = text("command_hash").nullable()
+    val inputJson = text("input_json")
+    val command = text("command").nullable()
     val image = text("image")
-    val outputJson = text("output_json")
+    val outputJson = text("output_json").nullable()
     init {
         uniqueIndex("task_run_by_inputs", taskName, inputJson, command, image)
     }

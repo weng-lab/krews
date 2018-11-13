@@ -5,11 +5,11 @@ import reactor.core.publisher.TopicProcessor
 
 const val DEFAULT_DOCKER_DATA_DIR = "/data"
 
-class Task<I : Any, O : Any> internal constructor(
+class Task<out I : Any, O : Any> internal constructor(
     val workflow: Workflow,
     val name: String,
     val labels: List<String> = listOf(),
-    val input: Flux<I>,
+    val input: Flux<out I>,
     val dockerImage: String,
     val dockerDataDir: String,
     private val outputFn: (inputItem: I) -> O,

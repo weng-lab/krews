@@ -9,7 +9,7 @@ class TaskBuilder<I : Any, O : Any> @PublishedApi internal constructor(
     private val outputClass: Class<O>) {
     lateinit var dockerImage: String
     var dockerDataDir: String = DEFAULT_DOCKER_DATA_DIR
-    lateinit var input: Publisher<I>
+    lateinit var input: Publisher<out I>
     private lateinit var outputFn: ((inputItem: I) -> O)
     private lateinit var commandFn: ((inputItem: I) -> String)
     var labels: List<String> = listOf()
@@ -28,8 +28,8 @@ class TaskBuilder<I : Any, O : Any> @PublishedApi internal constructor(
     }
 
     @PublishedApi internal fun build(): Task<I, O> {
-        val inputNN: Publisher<I> = checkNotNull(input)
-        val inFlux: Flux<I> = if (inputNN is Flux) inputNN else Flux.from(inputNN)
+        val inputNN: Publisher<out I> = checkNotNull(input)
+        val inFlux: Flux<out I> = if (inputNN is Flux) inputNN else Flux.from(inputNN)
         return Task(
             workflow = workflow,
             name = name,
