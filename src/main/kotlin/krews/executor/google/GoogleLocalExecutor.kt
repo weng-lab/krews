@@ -10,7 +10,6 @@ import krews.executor.*
 import krews.file.InputFile
 import krews.file.OutputFile
 import mu.KotlinLogging
-import org.joda.time.DateTime
 import java.nio.file.Files
 import java.nio.file.Paths
 
@@ -58,9 +57,9 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
         uploadObject(storageClient, bucket, dbStorageObject, dbFilePath)
     }
 
-    override fun outputFileLastModified(runOutputsDir: String, outputFile: OutputFile): DateTime {
+    override fun outputFileLastModified(runOutputsDir: String, outputFile: OutputFile): Long {
         val objectPath = gcsObjectPath(gcsBase, runOutputsDir, outputFile.path)
-        return DateTime(storageClient.objects().get(bucket, objectPath).execute().updated.value)
+        return storageClient.objects().get(bucket, objectPath).execute().updated.value
     }
 
     override fun copyCachedFiles(fromDir: String, toDir: String, files: Set<String>) {

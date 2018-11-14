@@ -12,12 +12,12 @@ import org.joda.time.DateTime
  *      /run/$run-timestamp/inputs directory, as well as the local task docker container path.
  */
 abstract class InputFile(path: String) : BaseFile(path) {
-    val lastModified: DateTime by lazy { fetchLastModified() }
+    val lastModified: Long by lazy { fetchLastModified() }
 
     /**
      * Retrieve the last modified timestamp
      */
-    abstract fun fetchLastModified(): DateTime
+    abstract fun fetchLastModified(): Long
 
     /**
      * The docker image used to download the input file

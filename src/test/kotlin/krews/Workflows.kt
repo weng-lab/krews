@@ -4,22 +4,20 @@ import krews.core.Workflow
 import krews.file.InputFile
 import krews.file.LocalInputFile
 import krews.file.OutputFile
-import reactor.core.publisher.toFlux
+import reactor.core.publisher.Flux
 import java.nio.file.Files
+import java.nio.file.Paths
 
-object SimpleWorkflow : Workflow("config-sample") {
-    // Create 3 files in a temp directory to use as inputs.
-    val tempDir = Files.createTempDirectory("test")!!
-    val tempFiles = (1..3)
-        .map { Files.createFile(tempDir.resolve("test-$it.txt")) }
-        .map { Files.write(it, "I am a test file".toByteArray()) }
-        .map { LocalInputFile(it.toString(), it.fileName.toString()) }
-        .toFlux()
+class SimpleWorkflow : Workflow("config-sample") {
+    val files = params<String>("sample-files-dir")
+        .map { Files.newDirectoryStream(Paths.get(it)).sortedBy { f -> f.fileName } }
+        .flatMapMany { Flux.fromIterable(it) }
+        .map { LocalInputFile(it.toAbsolutePath().toString(), it.fileName.toString()) }
 
     val base64 = task<InputFile, OutputFile>("base64") {
         dockerImage = "alpine:3.8"
 
-        input = tempFiles
+        input = files
         outputFn { OutputFile("base64/${inputItem.filenameNoExt()}.b64") }
         commandFn {
             """

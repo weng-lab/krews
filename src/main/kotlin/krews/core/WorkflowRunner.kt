@@ -26,6 +26,10 @@ class WorkflowRunner(private val workflow: Workflow,
     private val db = migrateAndConnectDb(executor.prepareDatabaseFile())
     private lateinit var workflowRun: WorkflowRun
 
+    init {
+        workflow.params = workflowConfig.params
+    }
+
     fun run() {
         // Create the workflow run in the database
         val workflowTime = if (runTimestampOverride != null) DateTime(runTimestampOverride) else DateTime.now()
@@ -33,7 +37,7 @@ class WorkflowRunner(private val workflow: Workflow,
         transaction(db) {
             workflowRun = WorkflowRun.new {
                 workflowName = workflow.name
-                startTime = workflowTime
+                startTime = workflowTime.millis
             }
         }
         log.info { "Workflow run created successfully!" }
@@ -84,7 +88,7 @@ class WorkflowRunner(private val workflow: Workflow,
         val taskRun: TaskRun = transaction(db) {
             TaskRun.new {
                 this.workflowRun = this@WorkflowRunner.workflowRun
-                this.startTime = now
+                this.startTime = now.millis
                 this.taskName = taskName
                 this.inputJson = inputJson
                 this.command = command
@@ -105,7 +109,7 @@ class WorkflowRunner(private val workflow: Workflow,
 
         val inputFilesBySource = transaction(db) { inputFilesBySource(inputItem) }
         val toInputDir = transaction(db) { getWorkflowInputsDir(workflowRun) }
-        val prevRunInputFiles = inputFilesBySource.cached.filter { it.workflowInputsDir == toInputDir }
+        val prevRunInputFiles = inputFilesBySource.cached.filter { it.workflowInputsDir != toInputDir }
         if (prevRunInputFiles.isNotEmpty()) {
             log.info { "Copying input files $prevRunInputFiles from previous run input directories to $toInputDir" }
             for (inputFile in prevRunInputFiles) {
@@ -115,32 +119,42 @@ class WorkflowRunner(private val workflow: Workflow,
                 transaction(db) {
                     InputFileRecord.new {
                         this.path = inputFile.path
-                        this.lastModifiedTime = DateTime(inputFile.lastModified)
+                        this.lastModifiedTime = inputFile.lastModified
                         this.workflowRun = this@WorkflowRunner.workflowRun
                     }
                 }
             }
         }
 
-        if (latestCachedOutputTask == null) {
-            log.info { "Valid cached outputs not found. Executing..." }
-            val outputFilesIn = getOutputFilesForObject(inputItem)
-            val outputFilesOut = getOutputFilesForObject(outputItem)
-            executor.executeTask(
-                getWorkflowRunDir(workflowRun), taskRun.id.value, taskConfig, task.dockerImage,
-                task.dockerDataDir, command, outputFilesIn, outputFilesOut, inputFilesBySource.cached, inputFilesBySource.download
-            )
-        } else {
-            log.info { "Valid cached outputs found. Skipping execution." }
-            if (latestCachedOutputTask.workflowRun.id.value == workflowRun.id.value) {
-                log.info { "Cached values come from this workflow run. Skipping output file copy." }
+        transaction(db) {
+            if (latestCachedOutputTask == null) {
+                log.info { "Valid cached outputs not found. Executing..." }
+                val outputFilesIn = getOutputFilesForObject(inputItem)
+                val outputFilesOut = getOutputFilesForObject(outputItem)
+                executor.executeTask(
+                    getWorkflowRunDir(workflowRun),
+                    taskRun.id.value,
+                    taskConfig,
+                    task.dockerImage,
+                    task.dockerDataDir,
+                    command,
+                    outputFilesIn,
+                    outputFilesOut,
+                    inputFilesBySource.cached,
+                    inputFilesBySource.download
+                )
             } else {
-                val cachedOutput = mapper.readValue(latestCachedOutputTask.outputJson, task.outputClass)
-                val fromOutputDir = getWorkflowOutputsDir(latestCachedOutputTask.workflowRun)
-                val toOutputDir = getWorkflowOutputsDir(workflowRun)
-                val outputFiles = getOutputFilesForObject(cachedOutput).map { it.path }.toSet()
-                log.info { "Copying cached output files $outputFiles from $fromOutputDir to $toOutputDir" }
-                executor.copyCachedFiles(fromOutputDir, toOutputDir, outputFiles)
+                log.info { "Valid cached outputs found. Skipping execution." }
+                if (latestCachedOutputTask.workflowRun.id.value == workflowRun.id.value) {
+                    log.info { "Cached values come from this workflow run. Skipping output file copy." }
+                } else {
+                    val cachedOutput = mapper.readValue(latestCachedOutputTask.outputJson, task.outputClass)
+                    val fromOutputDir = getWorkflowOutputsDir(latestCachedOutputTask.workflowRun)
+                    val toOutputDir = getWorkflowOutputsDir(workflowRun)
+                    val outputFiles = getOutputFilesForObject(cachedOutput).map { it.path }.toSet()
+                    log.info { "Copying cached output files $outputFiles from $fromOutputDir to $toOutputDir" }
+                    executor.copyCachedFiles(fromOutputDir, toOutputDir, outputFiles)
+                }
             }
         }
 
@@ -164,7 +178,7 @@ class WorkflowRunner(private val workflow: Workflow,
 
             taskRun.outputJson = mapper.writeValueAsString(outputItem)
             taskRun.completedSuccessfully = true
-            taskRun.completedTime = DateTime.now()
+            taskRun.completedTime = DateTime.now().millis
         }
     }
 
@@ -176,7 +190,7 @@ class WorkflowRunner(private val workflow: Workflow,
     }
 }
 
-private fun getWorkflowRunDir(workflowRun: WorkflowRun) = "$RUN_DIR/${workflowRun.startTime.millis}"
+private fun getWorkflowRunDir(workflowRun: WorkflowRun) = "$RUN_DIR/${workflowRun.startTime}"
 private fun getWorkflowOutputsDir(workflowRun: WorkflowRun) = "${getWorkflowRunDir(workflowRun)}/$OUTPUTS_DIR"
 private fun getWorkflowInputsDir(workflowRun: WorkflowRun) = "${getWorkflowRunDir(workflowRun)}/$INPUTS_DIR"
 
@@ -202,7 +216,7 @@ private fun inputFilesBySource(inputItem: Any): InputFilesBySource {
         // If the latest record exists and has the same lastModified time as remote, use the record's local copy
         if (inputFileRecord != null && inputFileRecord.lastModifiedTime == inputFile.lastModified) {
             val localInputFile = CachedInputFile(inputFileRecord.path, getWorkflowInputsDir(inputFileRecord.workflowRun),
-                inputFileRecord.lastModifiedTime.millis)
+                inputFileRecord.lastModifiedTime)
             cached.add(localInputFile)
         } else {
             download.add(inputFile)

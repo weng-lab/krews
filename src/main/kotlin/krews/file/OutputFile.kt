@@ -18,7 +18,12 @@ import org.joda.time.DateTime
  * MyData.myMap values.
  */
 class OutputFile(path: String) : BaseFile(path) {
-    lateinit var lastModified: DateTime internal set
+    var lastModified: Long = -1
+        internal set
+
+    override fun toString(): String {
+        return "OutputFile(path=$path, lastModified=$lastModified)"
+    }
 }
 
 /* TODO: finish implementing

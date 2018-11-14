@@ -36,7 +36,7 @@ interface LocallyDirectedExecutor {
     /**
      * @return The last modified date for the given output file as timestamp
      */
-    fun outputFileLastModified(runOutputsDir: String, outputFile: OutputFile): DateTime
+    fun outputFileLastModified(runOutputsDir: String, outputFile: OutputFile): Long
 
     /**
      * Copy cached output files from one workflow run directory to another

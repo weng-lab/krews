@@ -37,9 +37,9 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
 
     override fun pushDatabaseFile() {}
 
-    override fun outputFileLastModified(runOutputsDir: String, outputFile: OutputFile): DateTime {
+    override fun outputFileLastModified(runOutputsDir: String, outputFile: OutputFile): Long {
         val filePath = Paths.get(workflowBasePath.toString(), runOutputsDir, outputFile.path)
-        return DateTime(Files.getLastModifiedTime(filePath).toMillis())
+        return Files.getLastModifiedTime(filePath).toMillis()
     }
 
     override fun copyCachedFiles(fromDir: String, toDir: String, files: Set<String>) {
@@ -51,6 +51,8 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
             log.info { "Copying cached file from $fromPath to $toPath" }
             Files.createDirectories(toPath.parent)
             Files.copy(fromPath, toPath)
+            val fromLastModified = Files.getLastModifiedTime(fromPath)
+            Files.setLastModifiedTime(toPath, fromLastModified)
         }
     }
 

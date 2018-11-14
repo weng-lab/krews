@@ -2,13 +2,15 @@ package krews.core
 
 import org.reactivestreams.Publisher
 import reactor.core.publisher.Flux
+import reactor.core.publisher.Mono
+import reactor.core.publisher.toMono
 
 open class Workflow {
     lateinit var name: String
         internal set
 
-    lateinit var params: Map<String, Any>
-        internal set
+    internal val paramsMono: Mono<Map<String, Any>> = Mono.defer { params.toMono() }
+    internal lateinit var params: Map<String, Any>
 
     @PublishedApi internal val tasks = mutableListOf<Task<*, *>>()
     internal val fileImports =  mutableListOf<FileImport<*>>()
@@ -33,6 +35,12 @@ open class Workflow {
         return fileImport
     }
 
+    @Suppress("UNCHECKED_CAST")
+    fun <P> params(key: String): Mono<P> {
+        return this.paramsMono.map { it[key] as P }
+    }
+
 }
 
 @PublishedApi internal val defaultWorkflow = Workflow()
+fun <P> params(key: String) = defaultWorkflow.params<P>(key)

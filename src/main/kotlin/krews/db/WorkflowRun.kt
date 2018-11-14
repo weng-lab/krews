@@ -8,9 +8,9 @@ import org.jetbrains.exposed.dao.IntIdTable
 
 object WorkflowRuns : IntIdTable("workflow_run") {
     val workflowName = text("workflow_name")
-    val startTime = datetime("start_time")
+    val startTime = long("start_time")
     val completedSuccessfully = bool("completed_successfully")
-    val completedTime = datetime("completed_time").nullable()
+    val completedTime = long("completed_time").nullable()
 }
 
 class WorkflowRun(id: EntityID<Int>) : IntEntity(id) {

@@ -22,8 +22,10 @@ val storageClient: Storage by lazy {
  * @param path: Unique relative path used by Krews for storage and in task containers. Set to objectPath by default.
  */
 class GSInputFile(val bucket: String, val objectPath: String, path: String = objectPath) : InputFile(path) {
-    override fun fetchLastModified() = DateTime(storageClient.objects().get(bucket, objectPath).execute().updated.value)
+    override fun fetchLastModified() = storageClient.objects().get(bucket, objectPath).execute().updated.value
     override fun downloadFileImage() = CLOUD_SDK_IMAGE
     override fun downloadFileCommand(containerBaseDir: String) =
         "gsutil cp gs://$bucket/$objectPath $containerBaseDir/$path"
+
+    override fun toString() = "GSInputFile(bucket='$bucket', objectPath='$objectPath')"
 }

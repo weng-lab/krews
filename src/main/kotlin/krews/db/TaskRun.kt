@@ -6,9 +6,9 @@ import org.jetbrains.exposed.dao.*
 object TaskRuns : IntIdTable("task_run") {
     val workflowRunId = reference("workflow_run", WorkflowRuns)
     val taskName = text("task_name")
-    val startTime = datetime("start_time")
+    val startTime = long("start_time")
     val completedSuccessfully = bool("completed_successfully")
-    val completedTime = datetime("completed_time").nullable()
+    val completedTime = long("completed_time").nullable()
     val inputJson = text("input_json")
     val command = text("command").nullable()
     val image = text("image")

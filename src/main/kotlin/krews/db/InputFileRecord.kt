@@ -9,7 +9,7 @@ import org.jetbrains.exposed.dao.IntIdTable
 object InputFileRecords : IntIdTable("input_file") {
     val workflowRunId = reference("workflow_run", WorkflowRuns)
     val path = text("path").index("input_file_by_path")
-    val lastModifiedTime = datetime("last_modified_time")
+    val lastModifiedTime = long("last_modified_time")
 }
 
 class InputFileRecord(id: EntityID<Int>) : IntEntity(id) {
