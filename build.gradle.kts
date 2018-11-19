@@ -3,13 +3,12 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     kotlin("jvm") version "1.3.10"
-    id("maven")
     id("maven-publish")
     id("com.jfrog.bintray") version "1.8.1"
 }
 
 group = "io.krews"
-version = "0.1.0"
+version = "0.1.1"
 
 repositories {
     maven { setUrl("http://dl.bintray.com/kotlin/kotlin-eap") }
@@ -38,6 +37,11 @@ dependencies {
     testImplementation("io.mockk", "mockk", "1.8.13")
 }
 
+val test by tasks.getting(Test::class) {
+    useJUnitPlatform()
+    systemProperties = System.getProperties().map { it.key.toString() to it.value }.toMap()
+}
+
 tasks.withType<KotlinCompile> {
     kotlinOptions.jvmTarget = "1.8"
 }
@@ -59,8 +63,8 @@ publishing {
 }
 
 bintray {
-    user = System.getProperty("BINTRAY_USER")
-    key = System.getProperty("BINTRAY_KEY")
+    user = System.getenv("BINTRAY_USER")
+    key = System.getenv("BINTRAY_KEY")
     setPublications(publicationName)
     publish = true
     override = true

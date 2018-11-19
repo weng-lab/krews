@@ -4,7 +4,7 @@
 import krews.*
 import reactor.core.publisher.*
 
-val workflow = workflow("simple-workflow") {
+val simpleWorkflow = workflow("simple-workflow") {
     val messages: Flux<Int> = (1..5).toFlux()
 
     val base64 = task<Int, OutputFile>("base64") {
@@ -36,4 +36,4 @@ val workflow = workflow("simple-workflow") {
     }
 }
 
-run(workflow, args)
+run(simpleWorkflow, args)
