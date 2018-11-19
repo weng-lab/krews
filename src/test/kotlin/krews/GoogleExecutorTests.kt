@@ -52,7 +52,7 @@ class GoogleExecutorTests : StringSpec() {
 
     override fun afterSpec(description: Description, spec: Spec) {
         // Delete test bucket
-        //googleStorageClient.buckets().delete(testBucket)
+        googleStorageClient.buckets().delete(testBucket).execute()
     }
 
     init {
