@@ -14,20 +14,20 @@ import krews.executor.local.LocalExecutor
 import java.nio.file.Files
 import java.nio.file.Paths
 
-val tempDir = Paths.get("local-workflow-test")!!
-val sampleFilesDir = tempDir.resolve("sample-files-dir")!!
-val config =
-    """
-    params {
-        sample-files-dir = $sampleFilesDir
-    }
-    local {
-        local-base-dir = $tempDir
-    }
-    """.trimIndent()
-
 class LocalExecutorTests : StringSpec() {
     override fun tags() = setOf(Integration)
+
+    private val testDir = Paths.get("local-workflow-test")!!
+    private val sampleFilesDir = testDir.resolve("sample-files-dir")!!
+    private val config =
+        """
+        params {
+            sample-files-dir = $sampleFilesDir
+        }
+        local {
+            local-base-dir = $testDir
+        }
+        """.trimIndent()
 
     override fun beforeSpec(description: Description, spec: Spec) {
         // Create temp sample files dir (and parent test dir) to use for this set of tests
@@ -36,7 +36,7 @@ class LocalExecutorTests : StringSpec() {
 
     override fun afterSpec(description: Description, spec: Spec) {
         // Clean up temporary dirs
-        Files.walk(tempDir)
+        Files.walk(testDir)
             .sorted(Comparator.reverseOrder())
             .forEach { Files.delete(it) }
     }
@@ -51,10 +51,10 @@ class LocalExecutorTests : StringSpec() {
 
             runWorkflow(1)
 
-            val dbPath = tempDir.resolve(Paths.get("state", "metadata.db"))
+            val dbPath = testDir.resolve(Paths.get("state", "metadata.db"))
             dbPath.shouldExist()
 
-            val runPath = tempDir.resolve("run/1/")
+            val runPath = testDir.resolve("run/1/")
             val inputsPath = runPath.resolve("inputs")
             val outputsPath = runPath.resolve("outputs")
             val base64Path = outputsPath.resolve("base64")
@@ -74,7 +74,7 @@ class LocalExecutorTests : StringSpec() {
 
             val executor = runWorkflow(2)
 
-            val runPath = tempDir.resolve("run/2/")
+            val runPath = testDir.resolve("run/2/")
             val inputsPath = runPath.resolve("inputs")
             for (i in 1..4) {
                 inputsPath.resolve("test-$i.txt").shouldExist()

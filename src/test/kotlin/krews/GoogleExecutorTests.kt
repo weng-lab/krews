@@ -18,30 +18,30 @@ import java.io.IOException
 import java.util.*
 
 
-const val googleProjectId = "devenv-215523"
-const val inputFilesDir = "test-input-files"
-const val workflowBaseDir = "workflow-test"
-val testBucket = "krews-test-${UUID.randomUUID()}"
-fun googleConfig(inputFiles: List<String>) =
-    """
-    google {
-        storage-bucket = "$testBucket"
-        storage-base-dir = "$workflowBaseDir"
-        local-storage-base-dir = "google-workflow-test"
-        project-id = "$googleProjectId"
-        regions = ["us-east1", "us-east4"]
-        job-completion-poll-interval = 5
-        log-upload-interval = 10
-    }
-    params {
-        input-files-bucket = "$testBucket"
-        input-files-base-dir = "$inputFilesDir"
-        input-files = ${inputFiles.joinToString(",", "[", "]", -1, "...") {"\"$it\""}}
-    }
-    """.trimIndent()
-
 class GoogleExecutorTests : StringSpec() {
     override fun tags() = setOf(E2E)
+
+    private val googleProjectId = "devenv-215523"
+    private val inputFilesDir = "test-input-files"
+    private val workflowBaseDir = "workflow-test"
+    private val testBucket = "krews-test-${UUID.randomUUID()}"
+    private fun googleConfig(inputFiles: List<String>) =
+        """
+        google {
+            storage-bucket = "$testBucket"
+            storage-base-dir = "$workflowBaseDir"
+            local-storage-base-dir = "google-workflow-test"
+            project-id = "$googleProjectId"
+            regions = ["us-east1", "us-east4"]
+            job-completion-poll-interval = 5
+            log-upload-interval = 10
+        }
+        params {
+            input-files-bucket = "$testBucket"
+            input-files-base-dir = "$inputFilesDir"
+            input-files = ${inputFiles.joinToString(",", "[", "]", -1, "...") {"\"$it\""}}
+        }
+        """.trimIndent()
 
     override fun beforeSpec(description: Description, spec: Spec) {
         // Create a bucket to use for this set of tests
