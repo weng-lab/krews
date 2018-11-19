@@ -26,10 +26,6 @@ class WorkflowRunner(private val workflow: Workflow,
     private val db = migrateAndConnectDb(executor.prepareDatabaseFile())
     private lateinit var workflowRun: WorkflowRun
 
-    init {
-        workflow.params = workflowConfig.params
-    }
-
     fun run() {
         // Create the workflow run in the database
         val workflowTime = if (runTimestampOverride != null) DateTime(runTimestampOverride) else DateTime.now()
@@ -43,19 +39,19 @@ class WorkflowRunner(private val workflow: Workflow,
         log.info { "Workflow run created successfully!" }
 
         // Set execute function for each task.
-        for (task in workflow.tasks) {
+        for (task in workflow.tasks.values) {
             task.executeFn = { command, inputItem, outputItem -> runTask(task, command, inputItem, outputItem) }
             task.connect()
         }
 
         // Set execute function for each file import.
-        for (fileImport in workflow.fileImports) {
+        for (fileImport in workflow.fileImports.values) {
             fileImport.executeFn = { inputItem -> runFileImport(inputItem, fileImport.dockerDataDir) }
             fileImport.connect()
         }
 
         // Get "leafOutputs", meaning this workflow's task.output fluxes that don't have other task.outputs as parents
-        val allTaskOutputFluxes = workflow.tasks.map { it.output }
+        val allTaskOutputFluxes = workflow.tasks.values.map { it.output }
         val leafOutputs = allTaskOutputFluxes.toMutableSet()
         for (output in allTaskOutputFluxes) {
             val taskParents = Scannable.from(output).parents().collect(Collectors.toSet())
@@ -126,6 +122,7 @@ class WorkflowRunner(private val workflow: Workflow,
             }
         }
 
+        val cachedOutputLastModified = mutableMapOf<String, Long>()
         transaction(db) {
             if (latestCachedOutputTask == null) {
                 log.info { "Valid cached outputs not found. Executing..." }
@@ -151,9 +148,13 @@ class WorkflowRunner(private val workflow: Workflow,
                     val cachedOutput = mapper.readValue(latestCachedOutputTask.outputJson, task.outputClass)
                     val fromOutputDir = getWorkflowOutputsDir(latestCachedOutputTask.workflowRun)
                     val toOutputDir = getWorkflowOutputsDir(workflowRun)
-                    val outputFiles = getOutputFilesForObject(cachedOutput).map { it.path }.toSet()
+                    val outputFiles = getOutputFilesForObject(cachedOutput)
+                    val outputFilePaths = outputFiles.map { it.path }.toSet()
                     log.info { "Copying cached output files $outputFiles from $fromOutputDir to $toOutputDir" }
-                    executor.copyCachedFiles(fromOutputDir, toOutputDir, outputFiles)
+                    executor.copyCachedFiles(fromOutputDir, toOutputDir, outputFilePaths)
+                    for (outputFile in outputFiles) {
+                        cachedOutputLastModified[outputFile.path] = outputFile.lastModified
+                    }
                 }
             }
         }
@@ -171,9 +172,13 @@ class WorkflowRunner(private val workflow: Workflow,
             }
 
             // Add last modified timestamps to output files in task output
+            // If we copied cached output files over, we should set it to the lastModified date of the file copied over.
+            // This will downstream tasks with output files in their inputs to still use the cache properly even if
+            // executor.outputFileLastModified returns something new.
             val outputFilesOut = getOutputFilesForObject(outputItem)
             for (outputFile in outputFilesOut) {
-                outputFile.lastModified = executor.outputFileLastModified(getWorkflowOutputsDir(workflowRun), outputFile)
+                outputFile.lastModified = cachedOutputLastModified[outputFile.path] ?:
+                        executor.outputFileLastModified(getWorkflowOutputsDir(workflowRun), outputFile)
             }
 
             taskRun.outputJson = mapper.writeValueAsString(outputItem)

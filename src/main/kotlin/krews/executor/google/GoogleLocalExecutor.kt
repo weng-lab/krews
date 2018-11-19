@@ -1,8 +1,6 @@
 package krews.executor.google
 
-import com.google.api.services.genomics.v2alpha1.Genomics
 import com.google.api.services.genomics.v2alpha1.model.*
-import com.google.api.services.storage.Storage
 import krews.config.CapacityType
 import krews.config.TaskConfig
 import krews.config.WorkflowConfig
@@ -23,8 +21,6 @@ const val DEFAULT_MACHINE_TYPE = "n1-standard-1"
 
 class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
 
-    private val genomicsClient: Genomics
-    private val storageClient: Storage
     private val googleConfig = checkNotNull(workflowConfig.google)
         { "google workflow config must be present to use Google Local Executor" }
     private val bucket = googleConfig.storageBucket
@@ -32,18 +28,13 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
     private val dbFilePath = Paths.get(googleConfig.localStorageBaseDir, DB_FILENAME).toAbsolutePath()
     private val dbStorageObject = gcsObjectPath(gcsBase, STATE_DIR, DB_FILENAME)
 
-    init {
-        val googleClients = createGoogleClients()
-        genomicsClient = googleClients.first
-        storageClient = googleClients.second
-    }
-
     override fun prepareDatabaseFile(): String {
         log.info { "Deleting local copy of $dbFilePath if it exists" }
         Files.deleteIfExists(dbFilePath)
+        Files.createDirectories(Paths.get(googleConfig.localStorageBaseDir))
 
         log.info { "Attempting to download $dbStorageObject from bucket $bucket..." }
-        val fileExists = downloadObject(storageClient, bucket, dbStorageObject, dbFilePath)
+        val fileExists = downloadObject(googleStorageClient, bucket, dbStorageObject, dbFilePath)
         if (fileExists) {
             log.info { "$dbStorageObject not found in bucket $bucket. A new database file will be used." }
         } else {
@@ -54,19 +45,19 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
 
     override fun pushDatabaseFile() {
         log.info { "Pushing database file $dbFilePath to object $dbStorageObject in bucket $bucket" }
-        uploadObject(storageClient, bucket, dbStorageObject, dbFilePath)
+        uploadObject(googleStorageClient, bucket, dbStorageObject, dbFilePath)
     }
 
     override fun outputFileLastModified(runOutputsDir: String, outputFile: OutputFile): Long {
         val objectPath = gcsObjectPath(gcsBase, runOutputsDir, outputFile.path)
-        return storageClient.objects().get(bucket, objectPath).execute().updated.value
+        return googleStorageClient.objects().get(bucket, objectPath).execute().updated.value
     }
 
     override fun copyCachedFiles(fromDir: String, toDir: String, files: Set<String>) {
         for (file in files) {
-            val fromObject = gcsObjectPath(fromDir, file)
-            val toObject = gcsObjectPath(toDir, file)
-            copyObject(storageClient, bucket, fromObject, bucket, toObject)
+            val fromObject = gcsObjectPath(gcsBase, fromDir, file)
+            val toObject = gcsObjectPath(gcsBase, toDir, file)
+            copyObject(googleStorageClient, bucket, fromObject, bucket, toObject)
         }
     }
 
@@ -133,7 +124,7 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
         // Create action to copy logs to GCS after everything else is complete
         actions.add(createLogsAction(logPath))
 
-        submitJobAndWait(genomicsClient, run, googleConfig.jobCompletionPollInterval)
+        submitJobAndWait(run, googleConfig.jobCompletionPollInterval)
     }
 
     override fun downloadRemoteInputFiles(inputFiles: Set<InputFile>, dockerDataDir: String, workflowInputsDir: String) {
@@ -148,7 +139,7 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
         }
         run.pipeline.actions.addAll(uploadInputFileActions)
 
-        submitJobAndWait(genomicsClient, run, googleConfig.jobCompletionPollInterval)
+        submitJobAndWait(run, googleConfig.jobCompletionPollInterval)
     }
 
 }
@@ -179,16 +170,16 @@ internal fun createDownloadRemoteFileAction(inputFile: InputFile, dataDir: Strin
  * Submits a job to the pipelines api and polls periodically until the job is complete.
  * The current thread will be blocked until the job is complete.
  */
-internal fun submitJobAndWait(genomicsClient: Genomics, run: RunPipelineRequest, jobCompletionPollInterval: Int) {
+internal fun submitJobAndWait(run: RunPipelineRequest, jobCompletionPollInterval: Int) {
     log.info { "Submitting pipeline job for task run: $run" }
-    genomicsClient.projects().operations()
-    val initialOp: Operation = genomicsClient.pipelines().run(run).execute()
+    googleGenomicsClient.projects().operations()
+    val initialOp: Operation = googleGenomicsClient.pipelines().run(run).execute()
 
     log.info { "Pipeline job submitted. Operation returned: \"${initialOp.name}\". " +
             "Will check for completion every $jobCompletionPollInterval seconds" }
     do {
         Thread.sleep(jobCompletionPollInterval * 1000L)
-        val op: Operation = genomicsClient.projects().operations().get(initialOp.name).execute()
+        val op: Operation = googleGenomicsClient.projects().operations().get(initialOp.name).execute()
         if (op.done) {
             log.info { "Pipeline job \"${op.name}\" complete! Complete results: ${op.toPrettyString()}" }
         } else {

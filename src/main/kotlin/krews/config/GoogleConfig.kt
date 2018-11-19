@@ -1,6 +1,5 @@
-package krews.config
 
-import jdk.jfr.Frequency
+package krews.config
 
 
 data class GoogleWorkflowConfig (

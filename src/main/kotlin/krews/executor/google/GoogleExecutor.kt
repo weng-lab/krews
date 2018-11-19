@@ -1,8 +1,6 @@
 package krews.executor.google
 
-import com.google.api.services.genomics.v2alpha1.Genomics
 import com.google.api.services.genomics.v2alpha1.model.*
-import com.google.api.services.storage.Storage
 import krews.WORKFLOW_RUN_TIMESTAMP_ENV_VAR
 import krews.config.WorkflowConfig
 import krews.executor.LOGS_DIR
@@ -22,18 +20,11 @@ const val MASTER_IMAGE = "openjdk:8"
 
 class GoogleExecutor(workflowConfig: WorkflowConfig) : RemoteDirectedExecutor {
 
-    private val genomicsClient: Genomics
-    private val storageClient: Storage
     private val googleConfig = checkNotNull(workflowConfig.google)
         { "google workflow config must be present to use Google Executor" }
     private val bucket = googleConfig.storageBucket
     private val gcsBase = googleConfig.storageBaseDir
 
-    init {
-        val googleClients = createGoogleClients()
-        genomicsClient = googleClients.first
-        storageClient = googleClients.second
-    }
 
     override fun execute(executablePath: Path, configPath: Path) {
         val workflowTime = DateTime.now()
@@ -43,8 +34,8 @@ class GoogleExecutor(workflowConfig: WorkflowConfig) : RemoteDirectedExecutor {
         val configFilename = configPath.fileName!!.toString()
         val configObject = gcsObjectPath(gcsBase, RUN_DIR, workflowTime.millis.toString(), REMOTE_BIN_DIR, configFilename)
 
-        uploadObject(storageClient, bucket, executableObject, executablePath)
-        uploadObject(storageClient, bucket, configObject, configPath)
+        uploadObject(googleStorageClient, bucket, executableObject, executablePath)
+        uploadObject(googleStorageClient, bucket, configObject, configPath)
 
         val run = RunPipelineRequest()
         val pipeline = Pipeline()
@@ -92,8 +83,8 @@ class GoogleExecutor(workflowConfig: WorkflowConfig) : RemoteDirectedExecutor {
         actions.add(createLogsAction(logPath))
 
         log.info { "Submitting pipeline job for workflow run with timestamp ${workflowTime.millis}:\n$run" }
-        genomicsClient.projects().operations()
-        val initialOp: Operation = genomicsClient.pipelines().run(run).execute()
+        googleGenomicsClient.projects().operations()
+        val initialOp: Operation = googleGenomicsClient.pipelines().run(run).execute()
 
         log.info { "Pipeline job submitted. Operation returned: \"${initialOp.name}\". " +
                 "You can check on the status of the job by checking logs at $logPath" }

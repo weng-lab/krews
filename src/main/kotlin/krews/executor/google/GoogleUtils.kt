@@ -21,18 +21,20 @@ const val APPLICATION_NAME = "krews"
 const val STORAGE_READ_WRITE_SCOPE = "https://www.googleapis.com/auth/devstorage.read_write"
 const val LOG_FILE_NAME = "out.txt"
 const val DISK_NAME = "disk"
+const val LAST_MOD_METADATA_KEY = "x-krews-last-modified"
 
-internal fun createGoogleClients(): Pair<Genomics, Storage> {
-    val transport = NetHttpTransport()
-    val jsonFactory = JacksonFactory.getDefaultInstance()
-    val credentials = GoogleCredential.getApplicationDefault()
-    val genomics = Genomics.Builder(transport, jsonFactory, credentials)
+internal val googleClientTransport by lazy { NetHttpTransport() }
+internal val googleClientJsonFactory by lazy { JacksonFactory.getDefaultInstance() }
+internal val googleClientCredentials by lazy { GoogleCredential.getApplicationDefault() }
+internal val googleGenomicsClient by lazy {
+    Genomics.Builder(googleClientTransport, googleClientJsonFactory, googleClientCredentials)
         .setApplicationName(APPLICATION_NAME)
         .build()
-    val storage = Storage.Builder(transport, jsonFactory, credentials)
+}
+internal val googleStorageClient by lazy {
+    Storage.Builder(googleClientTransport, googleClientJsonFactory, googleClientCredentials)
         .setApplicationName(APPLICATION_NAME)
         .build()
-    return Pair(genomics, storage)
 }
 
 internal fun createRunPipelineRequest(googleConfig: GoogleWorkflowConfig): RunPipelineRequest {
@@ -148,11 +150,14 @@ internal fun createMount(mountDir: String): Mount {
 /**
  * Copies an object from one location in Google Cloud Storage to Another
  */
-internal fun copyObject(storageClient: Storage, fromBucket: String, fromObject: String, toBucket: String, toObject: String) {
+internal fun copyObject(googleStorageClient: Storage, fromBucket: String, fromObject: String, toBucket: String, toObject: String) {
     log.info { "Copying Google Cloud Storage object $fromObject in bucket $fromBucket to $toObject in bucket $toBucket..." }
     var rewriteToken: String? = null
     do {
-        val rewrite = storageClient.objects().rewrite(fromBucket, fromObject, toBucket, toObject, null)
+        val fromContent = googleStorageClient.objects().get(fromBucket, fromObject).execute()
+        val toContent = StorageObject()
+        toContent.updated = fromContent.updated
+        val rewrite = googleStorageClient.objects().rewrite(fromBucket, fromObject, toBucket, toObject, toContent)
         rewrite.rewriteToken = rewriteToken
         val rewriteResponse = rewrite.execute()
         rewriteToken = rewriteResponse.rewriteToken
@@ -166,10 +171,10 @@ internal fun copyObject(storageClient: Storage, fromBucket: String, fromObject: 
 /**
  * Downloads an "object" from Google Cloud Storage to local file system
  */
-internal fun downloadObject(storageClient: Storage, bucket: String, obj: String, downloadPath: Path): Boolean {
+internal fun downloadObject(googleStorageClient: Storage, bucket: String, obj: String, downloadPath: Path): Boolean {
     try {
         log.info { "Downloading file $downloadPath from object $obj in bucket $bucket" }
-        val objectInputStream = storageClient.objects().get(bucket, obj).executeMediaAsInputStream()
+        val objectInputStream = googleStorageClient.objects().get(bucket, obj).executeMediaAsInputStream()
         Files.copy(objectInputStream, downloadPath, StandardCopyOption.REPLACE_EXISTING)
         return true
     } catch (e: GoogleJsonResponseException) {
@@ -183,10 +188,10 @@ internal fun downloadObject(storageClient: Storage, bucket: String, obj: String,
 /**
  * Uploads a file from a local file system to Google Cloud Storage
  */
-internal fun uploadObject(storageClient: Storage, bucket: String, obj: String, uploadFromPath: Path) {
+internal fun uploadObject(googleStorageClient: Storage, bucket: String, obj: String, uploadFromPath: Path) {
     log.info { "Uploading file $uploadFromPath to object $obj in bucket $bucket" }
     val contentStream = InputStreamContent(Files.probeContentType(uploadFromPath), Files.newInputStream(uploadFromPath))
     contentStream.length = Files.size(uploadFromPath)
     val objectMetadata = StorageObject().setName(obj)
-    storageClient.objects().insert(bucket, objectMetadata, contentStream).execute()
+    googleStorageClient.objects().insert(bucket, objectMetadata, contentStream).execute()
 }

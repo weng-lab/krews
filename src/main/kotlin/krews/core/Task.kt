@@ -6,7 +6,6 @@ import reactor.core.publisher.TopicProcessor
 const val DEFAULT_DOCKER_DATA_DIR = "/data"
 
 class Task<out I : Any, O : Any> internal constructor(
-    val workflow: Workflow,
     val name: String,
     val labels: List<String> = listOf(),
     val input: Flux<out I>,
@@ -32,5 +31,3 @@ class Task<out I : Any, O : Any> internal constructor(
         return outputItem
     }
 }
-
-inline fun <I : Any, reified O : Any> task(name: String, noinline init: TaskBuilder<I, O>.() -> Unit): Task<I, O> = defaultWorkflow.task(name, init)

@@ -1,6 +1,5 @@
 package krews.core
 
-import org.reactivestreams.Publisher
 import reactor.core.publisher.Flux
 import reactor.core.publisher.TopicProcessor
 
@@ -18,6 +17,3 @@ class FileImport<I : Any> internal constructor(val name: String, val input: Flux
         return inputItem
     }
 }
-
-fun <I : Any> fileImport(name: String, input: Publisher<I>, dockerDataDir: String?): FileImport<I> =
-    defaultWorkflow.fileImport(name, input, dockerDataDir)

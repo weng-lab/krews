@@ -6,10 +6,9 @@ import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.choice
 import com.typesafe.config.ConfigFactory
+import krews.config.createParamsForConfig
 import krews.config.createWorkflowConfig
-import krews.core.Workflow
-import krews.core.WorkflowRunner
-import krews.core.defaultWorkflow
+import krews.core.*
 import krews.executor.google.GoogleExecutor
 import krews.executor.google.GoogleLocalExecutor
 import krews.executor.local.LocalExecutor
@@ -20,16 +19,11 @@ import java.nio.file.Paths
 // Required for remote executors logging. Should never be used directly by users.
 const val WORKFLOW_RUN_TIMESTAMP_ENV_VAR = "KREWS_RUN_TIMESTAMP_OVERRIDE"
 
-fun run(workflowName: String, args: Array<String>) {
-    defaultWorkflow.name = workflowName
-    run(defaultWorkflow, args)
-}
-
-fun run(workflow: Workflow, args: Array<String>) {
+fun run(workflow: WorkflowBuilder, args: Array<String>) {
     KrewsApp(workflow).main(args)
 }
 
-class KrewsApp(private val workflow: Workflow) : CliktCommand() {
+class KrewsApp(private val workflowBuilder: WorkflowBuilder) : CliktCommand() {
 
     private val on by option("-o", "--on", help = "where the workflow will run")
         .choice(
@@ -45,6 +39,8 @@ class KrewsApp(private val workflow: Workflow) : CliktCommand() {
 
     override fun run() {
         val hoconConfig = if (config != null) ConfigFactory.parseFile(config!!.toFile()) else ConfigFactory.empty()
+        val params = Params(createParamsForConfig(hoconConfig))
+        val workflow = workflowBuilder.build(params)
         val workflowConfig = createWorkflowConfig(hoconConfig, workflow)
 
         if (on.locallyDirected) {

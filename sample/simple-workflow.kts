@@ -4,34 +4,36 @@
 import krews.*
 import reactor.core.publisher.*
 
-val messages: Flux<Int> = (1..5).toFlux()
+val workflow = workflow("simple-workflow") {
+    val messages: Flux<Int> = (1..5).toFlux()
 
-val base64 = task<Int, OutputFile>("base64") {
-    dockerImage = "alpine:3.8"
+    val base64 = task<Int, OutputFile>("base64") {
+        dockerImage = "alpine:3.8"
 
-    input = messages
-    outputFn { WFile("base64/$inputItem.txt") }
-    commandFn {
-        """
-        echo "executing base64 on $inputItem"
-        mkdir -p /data/base64
-        echo "I am number $inputItem" | base64 > /data/base64/$inputItem.txt
-        """.trimIndent()
+        input = messages
+        outputFn { OutputFile("base64/$inputItem.txt") }
+        commandFn {
+            """
+            echo "executing base64 on $inputItem"
+            mkdir -p /data/base64
+            echo "I am number $inputItem" | base64 > /data/base64/$inputItem.txt
+            """.trimIndent()
+        }
+    }
+
+    task<OutputFile, OutputFile>("gzip") {
+        dockerImage = "alpine:3.8"
+
+        input = base64.output
+        outputFn { OutputFile("gzip/${inputItem.filename()}.gz") }
+        commandFn {
+            """
+            echo "executing gzip on ${inputItem.filename()}"
+            mkdir -p /data/gzip
+            gzip /data/${inputItem.path} > /data/gzip/${inputItem.filename()}.gz
+            """.trimIndent()
+        }
     }
 }
 
-task<OutputFile, OutputFile>("gzip") {
-    dockerImage = "alpine:3.8"
-
-    input = base64.output
-    outputFn { WFile("gzip/${inputItem.filename()}.gz") }
-    commandFn {
-        """
-        echo "executing gzip on ${inputItem.filename()}"
-        mkdir -p /data/gzip
-        gzip /data/${inputItem.path} > /data/gzip/${inputItem.filename()}.gz
-        """.trimIndent()
-    }
-}
-
-run("simple-workflow", args)
+run(workflow, args)

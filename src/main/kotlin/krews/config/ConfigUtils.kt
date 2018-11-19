@@ -12,6 +12,15 @@ const val DEFAULT_TASK_CONFIG_NAME = "default"
 const val NAME_TASK_CONFIG_PREFIX = "name-"
 const val LABEL_TASK_CONFIG_PREFIX = "label-"
 
+
+@Suppress("UNCHECKED_CAST")
+fun createParamsForConfig(config: Config): Map<String, Any> {
+    val configRoot = mutableMapOf<String, Any>()
+    deepOverrideConfig(configRoot, config.root())
+    val params = configRoot["params"]
+    return if (params != null && params is Map<*, *>) params as Map<String, Any> else mapOf()
+}
+
 /**
  * Creates workflow config object from raw deserialized HOCON config
  *
@@ -26,7 +35,7 @@ fun createWorkflowConfig(config: Config, workflow: Workflow): WorkflowConfig {
     deepOverrideConfig(configRoot, config.root())
     val rawTaskConfigs = if (configRoot["task"] != null) configRoot["task"] as MutableMap<String, Map<String, Any>> else mutableMapOf()
     configRoot.remove("task")
-    configRoot["tasks"] = createTaskConfigs(rawTaskConfigs, workflow.tasks)
+    configRoot["tasks"] = createTaskConfigs(rawTaskConfigs, workflow.tasks.values)
 
     if (configRoot["params"] == null) {
         configRoot["params"] = mapOf<String, Any>()
@@ -58,7 +67,7 @@ fun createWorkflowConfig(config: Config, workflow: Workflow): WorkflowConfig {
  *
  * @throws IllegalArgumentException if rawTaskConfig given with key that doesn't match any tasks.
  */
-fun createTaskConfigs(rawTaskConfigs: Map<String, Map<String, Any>>, tasks: List<Task<*, *>>): Map<String, Map<String, Any>> {
+fun createTaskConfigs(rawTaskConfigs: Map<String, Map<String, Any>>, tasks: Collection<Task<*, *>>): Map<String, Map<String, Any>> {
     // Gather 3 types of configurations we need: default, by name, and by label
     var defaultTaskConfig: Map<String, Any>? = null
     val tasksToNameConfigs = mutableMapOf<String, Map<String, Any>>()
