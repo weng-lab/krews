@@ -5,6 +5,8 @@ import krews.config.WorkflowConfig
 import krews.db.*
 import krews.executor.*
 import krews.file.InputFile
+import krews.file.getInputFilesForObject
+import krews.file.getOutputFilesForObject
 import mu.KotlinLogging
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction

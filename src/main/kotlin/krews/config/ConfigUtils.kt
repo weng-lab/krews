@@ -12,6 +12,11 @@ const val DEFAULT_TASK_CONFIG_NAME = "default"
 const val NAME_TASK_CONFIG_PREFIX = "name-"
 const val LABEL_TASK_CONFIG_PREFIX = "label-"
 
+val configMapper by lazy {
+    val mapper = jacksonObjectMapper()
+    mapper.propertyNamingStrategy = PropertyNamingStrategy.KEBAB_CASE
+    mapper
+}
 
 @Suppress("UNCHECKED_CAST")
 fun createParamsForConfig(config: Config): Map<String, Any> {
@@ -41,9 +46,7 @@ fun createWorkflowConfig(config: Config, workflow: Workflow): WorkflowConfig {
         configRoot["params"] = mapOf<String, Any>()
     }
 
-    val mapper = jacksonObjectMapper()
-    mapper.propertyNamingStrategy = PropertyNamingStrategy.KEBAB_CASE
-    return mapper.convertValue(configRoot)
+    return configMapper.convertValue(configRoot)
 }
 
 /**
