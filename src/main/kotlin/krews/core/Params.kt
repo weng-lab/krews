@@ -5,7 +5,7 @@ import krews.config.configMapper
 import java.lang.IllegalStateException
 
 class Params internal constructor(@PublishedApi internal val map: Map<String, Any>) {
-    @Suppress("UNCHECKED_CAST")
+
     inline fun <reified P> get(key: String): P {
         return if (map[key] == null) {
             // If Type P is nullable
@@ -17,4 +17,5 @@ class Params internal constructor(@PublishedApi internal val map: Map<String, An
             configMapper.convertValue(map[key]!!)
         }
     }
+    
 }
