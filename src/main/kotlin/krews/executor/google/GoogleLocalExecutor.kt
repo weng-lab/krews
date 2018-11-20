@@ -105,7 +105,7 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
         actions.addAll(downloadOutputFileActions)
 
         // Create the action that runs the task
-        actions.add(createExecuteTaskAction(dockerImage, dockerDataDir, command))
+        actions.add(createExecuteTaskAction(dockerImage, dockerDataDir, command, taskConfig.env))
 
         // Create the actions to upload each downloaded remote InputFile
         val uploadInputFileActions = downloadInputFiles.map {
@@ -147,10 +147,11 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
 /**
  * Create a pipeline action that will execute the task
  */
-internal fun createExecuteTaskAction(dockerImage: String, dockerDataDir: String, command: String?): Action {
+internal fun createExecuteTaskAction(dockerImage: String, dockerDataDir: String, command: String?, env: Map<String, String>?): Action {
     val action = Action()
     action.imageUri = dockerImage
     action.mounts = listOf(createMount(dockerDataDir))
+    action.environment = env
     if (command != null) action.commands = listOf("/bin/sh", "-c", command)
     return action
 }

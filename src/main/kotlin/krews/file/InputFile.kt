@@ -1,7 +1,5 @@
 package krews.file
 
-import org.joda.time.DateTime
-
 /**
  * Remote files downloaded and used for tasks.
  *
@@ -11,23 +9,23 @@ import org.joda.time.DateTime
  * @param path The relative path for this input file. It will be used as the storage path under the
  *      /run/$run-timestamp/inputs directory, as well as the local task docker container path.
  */
-abstract class InputFile(path: String) : BaseFile(path) {
+abstract class InputFile(path: String) : File(path) {
     val lastModified: Long by lazy { fetchLastModified() }
 
     /**
      * Retrieve the last modified timestamp
      */
-    abstract fun fetchLastModified(): Long
+    internal abstract fun fetchLastModified(): Long
 
     /**
      * The docker image used to download the input file
      */
-    abstract fun downloadFileImage(): String
+    internal abstract fun downloadFileImage(): String
 
     /**
      * The docker command used to download the input file
      *
      * @param containerBaseDir: The container local directory that the input file will be downloaded to
      */
-    abstract fun downloadFileCommand(containerBaseDir: String): String
+    internal abstract fun downloadFileCommand(containerBaseDir: String): String
 }

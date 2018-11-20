@@ -1,6 +1,6 @@
 package krews.file
 
-abstract class BaseFile(val path: String) {
+abstract class File(val path: String) {
     fun parentDir(): String {
         val pathParts = path.split("/")
         return pathParts.joinToString("/", limit = pathParts.size - 1)

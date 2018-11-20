@@ -10,20 +10,20 @@ class TaskBuilder<I : Any, O : Any> @PublishedApi internal constructor(
     lateinit var dockerImage: String
     var dockerDataDir: String = DEFAULT_DOCKER_DATA_DIR
     lateinit var input: Publisher<out I>
-    private lateinit var outputFn: ((inputItem: I) -> O)
-    private lateinit var commandFn: ((inputItem: I) -> String)
+    private lateinit var outputFn: ((inputItemContext: InputItemContext<I>) -> O)
+    private lateinit var commandFn: ((inputItemContext: InputItemContext<I>) -> String)
     var labels: List<String> = listOf()
 
 
     fun outputFn(init: InputItemContext<I>.() -> O) {
-        outputFn = { inputItem ->
-            InputItemContext(inputItem).init()
+        outputFn = { inputItemContext ->
+            inputItemContext.init()
         }
     }
 
     fun commandFn(init: InputItemContext<I>.() -> String) {
-        commandFn = { inputItem ->
-            InputItemContext(inputItem).init()
+        commandFn = { inputItemContext ->
+            inputItemContext.init()
         }
     }
 
@@ -45,4 +45,4 @@ class TaskBuilder<I : Any, O : Any> @PublishedApi internal constructor(
     }
 }
 
-data class InputItemContext<I : Any>(val inputItem: I)
+data class InputItemContext<I : Any>(val inputItem: I, val taskParams: Map<String, Any>)

@@ -1,6 +1,7 @@
 package krews.config
 
 data class TaskConfig (
+    val params: Map<String, Any>,
     val env: Map<String, String>?,
     val google: GoogleTaskConfig?
 )

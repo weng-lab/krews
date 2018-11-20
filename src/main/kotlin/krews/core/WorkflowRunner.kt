@@ -41,6 +41,7 @@ class WorkflowRunner(private val workflow: Workflow,
         // Set execute function for each task.
         for (task in workflow.tasks.values) {
             task.executeFn = { command, inputItem, outputItem -> runTask(task, command, inputItem, outputItem) }
+            task.taskParams = workflowConfig.tasks[task.name]?.params ?: mapOf()
             task.connect()
         }
 
