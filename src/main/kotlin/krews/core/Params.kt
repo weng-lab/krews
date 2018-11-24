@@ -17,5 +17,5 @@ class Params internal constructor(@PublishedApi internal val map: Map<String, An
             configMapper.convertValue(map[key]!!)
         }
     }
-    
+
 }

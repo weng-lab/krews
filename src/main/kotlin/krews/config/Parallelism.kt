@@ -13,7 +13,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeType
 @JsonDeserialize(using = ParallelismDeserializer::class)
 sealed class Parallelism
 object UnlimitedParallelism : Parallelism()
-data class LimitedParallelism (val limit: Int? = null) : Parallelism()
+data class LimitedParallelism (val limit: Int) : Parallelism()
 
 class ParallelismDeserializer : StdDeserializer<Parallelism>(Parallelism::class.java) {
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): Parallelism {

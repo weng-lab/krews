@@ -9,8 +9,6 @@ import krews.core.Task
 import krews.core.Workflow
 
 const val DEFAULT_TASK_CONFIG_NAME = "default"
-const val NAME_TASK_CONFIG_PREFIX = "name-"
-const val LABEL_TASK_CONFIG_PREFIX = "label-"
 
 val configMapper by lazy {
     val mapper = jacksonObjectMapper()
@@ -84,13 +82,13 @@ fun createTaskConfigs(rawTaskConfigs: Map<String, Map<String, Any>>, tasks: Coll
             }
 
             // If the key matches "task-$name" it applies to this task
-            if (key == NAME_TASK_CONFIG_PREFIX + kebabify(task.name)) {
+            if (key == kebabify(task.name)) {
                 tasksToNameConfigs[task.name] = configVal
                 return@filter true
             }
 
             // If the key matches any "task-$label" it applies to this task
-            val kebabLabels = task.labels.map { LABEL_TASK_CONFIG_PREFIX + kebabify(it) }
+            val kebabLabels = task.labels.map { kebabify(it) }
             if (kebabLabels.any { it == key }) {
                 tasksToLabelConfigs.getOrPut(task.name) { mutableSetOf() }.add(configVal)
                 return@filter true

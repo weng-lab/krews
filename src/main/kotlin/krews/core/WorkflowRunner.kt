@@ -1,6 +1,8 @@
 package krews.core
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import krews.config.LimitedParallelism
+import krews.config.UnlimitedParallelism
 import krews.config.WorkflowConfig
 import krews.db.*
 import krews.executor.*
@@ -14,16 +16,19 @@ import org.joda.time.DateTime
 import reactor.core.Scannable
 import reactor.core.publisher.Flux
 import reactor.core.scheduler.Schedulers
+import java.util.concurrent.Executors
 import java.util.stream.Collectors
 
 
 private val log = KotlinLogging.logger {}
 private val mapper = jacksonObjectMapper()
 
-class WorkflowRunner(private val workflow: Workflow,
-                     private val workflowConfig: WorkflowConfig,
-                     private val executor: LocallyDirectedExecutor,
-                     private val runTimestampOverride: Long? = null) {
+class WorkflowRunner(
+    private val workflow: Workflow,
+    private val workflowConfig: WorkflowConfig,
+    private val executor: LocallyDirectedExecutor,
+    private val runTimestampOverride: Long? = null
+) {
 
     private val db = migrateAndConnectDb(executor.prepareDatabaseFile())
     private lateinit var workflowRun: WorkflowRun
@@ -40,17 +45,28 @@ class WorkflowRunner(private val workflow: Workflow,
         }
         log.info { "Workflow run created successfully!" }
 
+        // Create an executor service for
+        val workflowParallelism = workflowConfig.parallelism
+        val executorService = when(workflowParallelism) {
+            null, is UnlimitedParallelism -> Executors.newCachedThreadPool()
+            is LimitedParallelism -> Executors.newFixedThreadPool(workflowParallelism.limit)
+        }
+
         // Set execute function for each task.
         for (task in workflow.tasks.values) {
-            task.executeFn = { command, inputItem, outputItem -> runTask(task, command, inputItem, outputItem) }
-            task.taskParams = workflowConfig.tasks[task.name]?.params ?: mapOf()
+            task.executorService = executorService
+            task.taskConfig = workflowConfig.tasks[task.name]
+            task.executeFn = { command: String, inputItem: Any, outputItem: Any? ->
+                runTask(task, command, inputItem, outputItem)
+            }
             task.connect()
         }
 
         // Set execute function for each file import.
         for (fileImport in workflow.fileImports.values) {
-            fileImport.executeFn = { inputItem -> runFileImport(inputItem, fileImport.dockerDataDir) }
-            fileImport.connect()
+            val executeFn: FileImportExecuteFn<Any> =
+                { inputItem -> runFileImport(inputItem, fileImport.dockerDataDir) }
+            fileImport.connect(executeFn)
         }
 
         // Get "leafOutputs", meaning this workflow's task.output fluxes that don't have other task.outputs as parents
@@ -66,7 +82,7 @@ class WorkflowRunner(private val workflow: Workflow,
         try {
             // Trigger workflow by subscribing to leaf task outputs...
             val leavesFlux = Flux.merge(leafOutputs)
-            leavesFlux.subscribeOn(Schedulers.elastic()).subscribe()
+            leavesFlux.subscribeOn(Schedulers.elastic())
 
             // and block until it's done
             leavesFlux.blockLast()
@@ -75,13 +91,15 @@ class WorkflowRunner(private val workflow: Workflow,
         }
     }
 
-    private fun runTask(task: Task<*,*>, command: String?, inputItem: Any, outputItem: Any?) {
+    private fun runTask(task: Task<*, *>, command: String?, inputItem: Any, outputItem: Any?) {
         val taskConfig = workflowConfig.tasks[task.name]!!
         val taskName = task.name
 
         val inputJson = mapper.writeValueAsString(inputItem)
-        log.info { "Running task \"${task.name}\" for dockerImage \"${task.dockerImage}\" input \"$inputJson\" " +
-                "output \"$outputItem\" command:\n$command" }
+        log.info {
+            "Running task \"${task.name}\" for dockerImage \"${task.dockerImage}\" input \"$inputJson\" " +
+                    "output \"$outputItem\" command:\n$command"
+        }
 
         val now = DateTime.now()
         val taskRun: TaskRun = transaction(db) {
@@ -126,26 +144,28 @@ class WorkflowRunner(private val workflow: Workflow,
         }
 
         val cachedOutputLastModified = mutableMapOf<String, Long>()
-        transaction(db) {
-            if (latestCachedOutputTask == null) {
-                log.info { "Valid cached outputs not found. Executing..." }
-                val outputFilesIn = getOutputFilesForObject(inputItem)
-                val outputFilesOut = getOutputFilesForObject(outputItem)
-                executor.executeTask(
-                    getWorkflowRunDir(workflowRun),
-                    taskRun.id.value,
-                    taskConfig,
-                    task.dockerImage,
-                    task.dockerDataDir,
-                    command,
-                    outputFilesIn,
-                    outputFilesOut,
-                    inputFilesBySource.cached,
-                    inputFilesBySource.download
-                )
-            } else {
+        if (latestCachedOutputTask == null) {
+            log.info { "Valid cached outputs not found. Executing..." }
+            val outputFilesIn = getOutputFilesForObject(inputItem)
+            val outputFilesOut = getOutputFilesForObject(outputItem)
+            executor.executeTask(
+                getWorkflowRunDir(workflowRun),
+                taskRun.id.value,
+                taskConfig,
+                task.dockerImage,
+                task.dockerDataDir,
+                command,
+                outputFilesIn,
+                outputFilesOut,
+                inputFilesBySource.cached,
+                inputFilesBySource.download
+            )
+        } else {
+            transaction(db) {
                 log.info { "Valid cached outputs found. Skipping execution." }
-                if (latestCachedOutputTask.workflowRun.id.value == workflowRun.id.value) {
+                val cachedOutputWorkflowRunId = latestCachedOutputTask.workflowRun.id.value
+                val workflowRunId = workflowRun.id.value
+                if (cachedOutputWorkflowRunId == workflowRunId) {
                     log.info { "Cached values come from this workflow run. Skipping output file copy." }
                 } else {
                     val cachedOutput = mapper.readValue(latestCachedOutputTask.outputJson, task.outputClass)
@@ -223,8 +243,10 @@ private fun inputFilesBySource(inputItem: Any): InputFilesBySource {
 
         // If the latest record exists and has the same lastModified time as remote, use the record's local copy
         if (inputFileRecord != null && inputFileRecord.lastModifiedTime == inputFile.lastModified) {
-            val localInputFile = CachedInputFile(inputFileRecord.path, getWorkflowInputsDir(inputFileRecord.workflowRun),
-                inputFileRecord.lastModifiedTime)
+            val localInputFile = CachedInputFile(
+                inputFileRecord.path, getWorkflowInputsDir(inputFileRecord.workflowRun),
+                inputFileRecord.lastModifiedTime
+            )
             cached.add(localInputFile)
         } else {
             download.add(inputFile)
