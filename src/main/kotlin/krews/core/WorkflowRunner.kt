@@ -54,19 +54,17 @@ class WorkflowRunner(
 
         // Set execute function for each task.
         for (task in workflow.tasks.values) {
-            task.executorService = executorService
-            task.taskConfig = workflowConfig.tasks[task.name]
-            task.executeFn = { command: String, inputItem: Any, outputItem: Any? ->
+            val taskConfig = workflowConfig.tasks[task.name]
+            val executeFn = { command: String, inputItem: Any, outputItem: Any? ->
                 runTask(task, command, inputItem, outputItem)
             }
-            task.connect()
+            task.connect(taskConfig, executeFn, executorService)
         }
 
         // Set execute function for each file import.
         for (fileImport in workflow.fileImports.values) {
-            val executeFn: FileImportExecuteFn<Any> =
-                { inputItem -> runFileImport(inputItem, fileImport.dockerDataDir) }
-            fileImport.connect(executeFn)
+            val executeFn = { inputItem: Any -> runFileImport(inputItem, fileImport.dockerDataDir) }
+            fileImport.connect(executeFn, executorService)
         }
 
         // Get "leafOutputs", meaning this workflow's task.output fluxes that don't have other task.outputs as parents

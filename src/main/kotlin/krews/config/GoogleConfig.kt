@@ -7,7 +7,7 @@ data class GoogleWorkflowConfig (
     val regions: List<String> = listOf(),
     val zones: List<String> = listOf(),
     val storageBucket: String,
-    val storageBaseDir: String?,
+    val storageBaseDir: String? = null,
     val localStorageBaseDir: String = ".",
     // Interval in seconds between checks for pipeline job completion
     val jobCompletionPollInterval: Int = 10,
@@ -16,9 +16,9 @@ data class GoogleWorkflowConfig (
 )
 
 data class GoogleTaskConfig (
-    val machineType: String?,
+    val machineType: String? = null,
     val diskSize: Capacity,
-    val diskType: GoogleDiskType
+    val diskType: GoogleDiskType = GoogleDiskType.HDD
 )
 
 enum class GoogleDiskType(val value: String) {

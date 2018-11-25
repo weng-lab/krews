@@ -39,7 +39,7 @@ class KrewsApp(private val workflowBuilder: WorkflowBuilder) : CliktCommand() {
 
     override fun run() {
         val hoconConfig = if (config != null) ConfigFactory.parseFile(config!!.toFile()) else ConfigFactory.empty()
-        val params = Params(createParamsForConfig(hoconConfig))
+        val params = createParamsForConfig(hoconConfig)
         val workflow = workflowBuilder.build(params)
         val workflowConfig = createWorkflowConfig(hoconConfig, workflow)
 

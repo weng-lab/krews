@@ -9,7 +9,6 @@ import io.kotlintest.specs.StringSpec
 import io.mockk.spyk
 import krews.config.createParamsForConfig
 import krews.config.createWorkflowConfig
-import krews.core.Params
 import krews.core.WorkflowRunner
 import krews.executor.google.GoogleLocalExecutor
 import krews.executor.google.googleStorageClient
@@ -109,7 +108,7 @@ class GoogleExecutorTests : StringSpec() {
      */
     private fun runWorkflow(inputFiles: List<String>, runTimestampOverride: Long): GoogleLocalExecutor {
         val config = ConfigFactory.parseString(googleConfig(inputFiles))
-        val workflow = gsFilesWorkflow.build(Params(createParamsForConfig(config)))
+        val workflow = gsFilesWorkflow.build(createParamsForConfig(config))
         val workflowConfig = createWorkflowConfig(config, workflow)
         val executor = spyk(GoogleLocalExecutor(workflowConfig))
         val runner = WorkflowRunner(workflow, workflowConfig, executor, runTimestampOverride)

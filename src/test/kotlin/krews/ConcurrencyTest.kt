@@ -8,7 +8,6 @@ import io.mockk.every
 import io.mockk.mockk
 import krews.config.createParamsForConfig
 import krews.config.createWorkflowConfig
-import krews.core.Params
 import krews.core.WorkflowRunner
 import krews.core.workflow
 import krews.executor.LocallyDirectedExecutor
@@ -122,7 +121,7 @@ class ConcurrencyTest : StringSpec(){
 
     private fun runWorkflow(config: String): ExecutorAndRunner {
         val parsedConfig = ConfigFactory.parseString(config)
-        val workflow = testWorkflow.build(Params(createParamsForConfig(parsedConfig)))
+        val workflow = testWorkflow.build(createParamsForConfig(parsedConfig))
         val workflowConfig = createWorkflowConfig(parsedConfig, workflow)
         val executor = mockk<LocallyDirectedExecutor>(relaxed = true)
         val localExecutor = LocalExecutor(workflowConfig)

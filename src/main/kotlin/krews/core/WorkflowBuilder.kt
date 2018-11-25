@@ -1,13 +1,22 @@
 package krews.core
 
+import com.fasterxml.jackson.module.kotlin.convertValue
+import krews.config.configMapper
 import org.reactivestreams.Publisher
 import reactor.core.publisher.Flux
 
 class WorkflowBuilder internal constructor(val name: String, private val init: WorkflowBuilder.() -> Unit) {
     @PublishedApi internal val tasks: MutableMap<String, Task<*, *>> = mutableMapOf()
     private val fileImports: MutableMap<String, FileImport<*>> = mutableMapOf()
-    lateinit var params: Params
-        internal set
+    @PublishedApi internal lateinit var rawParams: Map<String, Any>
+    @PublishedApi internal var cachedParams: Any? = null
+
+    inline fun <reified P> params(): P {
+        if (cachedParams == null) {
+            cachedParams = configMapper.convertValue<P>(rawParams)
+        }
+        return cachedParams as P
+    }
 
     inline fun <I : Any, reified O : Any> task(name: String, init: TaskBuilder<I, O>.() -> Unit): Task<I, O> {
         val builder = TaskBuilder<I, O>(name, O::class.java)
@@ -24,8 +33,8 @@ class WorkflowBuilder internal constructor(val name: String, private val init: W
         return fileImport
     }
 
-    internal fun build(params: Params): Workflow {
-        this.params = params
+    internal fun build(rawParams: Map<String, Any>): Workflow {
+        this.rawParams = rawParams
         this.init()
         return Workflow(name, tasks, fileImports)
     }

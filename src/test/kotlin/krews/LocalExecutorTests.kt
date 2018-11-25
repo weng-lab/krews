@@ -8,7 +8,6 @@ import io.kotlintest.specs.StringSpec
 import io.mockk.spyk
 import krews.config.createParamsForConfig
 import krews.config.createWorkflowConfig
-import krews.core.Params
 import krews.core.WorkflowRunner
 import krews.executor.local.LocalExecutor
 import java.nio.file.Files
@@ -111,7 +110,7 @@ class LocalExecutorTests : StringSpec() {
      */
     private fun runWorkflow(runTimestampOverride: Long): LocalExecutor {
         val parsedConfig = ConfigFactory.parseString(config)
-        val workflow = localFilesWorkflow.build(Params(createParamsForConfig(parsedConfig)))
+        val workflow = localFilesWorkflow.build(createParamsForConfig(parsedConfig))
         val workflowConfig = createWorkflowConfig(parsedConfig, workflow)
         val executor = spyk(LocalExecutor(workflowConfig))
         val runner = WorkflowRunner(workflow, workflowConfig, executor, runTimestampOverride)

@@ -9,9 +9,13 @@ import reactor.core.publisher.toFlux
 import java.nio.file.Files
 import java.nio.file.Paths
 
+private data class LocalWorkflowParams(
+    val sampleFilesDir: String
+)
+
 val localFilesWorkflow = workflow("local-files-workflow") {
-    val sampleFilesDir = params.get<String>("sample-files-dir")
-    val sampleFiles = Files.newDirectoryStream(Paths.get(sampleFilesDir)).sortedBy { f -> f.fileName }
+    val params = params<LocalWorkflowParams>()
+    val sampleFiles = Files.newDirectoryStream(Paths.get(params.sampleFilesDir)).sortedBy { f -> f.fileName }
         .map { LocalInputFile(it.toAbsolutePath().toString(), it.fileName.toString()) }
         .toFlux()
 
@@ -42,11 +46,16 @@ val localFilesWorkflow = workflow("local-files-workflow") {
     }
 }
 
+private data class GSWorkflowParams(
+    val inputFilesBucket: String,
+    val inputFilesBaseDir: String,
+    val inputFiles: List<String>
+)
+
 val gsFilesWorkflow = workflow("gs-files-workflow") {
-    val inputBucket = params.get<String>("input-files-bucket")
-    val inputBaseDir = params.get<String>("input-files-base-dir")
-    val inputFiles = params.get<List<String>>("input-files")
-        .map { GSInputFile(inputBucket, "$inputBaseDir/$it", it) }
+    val params = params<GSWorkflowParams>()
+    val inputFiles = params.inputFiles
+        .map { GSInputFile(params.inputFilesBucket, "${params.inputFilesBaseDir}/$it", it) }
         .toFlux()
 
     val base64 = task<InputFile, OutputFile>("base64") {
