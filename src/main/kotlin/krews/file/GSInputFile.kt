@@ -17,3 +17,14 @@ class GSInputFile(val bucket: String, val objectPath: String, path: String = obj
 
     override fun toString() = "GSInputFile(bucket='$bucket', objectPath='$objectPath', path='$path')"
 }
+
+private val gsPathRegex = """gs://(.*?)/(.*)""".toRegex()
+
+fun parseGSURL(gsURL: String): ParsedGSUrl {
+    val results = gsPathRegex.find(gsURL)!!
+    val bucket = results.groups[1]!!.value
+    val objectPath = results.groups[2]!!.value
+    val fileName = objectPath.split("/").last()
+    return ParsedGSUrl(bucket, objectPath, fileName)
+}
+data class ParsedGSUrl(val bucket: String, val objectPath: String, val fileName: String)

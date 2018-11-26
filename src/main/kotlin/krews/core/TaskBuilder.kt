@@ -25,7 +25,7 @@ class TaskBuilder<I : Any, O : Any> @PublishedApi internal constructor(
 
     fun commandFn(init: InputItemContext<I>.() -> String) {
         commandFn = { inputItemContext ->
-            inputItemContext.init()
+            inputItemContext.init().trimIndent()
         }
     }
 
