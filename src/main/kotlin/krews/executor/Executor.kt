@@ -47,9 +47,9 @@ interface LocallyDirectedExecutor {
      * Execute task for the environment. Will consist of running a docker container to complete the task, and another
      * for downloading the given input files from remote sources, and possibly more for environment specific requirements.
      *
-     * @param outputFilesIn: Output files coming from a task's current "Input Item." These will already exist in the
+     * @param outputFilesIn: Output files coming from a task's current "Input Element." These will already exist in the
      * current environment's storage.
-     * @param outputFilesOut: Output files coming from a task's current "Output Item." These need to end up in the
+     * @param outputFilesOut: Output files coming from a task's current "Output Element." These need to end up in the
      * current environment's storage.
      * @param cachedInputFiles: Input files that exist in the current environment's storage.
      * @param downloadInputFiles: Input files that need to be downloaded from original sources.

@@ -16,16 +16,9 @@ import mu.KotlinLogging
 import reactor.core.publisher.Mono
 import reactor.core.publisher.toFlux
 import reactor.core.publisher.toMono
-import reactor.core.scheduler.Schedulers
-import java.lang.Math.random
 import java.nio.file.Files
 import java.nio.file.Paths
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.Executor
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Future
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.function.Supplier
 import kotlin.math.max
 
 private val log = KotlinLogging.logger {}
@@ -59,13 +52,13 @@ class ConcurrencyTest : StringSpec(){
         val task1 = task<Int, Int>("task1") {
             dockerImage = "task1"
             input = i
-            outputFn { inputItem }
+            outputFn { inputEl }
             commandFn { "" }
         }
         val task2 = task<Int,Int>("task2") {
             dockerImage = "task2"
             input = task1.output
-            outputFn { inputItem }
+            outputFn { inputEl }
             commandFn { "" }
         }
         outputsCaptured = task2.output.buffer().toMono()

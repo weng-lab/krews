@@ -10,7 +10,7 @@ import java.util.function.Supplier
 class FileImport<I : Any> internal constructor(val name: String, val input: Flux<I>, val dockerDataDir: String) {
     val output: Flux<I> = TopicProcessor.create<I>()
 
-    internal fun connect(executeFn: (inputItem: I) -> Unit,
+    internal fun connect(executeFn: (inputEl: I) -> Unit,
                          executorService: ExecutorService) {
         val processed = input.flatMapSequential {
             Mono.fromFuture(CompletableFuture.supplyAsync(Supplier { processInput(it, executeFn) }, executorService))
@@ -18,9 +18,9 @@ class FileImport<I : Any> internal constructor(val name: String, val input: Flux
         processed.subscribe(output as TopicProcessor)
     }
 
-    private fun processInput(inputItem: I,
-                             executeFn: (inputItem: I) -> Unit): I {
-        executeFn(inputItem)
-        return inputItem
+    private fun processInput(inputEl: I,
+                             executeFn: (inputEl: I) -> Unit): I {
+        executeFn(inputEl)
+        return inputEl
     }
 }

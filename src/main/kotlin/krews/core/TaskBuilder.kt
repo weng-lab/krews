@@ -2,6 +2,7 @@ package krews.core
 
 import com.fasterxml.jackson.module.kotlin.convertValue
 import krews.config.configMapper
+import krews.file.File
 import org.reactivestreams.Publisher
 import reactor.core.publisher.Flux
 
@@ -12,20 +13,20 @@ class TaskBuilder<I : Any, O : Any> @PublishedApi internal constructor(
     lateinit var dockerImage: String
     var dockerDataDir: String = DEFAULT_DOCKER_DATA_DIR
     lateinit var input: Publisher<out I>
-    private lateinit var outputFn: ((inputItemContext: InputItemContext<I>) -> O)
-    private lateinit var commandFn: ((inputItemContext: InputItemContext<I>) -> String)
+    private lateinit var outputFn: ((inputElementContext: InputElementContext<I>) -> O)
+    private lateinit var commandFn: ((inputElementContext: InputElementContext<I>) -> String)
     var labels: List<String> = listOf()
 
 
-    fun outputFn(init: InputItemContext<I>.() -> O) {
-        outputFn = { inputItemContext ->
-            inputItemContext.init()
+    fun outputFn(init: InputElementContext<I>.() -> O) {
+        outputFn = { inputElementContext ->
+            inputElementContext.init()
         }
     }
 
-    fun commandFn(init: InputItemContext<I>.() -> String) {
-        commandFn = { inputItemContext ->
-            inputItemContext.init().trimIndent()
+    fun commandFn(init: InputElementContext<I>.() -> String) {
+        commandFn = { inputElementContext ->
+            inputElementContext.init().trimIndent()
         }
     }
 
@@ -43,11 +44,12 @@ class TaskBuilder<I : Any, O : Any> @PublishedApi internal constructor(
             commandFn = commandFn,
             outputClass = outputClass
         )
-
     }
+
+    val File.dockerPath: String get() = "$dockerDataDir/${this.path}"
 }
 
-data class InputItemContext<I : Any>(val inputItem: I, @PublishedApi internal val rawParams: Map<String, Any>) {
+data class InputElementContext<I : Any>(val inputEl: I, @PublishedApi internal val rawParams: Map<String, Any>) {
     @PublishedApi internal var cachedParams: Any? = null
 
     inline fun <reified P> taskParams(): P {

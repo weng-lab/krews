@@ -23,11 +23,11 @@ val localFilesWorkflow = workflow("local-files-workflow") {
         dockerImage = "alpine:3.8"
 
         input = sampleFiles
-        outputFn { OutputFile("base64/${inputItem.filenameNoExt()}.b64") }
+        outputFn { OutputFile("base64/${inputEl.filenameNoExt()}.b64") }
         commandFn {
             """
             mkdir -p /data/base64
-            base64 /data/${inputItem.path} > /data/base64/${inputItem.filenameNoExt()}.b64
+            base64 /data/${inputEl.path} > /data/base64/${inputEl.filenameNoExt()}.b64
             """.trimIndent()
         }
     }
@@ -36,11 +36,11 @@ val localFilesWorkflow = workflow("local-files-workflow") {
         dockerImage = "alpine:3.8"
 
         input = base64.output
-        outputFn { OutputFile("gzip/${inputItem.filename()}.gz") }
+        outputFn { OutputFile("gzip/${inputEl.filename()}.gz") }
         commandFn {
             """
             mkdir -p /data/gzip
-            gzip /data/${inputItem.path} > /data/gzip/${inputItem.filename()}.gz
+            gzip /data/${inputEl.path} > /data/gzip/${inputEl.filename()}.gz
             """.trimIndent()
         }
     }
@@ -62,11 +62,11 @@ val gsFilesWorkflow = workflow("gs-files-workflow") {
         dockerImage = "alpine:3.8"
 
         input = inputFiles
-        outputFn { OutputFile("base64/${inputItem.filenameNoExt()}.b64") }
+        outputFn { OutputFile("base64/${inputEl.filenameNoExt()}.b64") }
         commandFn {
             """
             mkdir -p /data/base64
-            base64 /data/${inputItem.path} > /data/base64/${inputItem.filenameNoExt()}.b64
+            base64 /data/${inputEl.path} > /data/base64/${inputEl.filenameNoExt()}.b64
             """.trimIndent()
         }
     }
@@ -75,11 +75,11 @@ val gsFilesWorkflow = workflow("gs-files-workflow") {
         dockerImage = "alpine:3.8"
 
         input = base64.output
-        outputFn { OutputFile("gzip/${inputItem.filename()}.gz") }
+        outputFn { OutputFile("gzip/${inputEl.filename()}.gz") }
         commandFn {
             """
             mkdir -p /data/gzip
-            gzip /data/${inputItem.path} > /data/gzip/${inputItem.filename()}.gz
+            gzip /data/${inputEl.path} > /data/gzip/${inputEl.filename()}.gz
             """.trimIndent()
         }
     }

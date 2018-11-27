@@ -20,14 +20,14 @@ class Task<I : Any, O : Any> internal constructor(
     val input: Flux<out I>,
     val dockerImage: String,
     val dockerDataDir: String,
-    private val outputFn: (inputItemContext: InputItemContext<I>) -> O,
-    private val commandFn: (inputItemContext: InputItemContext<I>) -> String,
+    private val outputFn: (inputElementContext: InputElementContext<I>) -> O,
+    private val commandFn: (inputElementContext: InputElementContext<I>) -> String,
     internal val outputClass: Class<O>
 ) {
     val output: Flux<O> = TopicProcessor.create<O>()
 
     internal fun connect(taskConfig: TaskConfig?,
-                         executeFn: (command: String, inputItem: I, outputItem: O) -> Unit,
+                         executeFn: (command: String, inputEl: I, outputEl: O) -> Unit,
                          executorService: ExecutorService) {
         val processed = input.flatMapSequential({
             Mono.fromFuture(CompletableFuture.supplyAsync(Supplier {
@@ -37,15 +37,15 @@ class Task<I : Any, O : Any> internal constructor(
         processed.subscribe(output as TopicProcessor)
     }
 
-    private fun processInput(inputItem: I,
+    private fun processInput(inputEl: I,
                              taskConfig: TaskConfig?,
-                             executeFn: (command: String, inputItem: I, outputItem: O) -> Unit): O {
+                             executeFn: (command: String, inputEl: I, outputEl: O) -> Unit): O {
         val taskParams = taskConfig?.params ?: mapOf()
-        val inputItemContext = InputItemContext(inputItem, taskParams)
-        val outputItem = outputFn(inputItemContext)
-        val command = commandFn(inputItemContext)
-        executeFn(command, inputItemContext.inputItem, outputItem)
-        return outputItem
+        val inputElementContext = InputElementContext(inputEl, taskParams)
+        val outputEl = outputFn(inputElementContext)
+        val command = commandFn(inputElementContext)
+        executeFn(command, inputElementContext.inputEl, outputEl)
+        return outputEl
     }
 }
 
