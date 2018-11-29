@@ -1,5 +1,6 @@
 package krews.config
 
+import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.core.TreeNode
 import com.fasterxml.jackson.databind.DeserializationContext
@@ -11,6 +12,7 @@ import com.fasterxml.jackson.databind.deser.std.StdDeserializer
 import com.fasterxml.jackson.databind.node.JsonNodeType
 
 @JsonDeserialize(using = ParallelismDeserializer::class)
+@JsonTypeInfo(use = JsonTypeInfo.Id.NONE)
 sealed class Parallelism
 object UnlimitedParallelism : Parallelism()
 data class LimitedParallelism (val limit: Int) : Parallelism()

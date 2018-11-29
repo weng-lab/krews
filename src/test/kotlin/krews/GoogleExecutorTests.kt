@@ -51,6 +51,8 @@ class GoogleExecutorTests : StringSpec() {
 
     override fun afterSpec(description: Description, spec: Spec) {
         // Delete test bucket
+        val bucketContents = googleStorageClient.objects().list(testBucket).execute()
+        bucketContents.items.forEach { googleStorageClient.objects().delete(testBucket, it.name) }
         googleStorageClient.buckets().delete(testBucket).execute()
     }
 
@@ -82,7 +84,7 @@ class GoogleExecutorTests : StringSpec() {
             val executor = runWorkflow((1..3).map { "test-$it.txt" }, 2)
 
             val runDir = "run/2"
-            for (i in 1..3) {
+            for (i in 1..2) {
                 "$runDir/inputs/test-$i.txt" should existInGS(testBucket, workflowBaseDir)
                 "$runDir/outputs/base64/test-$i.b64" should existInGS(testBucket, workflowBaseDir)
                 "$runDir/outputs/gzip/test-$i.b64.gz" should existInGS(testBucket, workflowBaseDir)
@@ -90,16 +92,13 @@ class GoogleExecutorTests : StringSpec() {
 
             verifyDownloadInputFile(executor, "test-1.txt")
             verifyCachedInputFile(executor, "test-2.txt")
-            verifyDownloadInputFile(executor, "test-3.txt")
 
             // Verify tasks were re-run for test-1 and test-4 and NOT for test-2
             verifyExecuteWithOutput(executor, "base64/test-1.b64")
             verifyExecuteWithOutput(executor, "base64/test-2.b64", 0)
-            verifyExecuteWithOutput(executor, "base64/test-3.b64")
 
             verifyExecuteWithOutput(executor, "gzip/test-1.b64.gz")
             verifyExecuteWithOutput(executor, "gzip/test-2.b64.gz", 0)
-            verifyExecuteWithOutput(executor, "gzip/test-3.b64.gz")
         }
     }
 

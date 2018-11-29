@@ -1,7 +1,6 @@
 package krews.config
 
 data class TaskConfig (
-    val params: Map<String, Any>? = mapOf(),
     val env: Map<String, String>? = null,
     val google: GoogleTaskConfig? = null,
     val parallelism: Parallelism = UnlimitedParallelism

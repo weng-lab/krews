@@ -7,24 +7,24 @@ import io.kotlintest.shouldBe
 import io.kotlintest.shouldThrow
 import io.kotlintest.specs.StringSpec
 import krews.config.*
-import krews.core.*
+import krews.core.workflow
+import krews.file.File
+import krews.file.InputFile
+import krews.file.LocalInputFile
 import reactor.core.publisher.toMono
-import java.lang.IllegalArgumentException
 
 private data class TestWorkflowParams(
     val withDefault: String = "default",
     val withoutDefault: String,
-    val nullable: String?,
-    val complex: ComplexType?
+    val nullableFile: File?,
+    val complex: ComplexType?,
+    val map: Map<String, String>?,
+    val list: List<String>?
 )
 
 private data class ComplexType(
     val intValue: Int,
     val doubleValue: Double
-)
-
-private data class TestTaskParams(
-    val value: String
 )
 
 private var parsedParams: TestWorkflowParams? = null
@@ -72,30 +72,42 @@ private val sparseParamsConfig =
 private val parsedSparseParams = TestWorkflowParams(
     withDefault = "default",
     withoutDefault = "without-test",
-    nullable = null,
-    complex = null
+    nullableFile = null,
+    complex = null,
+    map = null,
+    list = null
 )
 
 private val completeParamsConfig =
         """
-        params = {
+        params {
             with-default = test1
             without-default = test2
-            nullable = test3
-            complex = {
+            nullable-file {
+                "-type" = "krews.file.LocalInputFile"
+                local-path = "path/to/file.txt"
+                path = "file.txt"
+            }
+            complex {
                 int-value = 1
                 double-value = 2
             }
+            map {
+                text = test-text
+            }
+            list = ["list-test"]
         }
         """.trimIndent()
 private val parsedCompleteParams = TestWorkflowParams(
     withDefault = "test1",
     withoutDefault = "test2",
-    nullable = "test3",
+    nullableFile = LocalInputFile("path/to/file.txt", "file.txt"),
     complex = ComplexType(
         intValue = 1,
         doubleValue = 2.0
-    )
+    ),
+    map = mapOf("text" to "test-text"),
+    list = listOf("list-test")
 )
 
 private val completeTestConfig =
@@ -146,10 +158,10 @@ class ConfigTests : StringSpec({
     "Parsing params without missing not-nullable field should throw exception" {
         val config = ConfigFactory.parseString(brokenParamsConfig)
         val params = createParamsForConfig(config)
-        val exception = shouldThrow<IllegalArgumentException> {
+        val exception = shouldThrow<MissingKotlinParameterException> {
             configSampleWorkflow().build(params)
         }
-        exception.cause.shouldBeInstanceOf<MissingKotlinParameterException>()
+        //exception.cause.shouldBeInstanceOf<MissingKotlinParameterException>()
     }
 
     "Parsing workflow params with defaults and nullability should work" {
@@ -163,7 +175,13 @@ class ConfigTests : StringSpec({
         val config = ConfigFactory.parseString(completeParamsConfig)
         val params = createParamsForConfig(config)
         configSampleWorkflow().build(params)
-        parsedParams shouldBe parsedCompleteParams
+        parsedParams!!.withDefault shouldBe parsedCompleteParams.withDefault
+        parsedParams!!.withoutDefault shouldBe parsedCompleteParams.withoutDefault
+        parsedParams!!.complex shouldBe parsedCompleteParams.complex
+        parsedParams!!.nullableFile!!.path shouldBe parsedCompleteParams.nullableFile!!.path
+        parsedParams!!.nullableFile!!.shouldBeInstanceOf<InputFile>()
+        parsedParams!!.list shouldBe parsedCompleteParams.list
+        parsedParams!!.map shouldBe parsedCompleteParams.map
     }
 
     "createWorkflowConfig should create complete complex task-based configurations" {

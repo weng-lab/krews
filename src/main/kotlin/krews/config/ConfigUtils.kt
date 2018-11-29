@@ -3,18 +3,27 @@ package krews.config
 import com.fasterxml.jackson.databind.PropertyNamingStrategy
 import com.fasterxml.jackson.module.kotlin.convertValue
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigValue
 import krews.core.Task
 import krews.core.Workflow
+import krews.util.mapper
+import mu.KotlinLogging
 
 const val DEFAULT_TASK_CONFIG_NAME = "default"
 
-val configMapper by lazy {
+val xlog = KotlinLogging.logger {}
+
+@PublishedApi internal val noDefaultTypesMapper by lazy {
     val mapper = jacksonObjectMapper()
     mapper.propertyNamingStrategy = PropertyNamingStrategy.KEBAB_CASE
     mapper
 }
+
+@PublishedApi internal inline fun <reified T> convertConfigMap(raw: Map<String, Any>) =
+    mapper.readValue<T>(noDefaultTypesMapper.writeValueAsBytes(raw))
+
 
 @Suppress("UNCHECKED_CAST")
 fun createParamsForConfig(config: Config): Map<String, Any> {
@@ -44,7 +53,7 @@ fun createWorkflowConfig(config: Config, workflow: Workflow): WorkflowConfig {
         configRoot["params"] = mapOf<String, Any>()
     }
 
-    return configMapper.convertValue(configRoot)
+    return noDefaultTypesMapper.convertValue(configRoot)
 }
 
 /**

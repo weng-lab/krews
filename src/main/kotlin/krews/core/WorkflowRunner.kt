@@ -1,6 +1,5 @@
 package krews.core
 
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import krews.config.LimitedParallelism
 import krews.config.UnlimitedParallelism
 import krews.config.WorkflowConfig
@@ -9,6 +8,7 @@ import krews.executor.*
 import krews.file.InputFile
 import krews.file.getInputFilesForObject
 import krews.file.getOutputFilesForObject
+import krews.util.mapper
 import mu.KotlinLogging
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -21,7 +21,6 @@ import java.util.stream.Collectors
 
 
 private val log = KotlinLogging.logger {}
-private val mapper = jacksonObjectMapper()
 
 class WorkflowRunner(
     private val workflow: Workflow,
@@ -48,7 +47,7 @@ class WorkflowRunner(
         // Create an executor service for
         val workflowParallelism = workflowConfig.parallelism
         val executorService = when(workflowParallelism) {
-            null, is UnlimitedParallelism -> Executors.newCachedThreadPool()
+            is UnlimitedParallelism -> Executors.newCachedThreadPool()
             is LimitedParallelism -> Executors.newFixedThreadPool(workflowParallelism.limit)
         }
 
@@ -89,11 +88,11 @@ class WorkflowRunner(
         }
     }
 
-    private fun runTask(task: Task<*, *>, command: String?, inputEl: Any, outputEl: Any?) {
+    private fun <I : Any, O : Any> runTask(task: Task<I, O>, command: String?, inputEl: Any, outputEl: Any?) {
         val taskConfig = workflowConfig.tasks[task.name]!!
         val taskName = task.name
 
-        val inputJson = mapper.writeValueAsString(inputEl)
+        val inputJson = mapper.writerFor(task.inputClass).writeValueAsString(inputEl)
         log.info {
             "Running task \"${task.name}\" for dockerImage \"${task.dockerImage}\" input \"$inputJson\" " +
                     "output \"$outputEl\" command:\n$command"
@@ -202,7 +201,8 @@ class WorkflowRunner(
                         executor.outputFileLastModified(getWorkflowOutputsDir(workflowRun), outputFile)
             }
 
-            taskRun.outputJson = mapper.writeValueAsString(outputEl)
+            taskRun.outputJson = mapper.writerFor(task.outputClass).writeValueAsString(outputEl)
+            log.info { "OUTPUT_JSON: ${taskRun.outputJson}" }
             taskRun.completedSuccessfully = true
             taskRun.completedTime = DateTime.now().millis
         }

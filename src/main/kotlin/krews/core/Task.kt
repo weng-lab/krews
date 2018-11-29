@@ -22,6 +22,7 @@ class Task<I : Any, O : Any> internal constructor(
     val dockerDataDir: String,
     private val outputFn: (inputElementContext: InputElementContext<I>) -> O,
     private val commandFn: (inputElementContext: InputElementContext<I>) -> String,
+    internal val inputClass: Class<I>,
     internal val outputClass: Class<O>
 ) {
     val output: Flux<O> = TopicProcessor.create<O>()
@@ -31,17 +32,15 @@ class Task<I : Any, O : Any> internal constructor(
                          executorService: ExecutorService) {
         val processed = input.flatMapSequential({
             Mono.fromFuture(CompletableFuture.supplyAsync(Supplier {
-                processInput(it, taskConfig, executeFn)
+                processInput(it, executeFn)
             }, executorService))
         }, parToMaxConcurrency(taskConfig?.parallelism))
         processed.subscribe(output as TopicProcessor)
     }
 
     private fun processInput(inputEl: I,
-                             taskConfig: TaskConfig?,
                              executeFn: (command: String, inputEl: I, outputEl: O) -> Unit): O {
-        val taskParams = taskConfig?.params ?: mapOf()
-        val inputElementContext = InputElementContext(inputEl, taskParams)
+        val inputElementContext = InputElementContext(inputEl)
         val outputEl = outputFn(inputElementContext)
         val command = commandFn(inputElementContext)
         executeFn(command, inputElementContext.inputEl, outputEl)

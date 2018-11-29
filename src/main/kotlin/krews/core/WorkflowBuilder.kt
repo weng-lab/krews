@@ -1,9 +1,11 @@
 package krews.core
 
-import com.fasterxml.jackson.module.kotlin.convertValue
-import krews.config.configMapper
+import krews.config.convertConfigMap
+import mu.KotlinLogging
 import org.reactivestreams.Publisher
 import reactor.core.publisher.Flux
+
+val xlog = KotlinLogging.logger {}
 
 class WorkflowBuilder internal constructor(val name: String, private val init: WorkflowBuilder.() -> Unit) {
     @PublishedApi internal val tasks: MutableMap<String, Task<*, *>> = mutableMapOf()
@@ -13,13 +15,13 @@ class WorkflowBuilder internal constructor(val name: String, private val init: W
 
     inline fun <reified P> params(): P {
         if (cachedParams == null) {
-            cachedParams = configMapper.convertValue<P>(rawParams)
+            cachedParams = convertConfigMap<P>(rawParams)
         }
         return cachedParams as P
     }
 
-    inline fun <I : Any, reified O : Any> task(name: String, init: TaskBuilder<I, O>.() -> Unit): Task<I, O> {
-        val builder = TaskBuilder<I, O>(name, O::class.java)
+    inline fun <reified I : Any, reified O : Any> task(name: String, init: TaskBuilder<I, O>.() -> Unit): Task<I, O> {
+        val builder = TaskBuilder<I, O>(name, I::class.java, O::class.java)
         builder.init()
         val task = builder.build()
         this.tasks[task.name] = task

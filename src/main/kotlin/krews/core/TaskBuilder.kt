@@ -1,13 +1,12 @@
 package krews.core
 
-import com.fasterxml.jackson.module.kotlin.convertValue
-import krews.config.configMapper
 import krews.file.File
 import org.reactivestreams.Publisher
 import reactor.core.publisher.Flux
 
 class TaskBuilder<I : Any, O : Any> @PublishedApi internal constructor(
     private val name: String,
+    private val inputClass: Class<I>,
     private val outputClass: Class<O>
 ) {
     lateinit var dockerImage: String
@@ -42,6 +41,7 @@ class TaskBuilder<I : Any, O : Any> @PublishedApi internal constructor(
             dockerDataDir = dockerDataDir,
             outputFn = outputFn,
             commandFn = commandFn,
+            inputClass = inputClass,
             outputClass = outputClass
         )
     }
@@ -49,13 +49,4 @@ class TaskBuilder<I : Any, O : Any> @PublishedApi internal constructor(
     val File.dockerPath: String get() = "$dockerDataDir/${this.path}"
 }
 
-data class InputElementContext<I : Any>(val inputEl: I, @PublishedApi internal val rawParams: Map<String, Any>) {
-    @PublishedApi internal var cachedParams: Any? = null
-
-    inline fun <reified P> taskParams(): P {
-        if (cachedParams == null) {
-            cachedParams = configMapper.convertValue<P>(rawParams)
-        }
-        return cachedParams as P
-    }
-}
+data class InputElementContext<I : Any>(val inputEl: I)

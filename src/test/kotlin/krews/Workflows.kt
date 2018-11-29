@@ -1,10 +1,7 @@
 package krews
 
 import krews.core.workflow
-import krews.file.GSInputFile
-import krews.file.InputFile
-import krews.file.LocalInputFile
-import krews.file.OutputFile
+import krews.file.*
 import reactor.core.publisher.toFlux
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -13,26 +10,29 @@ private data class LocalWorkflowParams(
     val sampleFilesDir: String
 )
 
+interface TestBaseInputType { val file: File }
+data class TestComplexInputType (override val file: File, val string: String) : TestBaseInputType
+
 val localFilesWorkflow = workflow("local-files-workflow") {
     val params = params<LocalWorkflowParams>()
     val sampleFiles = Files.newDirectoryStream(Paths.get(params.sampleFilesDir)).sortedBy { f -> f.fileName }
-        .map { LocalInputFile(it.toAbsolutePath().toString(), it.fileName.toString()) }
+        .map { TestComplexInputType(LocalInputFile(it.toAbsolutePath().toString(), it.fileName.toString()), "test") }
         .toFlux()
 
-    val base64 = task<InputFile, OutputFile>("base64") {
+    val base64 = task<TestBaseInputType, File>("base64") {
         dockerImage = "alpine:3.8"
 
         input = sampleFiles
-        outputFn { OutputFile("base64/${inputEl.filenameNoExt()}.b64") }
+        outputFn { OutputFile("base64/${inputEl.file.filenameNoExt()}.b64") }
         commandFn {
             """
             mkdir -p /data/base64
-            base64 /data/${inputEl.path} > /data/base64/${inputEl.filenameNoExt()}.b64
-            """.trimIndent()
+            base64 /data/${inputEl.file.path} > /data/base64/${inputEl.file.filenameNoExt()}.b64
+            """
         }
     }
 
-    task<OutputFile, OutputFile>("gzip") {
+    task<File, File>("gzip") {
         dockerImage = "alpine:3.8"
 
         input = base64.output
@@ -41,7 +41,7 @@ val localFilesWorkflow = workflow("local-files-workflow") {
             """
             mkdir -p /data/gzip
             gzip /data/${inputEl.path} > /data/gzip/${inputEl.filename()}.gz
-            """.trimIndent()
+            """
         }
     }
 }
@@ -58,7 +58,7 @@ val gsFilesWorkflow = workflow("gs-files-workflow") {
         .map { GSInputFile(params.inputFilesBucket, "${params.inputFilesBaseDir}/$it", it) }
         .toFlux()
 
-    val base64 = task<InputFile, OutputFile>("base64") {
+    val base64 = task<File, File>("base64") {
         dockerImage = "alpine:3.8"
 
         input = inputFiles
@@ -67,11 +67,11 @@ val gsFilesWorkflow = workflow("gs-files-workflow") {
             """
             mkdir -p /data/base64
             base64 /data/${inputEl.path} > /data/base64/${inputEl.filenameNoExt()}.b64
-            """.trimIndent()
+            """
         }
     }
 
-    task<OutputFile, OutputFile>("gzip") {
+    task<File, File>("gzip") {
         dockerImage = "alpine:3.8"
 
         input = base64.output
@@ -80,7 +80,7 @@ val gsFilesWorkflow = workflow("gs-files-workflow") {
             """
             mkdir -p /data/gzip
             gzip /data/${inputEl.path} > /data/gzip/${inputEl.filename()}.gz
-            """.trimIndent()
+            """
         }
     }
 }
