@@ -182,7 +182,10 @@ internal fun submitJobAndWait(run: RunPipelineRequest, jobCompletionPollInterval
         Thread.sleep(jobCompletionPollInterval * 1000L)
         val op: Operation = googleGenomicsClient.projects().operations().get(initialOp.name).execute()
         if (op.done) {
-            log.info { "Pipeline job \"${op.name}\" complete! Complete results: ${op.toPrettyString()}" }
+            if (op.error != null) {
+                throw Exception("Error occurred during task execution. Operation Response: ${op.toPrettyString()}")
+            }
+            log.info { "Pipeline job \"${op.name}\" completed successfully. Results: ${op.toPrettyString()}" }
         } else {
             log.info { "Pipeline job \"${op.name}\" still running..." }
         }

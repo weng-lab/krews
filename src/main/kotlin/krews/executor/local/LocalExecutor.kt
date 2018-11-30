@@ -106,9 +106,35 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
         // Start the container and wait for it to finish processing
         log.info { "Starting container $containerId..." }
         dockerClient.startContainerCmd(containerId).exec()
-        log.info { "Waiting for container $containerId to finish..." }
-        dockerClient.waitContainerCmd(containerId).exec(WaitContainerResultCallback()).awaitCompletion()
-        log.info { "Container $containerId finished!" }
+
+        val logBasePath = runBasePath.resolve(LOGS_DIR).resolve(taskRunId.toString())
+
+        try {
+            log.info { "Waiting for container $containerId to finish..." }
+            val statusCode = dockerClient.waitContainerCmd(containerId).exec(WaitContainerResultCallback()).awaitStatusCode()
+            if (statusCode > 0) {
+                throw Exception("Container exited with code $statusCode. Please see logs at $logBasePath for more information.")
+            }
+            log.info { "Container $containerId finished successfully!" }
+        } finally {
+            // Copy logs from container
+            log.info { "Copying logs from container $containerId" }
+            Files.createDirectories(logBasePath)
+            val logCallback = object : LogContainerResultCallback() {
+                override fun onNext(item: Frame?) {
+                    if (item?.streamType == StreamType.STDOUT) {
+                        Files.newOutputStream(logBasePath.resolve("stdout.txt")).use { it.write(item.payload) }
+                    }
+                    if (item?.streamType == StreamType.STDERR) {
+                        Files.newOutputStream(logBasePath.resolve("stderr.txt")).use { it.write(item.payload) }
+                    }
+                }
+            }
+            dockerClient.logContainerCmd(containerId)
+                .withStdOut(true)
+                .withStdErr(true)
+                .exec(logCallback).awaitCompletion()
+        }
 
         // Copy newly downloaded input files out of docker container into run inputs dir
         if (downloadInputFiles.isNotEmpty()) {
@@ -131,25 +157,6 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
             Files.createDirectories(to.parent)
             Files.copy(mountDir.resolve(it), to)
         }
-
-        // Copy logs from container
-        log.info { "Copying logs from container $containerId" }
-        val logBasePath = runBasePath.resolve(LOGS_DIR).resolve(taskRunId.toString())
-        Files.createDirectories(logBasePath)
-        val logCallback = object : LogContainerResultCallback() {
-            override fun onNext(item: Frame?) {
-                if (item?.streamType == StreamType.STDOUT) {
-                    Files.newOutputStream(logBasePath.resolve("stdout.txt")).use { it.write(item.payload) }
-                }
-                if (item?.streamType == StreamType.STDERR) {
-                    Files.newOutputStream(logBasePath.resolve("stderr.txt")).use { it.write(item.payload) }
-                }
-            }
-        }
-        dockerClient.logContainerCmd(containerId)
-            .withStdOut(true)
-            .withStdErr(true)
-            .exec(logCallback).awaitCompletion()
 
         // Delete containers
         log.info { "Cleaning up containers..." }

@@ -102,7 +102,6 @@ internal fun createUploadAction(objectToUpload: String, dataDir: String, file: S
     // -n flag make sure it does not try to upload objects that already exist
     action.commands = listOf("sh", "-c", "gsutil cp -n $dataDir/$file $objectToUpload")
     action.mounts = listOf(createMount(dataDir))
-    action.flags = listOf("ALWAYS_RUN")
     return action
 }
 
