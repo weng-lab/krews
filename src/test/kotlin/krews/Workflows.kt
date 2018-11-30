@@ -1,5 +1,6 @@
 package krews
 
+import krews.core.CacheIgnored
 import krews.core.workflow
 import krews.file.*
 import reactor.core.publisher.toFlux
@@ -11,12 +12,16 @@ private data class LocalWorkflowParams(
 )
 
 interface TestBaseInputType { val file: File }
-data class TestComplexInputType (override val file: File, val string: String) : TestBaseInputType
+data class TestComplexInputType (
+    override val file: File,
+    @CacheIgnored
+    val cacheIgnoredVal: Double
+) : TestBaseInputType
 
 val localFilesWorkflow = workflow("local-files-workflow") {
     val params = params<LocalWorkflowParams>()
     val sampleFiles = Files.newDirectoryStream(Paths.get(params.sampleFilesDir)).sortedBy { f -> f.fileName }
-        .map { TestComplexInputType(LocalInputFile(it.toAbsolutePath().toString(), it.fileName.toString()), "test") }
+        .map { TestComplexInputType(LocalInputFile(it.toAbsolutePath().toString(), it.fileName.toString()), Math.random()) }
         .toFlux()
 
     val base64 = task<TestBaseInputType, File>("base64") {
