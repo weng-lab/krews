@@ -21,7 +21,7 @@ class WorkflowBuilder internal constructor(val name: String, private val init: W
     }
 
     inline fun <reified I : Any, reified O : Any> task(name: String, init: TaskBuilder<I, O>.() -> Unit): Task<I, O> {
-        val builder = TaskBuilder<I, O>(name, I::class.java, O::class.java)
+        val builder = TaskBuilder(name, I::class.java, O::class.java)
         builder.init()
         val task = builder.build()
         this.tasks[task.name] = task
