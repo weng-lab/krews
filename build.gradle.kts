@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "io.krews"
-version = "0.2.3"
+version = "0.2.4"
 
 repositories {
     maven { setUrl("http://dl.bintray.com/kotlin/kotlin-eap") }
@@ -25,6 +25,7 @@ dependencies {
     compile("com.github.docker-java", "docker-java", "3.0.14")
     // This one is needed to fix a warning from docker-java
     compile("javax.activation", "activation", "1.1.1")
+    compile( "org.apache.commons", "commons-lang3", "3.8.1")
     compile("com.typesafe", "config", "1.2.1")
     compile("com.fasterxml.jackson.module", "jackson-module-kotlin", "2.9.7")
     compile("org.jetbrains.exposed", "exposed", "0.10.5")

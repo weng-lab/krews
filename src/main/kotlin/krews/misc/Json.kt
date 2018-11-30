@@ -1,4 +1,4 @@
-package krews.util
+package krews.misc
 
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.databind.JavaType

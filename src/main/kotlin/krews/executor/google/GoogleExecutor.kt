@@ -99,6 +99,12 @@ internal fun createExecuteWorkflowAction(executableFilename: String, configFilen
     action.imageUri = MASTER_IMAGE
     action.mounts = listOf(createMount(MASTER_RUN_DIR))
     action.environment = mapOf(WORKFLOW_RUN_TIMESTAMP_ENV_VAR to "${workflowTime.millis}")
-    action.commands = listOf("sh", "-c", "$MASTER_RUN_DIR/$executableFilename --on google-local --config $MASTER_RUN_DIR/$configFilename")
+    val cmd =
+        """
+        ${if (executableFilename.endsWith(".jar")) "java -jar " else ""}$MASTER_RUN_DIR/$executableFilename \
+            --on google-local \
+            --config $MASTER_RUN_DIR/$configFilename
+        """.trimIndent()
+    action.commands = listOf("sh", "-c", cmd)
     return action
 }

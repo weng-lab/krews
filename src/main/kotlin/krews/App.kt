@@ -12,6 +12,7 @@ import krews.core.*
 import krews.executor.google.GoogleExecutor
 import krews.executor.google.GoogleLocalExecutor
 import krews.executor.local.LocalExecutor
+import java.io.File
 import java.nio.file.Paths
 
 
@@ -32,7 +33,8 @@ class KrewsApp(private val workflowBuilder: WorkflowBuilder) : CliktCommand() {
             "google-local" to Executors.GOOGLE_LOCAL
         )
         .default(Executors.LOCAL)
-    private val executable by option("-e", "--executable", help = "reference to krews app as an executable. Used to run remotely.")
+    private val executable by option("-e", "--executable",
+        help = "reference to krews app as an executable. Used to run remotely. Not required for fat jars.")
         .convert { Paths.get(it) }
     private val config by option("-c", "--config")
         .convert { Paths.get(it) }
@@ -58,7 +60,7 @@ class KrewsApp(private val workflowBuilder: WorkflowBuilder) : CliktCommand() {
                 Executors.GOOGLE -> GoogleExecutor(workflowConfig)
                 else -> throw Exception("Unsupported executor")
             }
-            val executable = checkNotNull(executable) { "--executable required for remote executors" }
+            val executable = executable ?: Paths.get(File(KrewsApp::class.java.protectionDomain.codeSource.location.toURI()).path)
             val config = checkNotNull(config) { "--config required for remote executors" }
             executor.execute(executable, config)
         }

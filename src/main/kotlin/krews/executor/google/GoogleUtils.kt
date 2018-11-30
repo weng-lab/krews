@@ -21,7 +21,6 @@ const val APPLICATION_NAME = "krews"
 const val STORAGE_READ_WRITE_SCOPE = "https://www.googleapis.com/auth/devstorage.read_write"
 const val LOG_FILE_NAME = "out.txt"
 const val DISK_NAME = "disk"
-const val LAST_MOD_METADATA_KEY = "x-krews-last-modified"
 
 internal val googleClientTransport by lazy { NetHttpTransport() }
 internal val googleClientJsonFactory by lazy { JacksonFactory.getDefaultInstance() }

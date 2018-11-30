@@ -1,13 +1,9 @@
 package krews.executor
 
 import krews.config.TaskConfig
-import krews.db.InputFileRecord
 import krews.file.InputFile
 import krews.file.OutputFile
-import org.joda.time.DateTime
 import java.nio.file.Path
-import kotlin.reflect.KProperty1
-import kotlin.reflect.full.memberProperties
 
 const val RUN_DIR = "run"
 const val OUTPUTS_DIR = "outputs"

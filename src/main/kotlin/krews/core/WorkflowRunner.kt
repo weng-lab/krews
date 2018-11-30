@@ -8,8 +8,9 @@ import krews.executor.*
 import krews.file.InputFile
 import krews.file.getInputFilesForObject
 import krews.file.getOutputFilesForObject
-import krews.util.mapper
+import krews.misc.mapper
 import mu.KotlinLogging
+import org.apache.commons.lang3.concurrent.BasicThreadFactory
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.joda.time.DateTime
@@ -18,6 +19,9 @@ import reactor.core.publisher.Flux
 import reactor.core.scheduler.Schedulers
 import java.util.concurrent.Executors
 import java.util.stream.Collectors
+import java.util.concurrent.ThreadFactory
+
+
 
 
 private val log = KotlinLogging.logger {}
@@ -44,11 +48,13 @@ class WorkflowRunner(
         }
         log.info { "Workflow run created successfully!" }
 
-        // Create an executor service for
+        // Create an executor service for executing tasks.
+        // The system's combined task parallelism will be determined by this executor's thread limit
+        val threadFactory = BasicThreadFactory.Builder().namingPattern("worker-%d").build()
         val workflowParallelism = workflowConfig.parallelism
         val executorService = when(workflowParallelism) {
-            is UnlimitedParallelism -> Executors.newCachedThreadPool()
-            is LimitedParallelism -> Executors.newFixedThreadPool(workflowParallelism.limit)
+            is UnlimitedParallelism -> Executors.newCachedThreadPool(threadFactory)
+            is LimitedParallelism -> Executors.newFixedThreadPool(workflowParallelism.limit, threadFactory)
         }
 
         // Set execute function for each task.
@@ -94,8 +100,12 @@ class WorkflowRunner(
 
         val inputJson = mapper.writerFor(task.inputClass).writeValueAsString(inputEl)
         log.info {
-            "Running task \"${task.name}\" for dockerImage \"${task.dockerImage}\" input \"$inputJson\" " +
-                    "output \"$outputEl\" command:\n$command"
+            """
+            |Running task "${task.name}" for dockerImage "${task.dockerImage}"
+            |Input: $inputJson
+            |Command:
+            |$command
+            """.trimMargin()
         }
 
         val now = DateTime.now()
@@ -179,8 +189,25 @@ class WorkflowRunner(
             }
         }
 
+        // Add last modified timestamps to output files in task output
+        // If we copied cached output files over, we should set it to the lastModified date of the file copied over.
+        // This will downstream tasks with output files in their inputs to still use the cache properly even if
+        // executor.outputFileLastModified returns something new.
+        val outputFilesOut = getOutputFilesForObject(outputEl)
+        for (outputFile in outputFilesOut) {
+            outputFile.lastModified = cachedOutputLastModified[outputFile.path] ?:
+                    executor.outputFileLastModified(getWorkflowOutputsDir(workflowRun), outputFile)
+        }
+        val outputJson = mapper.writerFor(task.outputClass).writeValueAsString(outputEl)
+
         transaction(db) {
-            log.info { "Task completed successfully. Saving status..." }
+            log.info {
+                """
+                |Task completed successfully!
+                |Output: $outputJson
+                |Saving status...
+                """.trimMargin()
+            }
 
             // Create new input file records in db for files copied from remote sources during execution
             for (remoteInputFile in inputFilesBySource.download) {
@@ -191,20 +218,10 @@ class WorkflowRunner(
                 }
             }
 
-            // Add last modified timestamps to output files in task output
-            // If we copied cached output files over, we should set it to the lastModified date of the file copied over.
-            // This will downstream tasks with output files in their inputs to still use the cache properly even if
-            // executor.outputFileLastModified returns something new.
-            val outputFilesOut = getOutputFilesForObject(outputEl)
-            for (outputFile in outputFilesOut) {
-                outputFile.lastModified = cachedOutputLastModified[outputFile.path] ?:
-                        executor.outputFileLastModified(getWorkflowOutputsDir(workflowRun), outputFile)
-            }
-
-            taskRun.outputJson = mapper.writerFor(task.outputClass).writeValueAsString(outputEl)
-            log.info { "OUTPUT_JSON: ${taskRun.outputJson}" }
+            taskRun.outputJson = outputJson
             taskRun.completedSuccessfully = true
             taskRun.completedTime = DateTime.now().millis
+            log.info { "Task status save complete." }
         }
     }
 

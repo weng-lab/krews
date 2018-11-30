@@ -104,13 +104,16 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
         }
 
         // Start the container and wait for it to finish processing
-        log.info { "Starting container $containerId" }
+        log.info { "Starting container $containerId..." }
         dockerClient.startContainerCmd(containerId).exec()
         log.info { "Waiting for container $containerId to finish..." }
         dockerClient.waitContainerCmd(containerId).exec(WaitContainerResultCallback()).awaitCompletion()
+        log.info { "Container $containerId finished!" }
 
         // Copy newly downloaded input files out of docker container into run inputs dir
-        log.info { "Copying downloaded input files $downloadInputFiles out of mounted data dir $mountDir" }
+        if (downloadInputFiles.isNotEmpty()) {
+            log.info { "Copying downloaded input files $downloadInputFiles out of mounted data dir $mountDir" }
+        }
         downloadInputFiles.map { it.path }.forEach {
             val to = runInputsPath.resolve(it)
             Files.createDirectories(to.parent)
@@ -118,7 +121,11 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
         }
 
         // Copy output files out of docker container into run outputs dir
-        log.info { "Copying output files $outputFilesOut for task output out of mounted data dir $mountDir" }
+        if (outputFilesOut.isNotEmpty()) {
+            log.info { "Copying output files $outputFilesOut for task output out of mounted data dir $mountDir" }
+        } else {
+            log.info { "No output files to copy for this task run." }
+        }
         outputFilesOut.map { it.path }.forEach {
             val to = runOutputsPath.resolve(it)
             Files.createDirectories(to.parent)
