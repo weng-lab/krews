@@ -22,7 +22,7 @@ data class GoogleTaskConfig (
 )
 
 enum class GoogleDiskType(val value: String) {
-    HDD("pd-standard"), SDD("pd-ssd")
+    HDD("pd-standard"), SSD("pd-ssd")
 }
 
 /*
