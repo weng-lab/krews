@@ -100,7 +100,7 @@ internal fun createDownloadAction(objectToDownload: String, dataDir: String, fil
 internal fun createDiagnosticUploadAction(diagnosticsGSPath: String, dataDir: String): Action {
     val action = Action()
     action.imageUri = CLOUD_SDK_IMAGE
-    action.commands = listOf("sh", "-c", "if [[ \"\$GOOGLE_PIPELINE_FAILED\" = \"1\" ]]; then gsutil cp -r $dataDir/* $diagnosticsGSPath; fi")
+    action.commands = listOf("sh", "-c", "if [[ \"\$GOOGLE_PIPELINE_FAILED\" = \"1\" ]]; then gsutil -m cp -r $dataDir $diagnosticsGSPath; fi")
     action.mounts = listOf(createMount(dataDir))
     action.flags = listOf("ALWAYS_RUN")
     return action
