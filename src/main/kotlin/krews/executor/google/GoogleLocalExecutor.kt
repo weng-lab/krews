@@ -124,7 +124,7 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
         // Create action to copy logs to GCS after everything else is complete
         actions.add(createLogsAction(logPath))
 
-        submitJobAndWait(run, googleConfig.jobCompletionPollInterval)
+        submitJobAndWait(run, googleConfig.jobCompletionPollInterval, "task run $taskRunId")
     }
 
     override fun downloadRemoteInputFiles(inputFiles: Set<InputFile>, dockerDataDir: String, workflowInputsDir: String) {
@@ -139,7 +139,7 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
         }
         run.pipeline.actions.addAll(uploadInputFileActions)
 
-        submitJobAndWait(run, googleConfig.jobCompletionPollInterval)
+        submitJobAndWait(run, googleConfig.jobCompletionPollInterval, "remote file download")
     }
 
 }
@@ -171,7 +171,7 @@ internal fun createDownloadRemoteFileAction(inputFile: InputFile, dataDir: Strin
  * Submits a job to the pipelines api and polls periodically until the job is complete.
  * The current thread will be blocked until the job is complete.
  */
-internal fun submitJobAndWait(run: RunPipelineRequest, jobCompletionPollInterval: Int) {
+internal fun submitJobAndWait(run: RunPipelineRequest, jobCompletionPollInterval: Int, context: String) {
     log.info { "Submitting pipeline job for task run: $run" }
     googleGenomicsClient.projects().operations()
     val initialOp: Operation = googleGenomicsClient.pipelines().run(run).execute()
@@ -183,11 +183,11 @@ internal fun submitJobAndWait(run: RunPipelineRequest, jobCompletionPollInterval
         val op: Operation = googleGenomicsClient.projects().operations().get(initialOp.name).execute()
         if (op.done) {
             if (op.error != null) {
-                throw Exception("Error occurred during task execution. Operation Response: ${op.toPrettyString()}")
+                throw Exception("Error occurred during $context (${op.name}) execution. Operation Response: ${op.toPrettyString()}")
             }
-            log.info { "Pipeline job \"${op.name}\" completed successfully. Results: ${op.toPrettyString()}" }
+            log.info { "Pipeline job for $context (${op.name}) completed successfully. Results: ${op.toPrettyString()}" }
         } else {
-            log.info { "Pipeline job \"${op.name}\" still running..." }
+            log.info { "Pipeline job for task run $context (${op.name}) still running..." }
         }
     } while (!op.done)
 }
