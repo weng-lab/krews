@@ -1,11 +1,8 @@
 package krews.core
 
 import krews.config.convertConfigMap
-import mu.KotlinLogging
 import org.reactivestreams.Publisher
 import reactor.core.publisher.Flux
-
-val xlog = KotlinLogging.logger {}
 
 class WorkflowBuilder internal constructor(val name: String, private val init: WorkflowBuilder.() -> Unit) {
     @PublishedApi internal val tasks: MutableMap<String, Task<*, *>> = mutableMapOf()

@@ -94,6 +94,19 @@ internal fun createDownloadAction(objectToDownload: String, dataDir: String, fil
 }
 
 /**
+ * Create a pipeline action that will upload all the contents of the VM's data directory to the given GS bucket
+ * if the pipeline has failed
+ */
+internal fun createDiagnosticUploadAction(diagnosticsGSPath: String, dataDir: String): Action {
+    val action = Action()
+    action.imageUri = CLOUD_SDK_IMAGE
+    action.commands = listOf("sh", "-c", "if [[ \"\$GOOGLE_PIPELINE_FAILED\" = \"1\" ]]; then gsutil cp -r $dataDir/* $diagnosticsGSPath; fi")
+    action.mounts = listOf(createMount(dataDir))
+    action.flags = listOf("ALWAYS_RUN")
+    return action
+}
+
+/**
  * Create a pipeline action that will upload a file from the Pipelines VM to the specified google storage object.
  */
 internal fun createUploadAction(objectToUpload: String, dataDir: String, file: String): Action {

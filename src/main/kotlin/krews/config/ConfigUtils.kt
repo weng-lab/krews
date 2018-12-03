@@ -9,11 +9,8 @@ import com.typesafe.config.ConfigValue
 import krews.core.Task
 import krews.core.Workflow
 import krews.misc.mapper
-import mu.KotlinLogging
 
 const val DEFAULT_TASK_CONFIG_NAME = "default"
-
-val xlog = KotlinLogging.logger {}
 
 @PublishedApi internal val noDefaultTypesMapper by lazy {
     val mapper = jacksonObjectMapper()

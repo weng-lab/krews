@@ -52,7 +52,7 @@ class GoogleExecutorTests : StringSpec() {
     override fun afterSpec(description: Description, spec: Spec) {
         // Delete test bucket
         val bucketContents = googleStorageClient.objects().list(testBucket).execute()
-        bucketContents.items.forEach { googleStorageClient.objects().delete(testBucket, it.name) }
+        bucketContents.items.forEach { googleStorageClient.objects().delete(testBucket, it.name).execute() }
         googleStorageClient.buckets().delete(testBucket).execute()
     }
 

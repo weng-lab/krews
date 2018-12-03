@@ -121,6 +121,11 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
         }
         actions.addAll(uploadActions)
 
+        // Create the action to upload all data dir files to diagnostic-output directory if execution fails
+        val diagnosticsGSPath = gcsPath(bucket, gcsBase, workflowRunDir, DIAGNOSTICS_DIR, taskRunId.toString())
+        val diagnosticsAction = createDiagnosticUploadAction(diagnosticsGSPath, dockerDataDir)
+        actions.add(diagnosticsAction)
+
         // Create action to copy logs to GCS after everything else is complete
         actions.add(createLogsAction(logPath))
 

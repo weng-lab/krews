@@ -14,7 +14,6 @@ import krews.executor.*
 import krews.file.InputFile
 import krews.file.OutputFile
 import mu.KotlinLogging
-import org.joda.time.DateTime
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.*
@@ -113,6 +112,11 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
             log.info { "Waiting for container $containerId to finish..." }
             val statusCode = dockerClient.waitContainerCmd(containerId).exec(WaitContainerResultCallback()).awaitStatusCode()
             if (statusCode > 0) {
+                // Copy all files in mounted docker data directory to task diagnostics directory
+                val taskDiagnosticsDir = runBasePath.resolve(DIAGNOSTICS_DIR).resolve(taskRunId.toString())
+                Files.createDirectories(taskDiagnosticsDir)
+                Files.walk(mountDir)
+                    .forEach { source -> Files.copy(source, taskDiagnosticsDir.resolve(source.relativize(mountDir))) }
                 throw Exception("Container exited with code $statusCode. Please see logs at $logBasePath for more information.")
             }
             log.info { "Container $containerId finished successfully!" }

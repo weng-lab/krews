@@ -7,6 +7,7 @@ import java.nio.file.Path
 
 const val RUN_DIR = "run"
 const val OUTPUTS_DIR = "outputs"
+const val DIAGNOSTICS_DIR = "diagnostics"
 const val INPUTS_DIR = "inputs"
 const val LOGS_DIR = "logs"
 const val STATE_DIR = "state"
