@@ -23,8 +23,6 @@ import java.util.stream.Collectors
 import java.util.concurrent.ThreadFactory
 
 
-
-
 private val log = KotlinLogging.logger {}
 
 class WorkflowRunner(
@@ -53,7 +51,7 @@ class WorkflowRunner(
         // The system's combined task parallelism will be determined by this executor's thread limit
         val threadFactory = BasicThreadFactory.Builder().namingPattern("worker-%d").build()
         val workflowParallelism = workflowConfig.parallelism
-        val executorService = when(workflowParallelism) {
+        val executorService = when (workflowParallelism) {
             is UnlimitedParallelism -> Executors.newCachedThreadPool(threadFactory)
             is LimitedParallelism -> Executors.newFixedThreadPool(workflowParallelism.limit, threadFactory)
         }
@@ -91,14 +89,15 @@ class WorkflowRunner(
             // and block until it's done
             leavesFlux.blockLast()
 
-            if (workflowConfig.cleanOldRuns) {
-                transaction(db) {
+            transaction(db) {
+                if (workflowConfig.cleanOldRuns) {
                     val oldWorkflowRuns = WorkflowRun.find { WorkflowRuns.id neq workflowRun.id }
                     for (oldWorkflowRun in oldWorkflowRuns) {
                         executor.deleteDirectory(getWorkflowRunDir(oldWorkflowRun))
                     }
                     WorkflowRuns.deleteWhere { WorkflowRuns.id neq workflowRun.id }
                 }
+                workflowRun.completedSuccessfully = true
             }
         } finally {
             executor.pushDatabaseFile()
