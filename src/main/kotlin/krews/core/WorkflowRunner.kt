@@ -12,6 +12,7 @@ import krews.misc.mapper
 import mu.KotlinLogging
 import org.apache.commons.lang3.concurrent.BasicThreadFactory
 import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.joda.time.DateTime
 import reactor.core.Scannable
@@ -89,6 +90,16 @@ class WorkflowRunner(
 
             // and block until it's done
             leavesFlux.blockLast()
+
+            if (workflowConfig.cleanOldRuns) {
+                transaction(db) {
+                    val oldWorkflowRuns = WorkflowRun.find { WorkflowRuns.id neq workflowRun.id }
+                    for (oldWorkflowRun in oldWorkflowRuns) {
+                        executor.deleteDirectory(getWorkflowRunDir(oldWorkflowRun))
+                    }
+                    WorkflowRuns.deleteWhere { WorkflowRuns.id neq workflowRun.id }
+                }
+            }
         } finally {
             executor.pushDatabaseFile()
         }

@@ -58,7 +58,7 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
     override fun executeTask(workflowRunDir: String, taskRunId: Int, taskConfig: TaskConfig, dockerImage: String,
                              dockerDataDir: String, command: String?, outputFilesIn: Set<OutputFile>, outputFilesOut: Set<OutputFile>,
                              cachedInputFiles: Set<CachedInputFile>, downloadInputFiles: Set<InputFile>) {
-        val runBasePath = Paths.get(workflowBasePath.toString(), workflowRunDir)
+        val runBasePath = workflowBasePath.resolve(workflowRunDir)
         val runInputsPath = runBasePath.resolve(INPUTS_DIR)
         val runOutputsPath = runBasePath.resolve(OUTPUTS_DIR)
 
@@ -180,6 +180,12 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
             Files.copy(mountDir.resolve(inputFile.path), runInputsPath.resolve(inputFile.path))
         }
         Files.walk(mountDir)
+            .sorted(Comparator.reverseOrder())
+            .forEach { Files.delete(it) }
+    }
+
+    override fun deleteDirectory(dir: String){
+        Files.walk(workflowBasePath.resolve(dir))
             .sorted(Comparator.reverseOrder())
             .forEach { Files.delete(it) }
     }

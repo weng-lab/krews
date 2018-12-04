@@ -147,6 +147,11 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
         submitJobAndWait(run, googleConfig.jobCompletionPollInterval, "remote file download")
     }
 
+    override fun deleteDirectory(dir: String) {
+        val bucketContents = googleStorageClient.objects().list(dir).setPrefix(dir).execute()
+        bucketContents.items.forEach { googleStorageClient.objects().delete(bucket, it.name).execute() }
+    }
+
 }
 
 /**

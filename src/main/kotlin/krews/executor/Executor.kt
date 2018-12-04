@@ -65,6 +65,11 @@ interface LocallyDirectedExecutor {
      * may differ when we need to run it alone.
      */
     fun downloadRemoteInputFiles(inputFiles: Set<InputFile>, dockerDataDir: String, workflowInputsDir: String)
+
+    /**
+     * Deletes the given directory. Used for deleting old run directories.
+     */
+    fun deleteDirectory(dir: String)
 }
 
 /**

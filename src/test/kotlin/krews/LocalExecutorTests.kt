@@ -4,6 +4,7 @@ import com.typesafe.config.ConfigFactory
 import io.kotlintest.Description
 import io.kotlintest.Spec
 import io.kotlintest.matchers.file.shouldExist
+import io.kotlintest.matchers.file.shouldNotExist
 import io.kotlintest.specs.StringSpec
 import io.mockk.spyk
 import krews.config.createParamsForConfig
@@ -102,6 +103,9 @@ class LocalExecutorTests : StringSpec() {
             verifyExecuteWithOutput(executor, "gzip/test-2.b64.gz", 0)
             verifyExecuteWithOutput(executor, "gzip/test-3.b64.gz", 0)
             verifyExecuteWithOutput(executor, "gzip/test-4.b64.gz")
+
+            // Confirm the first run directory was deleted
+            testDir.resolve("run/1/").shouldNotExist()
         }
     }
 

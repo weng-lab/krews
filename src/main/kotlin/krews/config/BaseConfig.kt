@@ -11,5 +11,6 @@ data class WorkflowConfig (
     val local: LocalWorkflowConfig? = null,
     val google: GoogleWorkflowConfig? = null,
     val tasks: Map<String, TaskConfig>,
-    val parallelism: Parallelism = UnlimitedParallelism
+    val parallelism: Parallelism = UnlimitedParallelism,
+    val cleanOldRuns: Boolean = true
 )
