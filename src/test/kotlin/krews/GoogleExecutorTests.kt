@@ -99,6 +99,9 @@ class GoogleExecutorTests : StringSpec() {
 
             verifyExecuteWithOutput(executor, "gzip/test-1.b64.gz")
             verifyExecuteWithOutput(executor, "gzip/test-2.b64.gz", 0)
+
+            // Make sure the previous run was deleted by checking for an output object in the previous run dir
+            "run/1/outputs/base64/test-1.b64" shouldNot existInGS(testBucket, workflowBaseDir)
         }
     }
 

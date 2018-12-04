@@ -148,8 +148,10 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
     }
 
     override fun deleteDirectory(dir: String) {
-        val bucketContents = googleStorageClient.objects().list(dir).setPrefix(dir).execute()
-        bucketContents.items.forEach { googleStorageClient.objects().delete(bucket, it.name).execute() }
+        log.info { "DELETING: $dir" }
+        val bucketContents = googleStorageClient.objects().list(bucket).setPrefix(gcsObjectPath(gcsBase, dir)).execute()
+        log.info { "BUCKET_CONTENTS: ${bucketContents.toPrettyString()}" }
+        bucketContents.items?.forEach { googleStorageClient.objects().delete(bucket, it.name).execute() }
     }
 
 }
