@@ -19,33 +19,34 @@ const val CLOUD_SDK_IMAGE = "google/cloud-sdk:alpine"
 // Default VM machine type if not define in task configuration
 const val DEFAULT_MACHINE_TYPE = "n1-standard-1"
 
-class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
+class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
 
     private val googleConfig = checkNotNull(workflowConfig.google)
         { "google workflow config must be present to use Google Local Executor" }
     private val bucket = googleConfig.storageBucket
     private val gcsBase = googleConfig.storageBaseDir
-    private val dbFilePath = Paths.get(googleConfig.localStorageBaseDir, DB_FILENAME).toAbsolutePath()
-    private val dbStorageObject = gcsObjectPath(gcsBase, STATE_DIR, DB_FILENAME)
 
-    override fun prepareDatabaseFile(): String {
-        log.info { "Deleting local copy of $dbFilePath if it exists" }
-        Files.deleteIfExists(dbFilePath)
-        Files.createDirectories(Paths.get(googleConfig.localStorageBaseDir))
+    override fun downloadFile(path: String) {
+        val localFilePath = Paths.get(workflowConfig.localFilesBaseDir, path)
+        log.info { "Deleting local copy of $path if it exists" }
+        Files.deleteIfExists(localFilePath)
+        Files.createDirectories(Paths.get(workflowConfig.localFilesBaseDir))
 
-        log.info { "Attempting to download $dbStorageObject from bucket $bucket..." }
-        val fileExists = downloadObject(googleStorageClient, bucket, dbStorageObject, dbFilePath)
+        log.info { "Attempting to download $path from bucket $bucket..." }
+        val storageObject = gcsObjectPath(gcsBase, path)
+        val fileExists = downloadObject(googleStorageClient, bucket, storageObject, localFilePath)
         if (fileExists) {
-            log.info { "$dbStorageObject not found in bucket $bucket. A new database file will be used." }
+            log.info { "$storageObject not found in bucket $bucket. A new database file will be used." }
         } else {
-            log.info { "$dbStorageObject successfully downloaded to $dbFilePath" }
+            log.info { "$storageObject successfully downloaded to $localFilePath" }
         }
-        return dbFilePath.toString()
     }
 
-    override fun pushDatabaseFile() {
-        log.info { "Pushing database file $dbFilePath to object $dbStorageObject in bucket $bucket" }
-        uploadObject(googleStorageClient, bucket, dbStorageObject, dbFilePath)
+    override fun uploadFile(path: String) {
+        val localFilePath = Paths.get(workflowConfig.localFilesBaseDir, path)
+        val storageObject = gcsObjectPath(gcsBase, path)
+        log.info { "Pushing file $localFilePath to object $storageObject in bucket $bucket" }
+        uploadObject(googleStorageClient, bucket, storageObject, localFilePath)
     }
 
     override fun outputFileLastModified(runOutputsDir: String, outputFile: OutputFile): Long {

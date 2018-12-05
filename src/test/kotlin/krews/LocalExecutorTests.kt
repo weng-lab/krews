@@ -21,11 +21,9 @@ class LocalExecutorTests : StringSpec() {
     private val sampleFilesDir = testDir.resolve("sample-files-dir")!!
     private val config =
         """
+        local-files-base-dir = $testDir
         params {
             sample-files-dir = $sampleFilesDir
-        }
-        local {
-            local-base-dir = $testDir
         }
         """.trimIndent()
 

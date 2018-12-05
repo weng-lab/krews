@@ -16,11 +16,9 @@ class AppTests : StringSpec() {
     private val configFile = testDir.resolve("app-test.conf")!!
     private val config =
         """
+        local-files-base-dir = $testDir
         params {
             sample-files-dir = $sampleFilesDir
-        }
-        local {
-            local-base-dir = $testDir
         }
         """.trimIndent()
 

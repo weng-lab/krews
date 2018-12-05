@@ -10,8 +10,8 @@ const val OUTPUTS_DIR = "outputs"
 const val DIAGNOSTICS_DIR = "diagnostics"
 const val INPUTS_DIR = "inputs"
 const val LOGS_DIR = "logs"
-const val STATE_DIR = "state"
-const val DB_FILENAME = "metadata.db"
+const val DB_FILENAME = "state/metadata.db"
+const val REPORT_FILENAME = "status/report.html"
 
 
 /**
@@ -21,14 +21,14 @@ const val DB_FILENAME = "metadata.db"
 interface LocallyDirectedExecutor {
 
     /**
-     * Download the database file if remote and return path
+     * Download the file at the given path
      */
-    fun prepareDatabaseFile(): String
+    fun downloadFile(path: String)
 
     /**
-     * Upload the database file if remote
+     * Upload the given file
      */
-    fun pushDatabaseFile()
+    fun uploadFile(path: String)
 
     /**
      * @return The last modified date for the given output file as timestamp

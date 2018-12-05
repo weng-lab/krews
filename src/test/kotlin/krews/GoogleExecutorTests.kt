@@ -26,10 +26,10 @@ class GoogleExecutorTests : StringSpec() {
     private val testBucket = "krews-test-${UUID.randomUUID()}"
     private fun googleConfig(inputFiles: List<String>) =
         """
+        local-files-base-dir = "google-workflow-test"
         google {
             storage-bucket = "$testBucket"
             storage-base-dir = "$workflowBaseDir"
-            local-storage-base-dir = "google-workflow-test"
             project-id = "$googleProjectId"
             regions = ["us-east1", "us-east4"]
             job-completion-poll-interval = 5
