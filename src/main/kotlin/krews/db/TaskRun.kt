@@ -9,6 +9,7 @@ object TaskRuns : IntIdTable("task_run") {
     val startTime = long("start_time")
     val completedSuccessfully = bool("completed_successfully")
     val completedTime = long("completed_time").nullable()
+    val cacheUsed = bool("cache_used")
     val inputJson = text("input_json")
     val command = text("command").nullable()
     val image = text("image")
@@ -26,6 +27,7 @@ class TaskRun(id: EntityID<Int>) : IntEntity(id) {
     var startTime by TaskRuns.startTime
     var completedSuccessfully by TaskRuns.completedSuccessfully
     var completedTime by TaskRuns.completedTime
+    var cacheUsed by TaskRuns.cacheUsed
     var inputJson by TaskRuns.inputJson
     var command by TaskRuns.command
     var image by TaskRuns.image

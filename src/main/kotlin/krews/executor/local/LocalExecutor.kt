@@ -18,23 +18,15 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.*
 
-
-const val DEFAULT_LOCAL_BASE_DIR = "workflow-out"
-
 private val log = KotlinLogging.logger {}
 
 class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
 
     private val dockerClient = buildDockerClient(workflowConfig.local?.docker ?: DockerConfig())
-    private val workflowBasePath = Paths.get(workflowConfig.local?.localBaseDir ?: DEFAULT_LOCAL_BASE_DIR).toAbsolutePath()!!
+    private val workflowBasePath = Paths.get(workflowConfig.localFilesBaseDir).toAbsolutePath()!!
 
-    override fun prepareDatabaseFile(): String {
-        val statePath = workflowBasePath.resolve(STATE_DIR)
-        Files.createDirectories(statePath)
-        return statePath.resolve(DB_FILENAME).toString()
-    }
-
-    override fun pushDatabaseFile() {}
+    override fun downloadFile(path: String) {}
+    override fun uploadFile(path: String) {}
 
     override fun outputFileLastModified(runOutputsDir: String, outputFile: OutputFile): Long {
         val filePath = Paths.get(workflowBasePath.toString(), runOutputsDir, outputFile.path)

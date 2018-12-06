@@ -8,7 +8,6 @@ data class GoogleWorkflowConfig (
     val zones: List<String> = listOf(),
     val storageBucket: String,
     val storageBaseDir: String? = null,
-    val localStorageBaseDir: String = ".",
     // Interval in seconds between checks for pipeline job completion
     val jobCompletionPollInterval: Int = 10,
     // Interval in seconds between pipeline job log uploads to GCS

@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "io.krews"
-version = "0.2.11"
+version = "0.2.12"
 
 repositories {
     maven { setUrl("http://dl.bintray.com/kotlin/kotlin-eap") }
@@ -35,6 +35,7 @@ dependencies {
     compile("com.google.apis", "google-api-services-genomics", "v2alpha1-rev20181017-1.26.0")
     compile("com.google.apis", "google-api-services-storage", "v1-rev20180905-1.26.0")
     compile("com.github.ajalt","clikt", "1.5.0")
+    compile( "org.jetbrains.kotlinx", "kotlinx-html-jvm", "0.6.11")
     testCompile("io.kotlintest", "kotlintest-runner-junit5", "3.1.10")
     testImplementation("io.mockk", "mockk", "1.8.13")
 }

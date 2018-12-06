@@ -8,9 +8,11 @@ import krews.executor.*
 import krews.file.InputFile
 import krews.file.getInputFilesForObject
 import krews.file.getOutputFilesForObject
+import krews.misc.createReport
 import krews.misc.mapper
 import mu.KotlinLogging
 import org.apache.commons.lang3.concurrent.BasicThreadFactory
+import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -18,9 +20,13 @@ import org.joda.time.DateTime
 import reactor.core.Scannable
 import reactor.core.publisher.Flux
 import reactor.core.scheduler.Schedulers
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.nio.file.Paths
+import java.nio.file.StandardOpenOption
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.stream.Collectors
-import java.util.concurrent.ThreadFactory
 
 
 private val log = KotlinLogging.logger {}
@@ -31,9 +37,13 @@ class WorkflowRunner(
     private val executor: LocallyDirectedExecutor,
     private val runTimestampOverride: Long? = null
 ) {
-
-    private val db = migrateAndConnectDb(executor.prepareDatabaseFile())
+    private val db: Database
     private lateinit var workflowRun: WorkflowRun
+
+    init {
+        executor.downloadFile(DB_FILENAME)
+        db = migrateAndConnectDb(Paths.get(workflowConfig.localFilesBaseDir, DB_FILENAME))
+    }
 
     fun run() {
         // Create the workflow run in the database
@@ -47,13 +57,19 @@ class WorkflowRunner(
         }
         log.info { "Workflow run created successfully!" }
 
+        // Create an executor service for periodically generating reports
+        val reportThreadFactory = BasicThreadFactory.Builder().namingPattern("report-gen-%d").build()
+        val reportExecutorService = Executors.newSingleThreadScheduledExecutor(reportThreadFactory)
+        reportExecutorService.scheduleWithFixedDelay({ generateReport() },
+            workflowConfig.reportGenerationDelay, workflowConfig.reportGenerationDelay, TimeUnit.SECONDS)
+
         // Create an executor service for executing tasks.
         // The system's combined task parallelism will be determined by this executor's thread limit
-        val threadFactory = BasicThreadFactory.Builder().namingPattern("worker-%d").build()
+        val workerThreadFactory = BasicThreadFactory.Builder().namingPattern("worker-%d").build()
         val workflowParallelism = workflowConfig.parallelism
-        val executorService = when (workflowParallelism) {
-            is UnlimitedParallelism -> Executors.newCachedThreadPool(threadFactory)
-            is LimitedParallelism -> Executors.newFixedThreadPool(workflowParallelism.limit, threadFactory)
+        val workerExecutorService = when (workflowParallelism) {
+            is UnlimitedParallelism -> Executors.newCachedThreadPool(workerThreadFactory)
+            is LimitedParallelism -> Executors.newFixedThreadPool(workflowParallelism.limit, workerThreadFactory)
         }
 
         // Set execute function for each task.
@@ -62,13 +78,13 @@ class WorkflowRunner(
             val executeFn = { command: String, inputEl: Any, outputEl: Any? ->
                 runTask(task, command, inputEl, outputEl)
             }
-            task.connect(taskConfig, executeFn, executorService)
+            task.connect(taskConfig, executeFn, workerExecutorService)
         }
 
         // Set execute function for each file import.
         for (fileImport in workflow.fileImports.values) {
             val executeFn = { inputEl: Any -> runFileImport(inputEl, fileImport.dockerDataDir) }
-            fileImport.connect(executeFn, executorService)
+            fileImport.connect(executeFn, workerExecutorService)
         }
 
         // Get "leafOutputs", meaning this workflow's task.output fluxes that don't have other task.outputs as parents
@@ -98,9 +114,20 @@ class WorkflowRunner(
                     WorkflowRuns.deleteWhere { WorkflowRuns.id neq workflowRun.id }
                 }
                 workflowRun.completedSuccessfully = true
+                workflowRun.completedTime = DateTime.now().millis
             }
+        } catch (e: Exception) {
+            transaction(db) {
+                workflowRun.completedTime = DateTime.now().millis
+            }
+            throw e
         } finally {
-            executor.pushDatabaseFile()
+            // Stop the periodic report generation executor service and generate one final report.
+            reportExecutorService.shutdown()
+            reportExecutorService.awaitTermination(3000, TimeUnit.SECONDS)
+            generateReport()
+
+            executor.uploadFile(DB_FILENAME)
         }
     }
 
@@ -180,6 +207,7 @@ class WorkflowRunner(
         } else {
             transaction(db) {
                 log.info { "Valid cached outputs found. Skipping execution." }
+                taskRun.cacheUsed = true
                 val cachedOutputWorkflowRunId = latestCachedOutputTask.workflowRun.id.value
                 val workflowRunId = workflowRun.id.value
                 if (cachedOutputWorkflowRunId == workflowRunId) {
@@ -240,6 +268,17 @@ class WorkflowRunner(
         val (_, remoteInputFiles) = transaction(db) { inputFilesBySource(inputEl) }
         val workflowInputsDir = getWorkflowInputsDir(workflowRun)
         executor.downloadRemoteInputFiles(remoteInputFiles, dockerDataDir, workflowInputsDir)
+    }
+
+    private fun generateReport() {
+        val reportFile = "$RUN_DIR/${workflowRun.id.value}/$REPORT_FILENAME"
+        val reportPath = Paths.get(workflowConfig.localFilesBaseDir, reportFile)
+        Files.createDirectories(reportPath.parent)
+        val writer = Files.newBufferedWriter(reportPath, StandardCharsets.UTF_8, StandardOpenOption.CREATE,
+            StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)
+        createReport(db, workflowRun, writer)
+        writer.flush()
+        executor.uploadFile(reportFile)
     }
 }
 
