@@ -6,6 +6,7 @@ import io.kotlintest.matchers.numerics.shouldBeLessThanOrEqual
 import io.kotlintest.specs.StringSpec
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import krews.config.createParamsForConfig
 import krews.config.createWorkflowConfig
 import krews.core.WorkflowRunner
@@ -29,9 +30,7 @@ class ConcurrencyTest : StringSpec(){
     private val testDir = Paths.get("concurrency-test")!!
     private val baseConfig =
         """
-        local {
-            local-base-dir = $testDir
-        }
+        local-files-base-dir = $testDir
         """.trimIndent()
     private val taskParConfig =
         """
@@ -117,12 +116,14 @@ class ConcurrencyTest : StringSpec(){
         val workflow = testWorkflow.build(createParamsForConfig(parsedConfig))
         val workflowConfig = createWorkflowConfig(parsedConfig, workflow)
         val executor = mockk<LocallyDirectedExecutor>(relaxed = true)
-        val localExecutor = LocalExecutor(workflowConfig)
+        /*val localExecutor = LocalExecutor(workflowConfig)
+
+        val dlFile = slot<String>()
         every {
-            executor.prepareDatabaseFile()
+            executor.downloadFile(capture(dlFile))
         } answers {
-            localExecutor.prepareDatabaseFile()
-        }
+            localExecutor.downloadFile(dlFile.captured)
+        }*/
         val runner = WorkflowRunner(workflow, workflowConfig, executor)
         return ExecutorAndRunner(executor, runner)
     }

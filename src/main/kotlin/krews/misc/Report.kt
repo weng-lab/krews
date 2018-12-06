@@ -77,7 +77,7 @@ private fun createReport(workflowRun: WorkflowRun, taskRuns: Iterable<TaskRun>, 
                                     attributes["data-target"] = "#$taskBodyId"
                                     val statusMessage = when (taskStatus) {
                                         Status.IN_PROGRESS -> "In Progress..."
-                                        Status.SUCCEEDED -> "Completed Successfully!"
+                                        Status.SUCCEEDED -> if (taskRun.cacheUsed) "Cache Used" else "Completed Successfully!"
                                         Status.FAILED -> "Failed"
                                     }
                                     +"${taskRun.taskName} - ${taskRun.id.value} ($statusMessage)"
@@ -108,7 +108,7 @@ private fun createReport(workflowRun: WorkflowRun, taskRuns: Iterable<TaskRun>, 
 
             script(src = "https://cdn.jsdelivr.net/npm/foundation-sites@6.5.1/dist/js/foundation.min.js") {}
             script(src = "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.13.1/build/highlight.min.js") {}
-            script { +"hljs.initHighlightingOnLoad();" }
+            script { unsafe { raw("hljs.initHighlightingOnLoad();") } }
             script(src = "https://code.jquery.com/jquery-3.2.1.slim.min.js") {}
             script(src = "https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js") {}
             script(src = "https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js") {}

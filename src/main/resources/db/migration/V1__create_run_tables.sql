@@ -15,6 +15,7 @@ CREATE TABLE task_run (
     start_time INTEGER NOT NULL,
     completed_successfully INTEGER DEFAULT 0,
     completed_time INTEGER,
+    cache_used INTEGER DEFAULT 0,
     input_json TEXT NOT NULL,
     command TEXT,
     image TEXT NOT NULL,

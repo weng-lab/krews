@@ -42,7 +42,7 @@ class WorkflowRunner(
 
     init {
         executor.downloadFile(DB_FILENAME)
-        db = migrateAndConnectDb(DB_FILENAME)
+        db = migrateAndConnectDb(Paths.get(workflowConfig.localFilesBaseDir, DB_FILENAME))
     }
 
     fun run() {
@@ -114,13 +114,19 @@ class WorkflowRunner(
                     WorkflowRuns.deleteWhere { WorkflowRuns.id neq workflowRun.id }
                 }
                 workflowRun.completedSuccessfully = true
+                workflowRun.completedTime = DateTime.now().millis
             }
-
+        } catch (e: Exception) {
+            transaction(db) {
+                workflowRun.completedTime = DateTime.now().millis
+            }
+            throw e
+        } finally {
             // Stop the periodic report generation executor service and generate one final report.
             reportExecutorService.shutdown()
             reportExecutorService.awaitTermination(3000, TimeUnit.SECONDS)
             generateReport()
-        } finally {
+
             executor.uploadFile(DB_FILENAME)
         }
     }
@@ -201,6 +207,7 @@ class WorkflowRunner(
         } else {
             transaction(db) {
                 log.info { "Valid cached outputs found. Skipping execution." }
+                taskRun.cacheUsed = true
                 val cachedOutputWorkflowRunId = latestCachedOutputTask.workflowRun.id.value
                 val workflowRunId = workflowRun.id.value
                 if (cachedOutputWorkflowRunId == workflowRunId) {
@@ -270,6 +277,7 @@ class WorkflowRunner(
         val writer = Files.newBufferedWriter(reportPath, StandardCharsets.UTF_8, StandardOpenOption.CREATE,
             StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)
         createReport(db, workflowRun, writer)
+        writer.flush()
         executor.uploadFile(reportFile)
     }
 }

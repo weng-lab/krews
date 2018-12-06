@@ -10,6 +10,7 @@ import io.mockk.spyk
 import krews.config.createParamsForConfig
 import krews.config.createWorkflowConfig
 import krews.core.WorkflowRunner
+import krews.executor.REPORT_FILENAME
 import krews.executor.local.LocalExecutor
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -34,9 +35,9 @@ class LocalExecutorTests : StringSpec() {
 
     override fun afterSpec(description: Description, spec: Spec) {
         // Clean up temporary dirs
-        Files.walk(testDir)
-            .sorted(Comparator.reverseOrder())
-            .forEach { Files.delete(it) }
+        //Files.walk(testDir)
+        //    .sorted(Comparator.reverseOrder())
+        //    .forEach { Files.delete(it) }
     }
 
     init {
@@ -62,6 +63,9 @@ class LocalExecutorTests : StringSpec() {
                 base64Path.resolve("test-$i.b64").shouldExist()
                 gzipPath.resolve("test-$i.b64.gz").shouldExist()
             }
+
+            // Confirm that an html report was generated
+            runPath.resolve(REPORT_FILENAME).shouldExist()
         }
 
         "Can run a second run on a workflow with cached inputs and outputs" {
@@ -104,6 +108,9 @@ class LocalExecutorTests : StringSpec() {
 
             // Confirm the first run directory was deleted
             testDir.resolve("run/1/").shouldNotExist()
+
+            // Confirm that an html report was generated
+            runPath.resolve(REPORT_FILENAME).shouldExist()
         }
     }
 

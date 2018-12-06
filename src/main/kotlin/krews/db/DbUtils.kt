@@ -7,11 +7,12 @@ import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.sqlite.SQLiteDataSource
 import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.Paths
 import java.sql.Connection
 
-fun migrateAndConnectDb(dbFile: String): Database {
-    Files.createDirectories(Paths.get(dbFile).parent)
+fun migrateAndConnectDb(dbFile: Path): Database {
+    Files.createDirectories(dbFile.parent)
     val hikariConfig = HikariConfig()
     hikariConfig.maximumPoolSize = 1
     hikariConfig.jdbcUrl = "jdbc:sqlite:$dbFile"

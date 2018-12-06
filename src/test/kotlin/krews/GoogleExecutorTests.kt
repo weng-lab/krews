@@ -5,11 +5,13 @@ import com.google.api.services.storage.model.Bucket
 import com.google.api.services.storage.model.StorageObject
 import com.typesafe.config.ConfigFactory
 import io.kotlintest.*
+import io.kotlintest.matchers.file.shouldExist
 import io.kotlintest.specs.StringSpec
 import io.mockk.spyk
 import krews.config.createParamsForConfig
 import krews.config.createWorkflowConfig
 import krews.core.WorkflowRunner
+import krews.executor.REPORT_FILENAME
 import krews.executor.google.GoogleLocalExecutor
 import krews.executor.google.googleStorageClient
 import java.io.ByteArrayInputStream
@@ -72,6 +74,9 @@ class GoogleExecutorTests : StringSpec() {
                 "$runDir/outputs/base64/test-$i.b64" should existInGS(testBucket, workflowBaseDir)
                 "$runDir/outputs/gzip/test-$i.b64.gz" should existInGS(testBucket, workflowBaseDir)
             }
+
+            // Confirm that an html report was generated
+            "$runDir/$REPORT_FILENAME" should existInGS(testBucket, workflowBaseDir)
         }
 
         "Can do a second run of the same simple workflow on google cloud with cached inputs and outputs" {
