@@ -16,7 +16,7 @@ data class GoogleWorkflowConfig (
 
 data class GoogleTaskConfig (
     val machineType: String? = null,
-    val diskSize: Capacity,
+    val diskSize: Capacity = Capacity(500, CapacityType.GB),
     val diskType: GoogleDiskType = GoogleDiskType.HDD
 )
 
