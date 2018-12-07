@@ -17,13 +17,14 @@ CREATE TABLE task_run (
     completed_time INTEGER,
     cache_used INTEGER DEFAULT 0,
     input_json TEXT NOT NULL,
+    params_json TEXT,
     command TEXT,
     image TEXT NOT NULL,
     output_json TEXT,
     FOREIGN KEY(workflow_run) REFERENCES workflow_run(id)
 );
 
-CREATE INDEX task_run_by_inputs ON task_run(input_json, image, task_name, command);
+CREATE INDEX task_run_by_inputs ON task_run(input_json, params_json, image, task_name, command);
 
 CREATE TABLE input_file (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

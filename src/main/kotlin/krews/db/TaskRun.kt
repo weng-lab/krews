@@ -11,11 +11,12 @@ object TaskRuns : IntIdTable("task_run") {
     val completedTime = long("completed_time").nullable()
     val cacheUsed = bool("cache_used")
     val inputJson = text("input_json")
+    val paramsJson = text("params_json").nullable()
     val command = text("command").nullable()
     val image = text("image")
     val outputJson = text("output_json").nullable()
     init {
-        uniqueIndex("task_run_by_inputs", taskName, inputJson, command, image)
+        uniqueIndex("task_run_by_inputs", taskName, inputJson, paramsJson, command, image)
     }
 }
 
@@ -29,6 +30,7 @@ class TaskRun(id: EntityID<Int>) : IntEntity(id) {
     var completedTime by TaskRuns.completedTime
     var cacheUsed by TaskRuns.cacheUsed
     var inputJson by TaskRuns.inputJson
+    var paramsJson by TaskRuns.paramsJson
     var command by TaskRuns.command
     var image by TaskRuns.image
     var outputJson by TaskRuns.outputJson

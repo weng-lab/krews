@@ -93,6 +93,10 @@ private fun createReport(workflowRun: WorkflowRun, taskRuns: Iterable<TaskRun>, 
                                         h5 { +"Command" }
                                         pre { code("hljs shell") { +taskRun.command!! } }
                                     }
+                                    if (taskRun.paramsJson != null) {
+                                        h5 { +"Task Params" }
+                                        pre { code("hljs json") { +taskRun.paramsJson!! } }
+                                    }
                                     h5 { +"Input" }
                                     pre { code("hljs json") { +taskRun.inputJson } }
                                     if (taskRun.outputJson != null) {

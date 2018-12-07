@@ -75,8 +75,8 @@ class WorkflowRunner(
         // Set execute function for each task.
         for (task in workflow.tasks.values) {
             val taskConfig = workflowConfig.tasks[task.name]
-            val executeFn = { command: String, inputEl: Any, outputEl: Any? ->
-                runTask(task, command, inputEl, outputEl)
+            val executeFn = { taskRunContext: TaskRunContext<*, *> ->
+                runTask(task, taskRunContext)
             }
             task.connect(taskConfig, executeFn, workerExecutorService)
         }
@@ -88,7 +88,7 @@ class WorkflowRunner(
         }
 
         // Get "leafOutputs", meaning this workflow's task.output fluxes that don't have other task.outputs as parents
-        val allTaskOutputFluxes = workflow.tasks.values.map { it.output }
+        val allTaskOutputFluxes = workflow.tasks.values.map { it.outputPub }
         val leafOutputs = allTaskOutputFluxes.toMutableSet()
         for (output in allTaskOutputFluxes) {
             val taskParents = Scannable.from(output).parents().collect(Collectors.toSet())
@@ -131,19 +131,24 @@ class WorkflowRunner(
         }
     }
 
-    private fun <I : Any, O : Any> runTask(task: Task<I, O>, command: String?, inputEl: Any, outputEl: Any?) {
+    private fun <I : Any, O : Any> runTask(task: Task<I, O>, taskRunContext: TaskRunContext<*, *>) {
         val taskConfig = workflowConfig.tasks[task.name]!!
         val taskName = task.name
 
-        val inputJson = mapper.writerFor(task.inputClass).writeValueAsString(inputEl)
+        val inputJson = mapper.writerFor(task.inputClass).writeValueAsString(taskRunContext.input)
         log.info {
             """
-            |Running task "${task.name}" for dockerImage "${task.dockerImage}"
+            |Running task "${task.name}" for dockerImage "${taskRunContext.dockerImage}"
             |Input: $inputJson
             |Command:
-            |$command
+            |${taskRunContext.command}
             """.trimMargin()
         }
+
+        val paramsJson =
+            if (taskRunContext.taskParams != null) {
+                mapper.writerFor(taskRunContext.taskParamsClass).writeValueAsString(taskRunContext.taskParams)
+            } else { null }
 
         val now = DateTime.now()
         val taskRun: TaskRun = transaction(db) {
@@ -152,23 +157,25 @@ class WorkflowRunner(
                 this.startTime = now.millis
                 this.taskName = taskName
                 this.inputJson = inputJson
-                this.command = command
-                this.image = task.dockerImage
+                this.paramsJson = paramsJson
+                this.command = taskRunContext.command
+                this.image = taskRunContext.dockerImage
             }
         }
         log.info { "Task run created with id ${taskRun.id.value}. Checking cache..." }
         val cachedOutputTasks: List<TaskRun> = transaction(db) {
             TaskRun.find {
                 TaskRuns.taskName eq task.name and
-                        (TaskRuns.image eq task.dockerImage) and
+                        (TaskRuns.image eq taskRunContext.dockerImage) and
                         (TaskRuns.inputJson eq inputJson) and
-                        (TaskRuns.command eq command) and
+                        (TaskRuns.paramsJson eq paramsJson) and
+                        (TaskRuns.command eq taskRunContext.command) and
                         (TaskRuns.completedSuccessfully eq true)
             }.toList()
         }
         val latestCachedOutputTask: TaskRun? = cachedOutputTasks.maxBy { it.startTime }
 
-        val inputFilesBySource = transaction(db) { inputFilesBySource(inputEl) }
+        val inputFilesBySource = transaction(db) { inputFilesBySource(taskRunContext.input, taskRunContext.taskParams) }
         val toInputDir = transaction(db) { getWorkflowInputsDir(workflowRun) }
         val prevRunInputFiles = inputFilesBySource.cached.filter { it.workflowInputsDir != toInputDir }
         if (prevRunInputFiles.isNotEmpty()) {
@@ -190,15 +197,13 @@ class WorkflowRunner(
         val cachedOutputLastModified = mutableMapOf<String, Long>()
         if (latestCachedOutputTask == null) {
             log.info { "Valid cached outputs not found. Executing..." }
-            val outputFilesIn = getOutputFilesForObject(inputEl)
-            val outputFilesOut = getOutputFilesForObject(outputEl)
+            val outputFilesIn = getOutputFilesForObject(taskRunContext.input)
+            val outputFilesOut = getOutputFilesForObject(taskRunContext.output)
             executor.executeTask(
                 getWorkflowRunDir(workflowRun),
                 taskRun.id.value,
                 taskConfig,
-                task.dockerImage,
-                task.dockerDataDir,
-                command,
+                taskRunContext,
                 outputFilesIn,
                 outputFilesOut,
                 inputFilesBySource.cached,
@@ -231,12 +236,12 @@ class WorkflowRunner(
         // If we copied cached output files over, we should set it to the lastModified date of the file copied over.
         // This will downstream tasks with output files in their inputs to still use the cache properly even if
         // executor.outputFileLastModified returns something new.
-        val outputFilesOut = getOutputFilesForObject(outputEl)
+        val outputFilesOut = getOutputFilesForObject(taskRunContext.output)
         for (outputFile in outputFilesOut) {
             outputFile.lastModified = cachedOutputLastModified[outputFile.path] ?:
                     executor.outputFileLastModified(getWorkflowOutputsDir(workflowRun), outputFile)
         }
-        val outputJson = mapper.writerFor(task.outputClass).writeValueAsString(outputEl)
+        val outputJson = mapper.writerFor(task.outputClass).writeValueAsString(taskRunContext.output)
 
         transaction(db) {
             log.info {
@@ -263,9 +268,9 @@ class WorkflowRunner(
         }
     }
 
-    private fun runFileImport(inputEl: Any, dockerDataDir: String) {
-        log.info { "Running file import for inputEl $inputEl" }
-        val (_, remoteInputFiles) = transaction(db) { inputFilesBySource(inputEl) }
+    private fun runFileImport(input: Any, dockerDataDir: String) {
+        log.info { "Running file import for inputEl $input" }
+        val (_, remoteInputFiles) = transaction(db) { inputFilesBySource(input) }
         val workflowInputsDir = getWorkflowInputsDir(workflowRun)
         executor.downloadRemoteInputFiles(remoteInputFiles, dockerDataDir, workflowInputsDir)
     }
@@ -290,12 +295,13 @@ private fun getWorkflowInputsDir(workflowRun: WorkflowRun) = "${getWorkflowRunDi
  * Gets a set of InputFiles out of the given inputEl, and splits them up into two categories: those that need to be
  * downloaded from cached (executor) storage and original sources.
  *
- * @param inputEl The element being processed, which may contain one or many input files.
+ * @param input The input element being processed, which may contain one or many input files.
+ * @param params Input parameters (optional) also being processed. May also contain input files.
  * @return Object containing "cached" input files (as records) that we will download from the record's run directory
  * and "download" input files that we need to download from the original input source
  */
-private fun inputFilesBySource(inputEl: Any): InputFilesBySource {
-    val inputFiles = getInputFilesForObject(inputEl)
+private fun inputFilesBySource(input: Any, params: Any? = null): InputFilesBySource {
+    val inputFiles = getInputFilesForObject(input) + getInputFilesForObject(params)
     val cached = mutableSetOf<CachedInputFile>()
     val download = mutableSetOf<InputFile>()
 

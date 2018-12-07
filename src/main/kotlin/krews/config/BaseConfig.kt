@@ -1,8 +1,11 @@
 package krews.config
 
 data class TaskConfig (
-    val env: Map<String, String>? = null,
+    // Task level input parameters
+    val params: Map<String, Any> = mapOf(),
+    // Task level Google executor configuration
     val google: GoogleTaskConfig? = null,
+    // The maximum allowed parallelism for this task
     val parallelism: Parallelism = UnlimitedParallelism
 )
 
@@ -11,9 +14,9 @@ data class WorkflowConfig (
     val params: Map<String, Any> = mapOf(),
     // Directory where files handled locally are kept. For the local Executor, all output goes here
     val localFilesBaseDir: String = "workflow-out",
-    // Local Executor Configuration
+    // Local executor configuration
     val local: LocalWorkflowConfig? = null,
-    // Google Executor configuration
+    // Google executor configuration
     val google: GoogleWorkflowConfig? = null,
     // Configuration for individual tasks
     val tasks: Map<String, TaskConfig>,

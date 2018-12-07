@@ -20,11 +20,14 @@ class LocalExecutorTests : StringSpec() {
 
     private val testDir = Paths.get("local-workflow-test")!!
     private val sampleFilesDir = testDir.resolve("sample-files-dir")!!
-    private val config =
+    private fun config(taskParam: String) =
         """
         local-files-base-dir = $testDir
         params {
             sample-files-dir = $sampleFilesDir
+        }
+        task.base64.params = {
+            some-val = $taskParam
         }
         """.trimIndent()
 
@@ -35,9 +38,9 @@ class LocalExecutorTests : StringSpec() {
 
     override fun afterSpec(description: Description, spec: Spec) {
         // Clean up temporary dirs
-        //Files.walk(testDir)
-        //    .sorted(Comparator.reverseOrder())
-        //    .forEach { Files.delete(it) }
+        Files.walk(testDir)
+            .sorted(Comparator.reverseOrder())
+            .forEach { Files.delete(it) }
     }
 
     init {
@@ -48,7 +51,7 @@ class LocalExecutorTests : StringSpec() {
                 Files.write(file, "I am test file #$i".toByteArray())
             }
 
-            runWorkflow(1)
+            runWorkflow(1, "task-param-1")
 
             val dbPath = testDir.resolve(Paths.get("state", "metadata.db"))
             dbPath.shouldExist()
@@ -68,15 +71,36 @@ class LocalExecutorTests : StringSpec() {
             runPath.resolve(REPORT_FILENAME).shouldExist()
         }
 
+        "Can invalidate cache using different task parameters" {
+            val executor = runWorkflow(2, "task-param-2")
+
+            val runPath = testDir.resolve("run/2/")
+            val inputsPath = runPath.resolve("inputs")
+            val outputsPath = runPath.resolve("outputs")
+            val base64Path = outputsPath.resolve("base64")
+            val gzipPath = outputsPath.resolve("gzip")
+            for (i in 1..3) {
+                inputsPath.resolve("test-$i.txt").shouldExist()
+                base64Path.resolve("test-$i.b64").shouldExist()
+                gzipPath.resolve("test-$i.b64.gz").shouldExist()
+                verifyCachedInputFile(executor, "test-$i.txt")
+                verifyExecuteWithOutput(executor, "base64/test-$i.b64")
+                verifyExecuteWithOutput(executor, "gzip/test-$i.b64.gz")
+            }
+
+            // Confirm the first run directory was deleted
+            testDir.resolve("run/1/").shouldNotExist()
+        }
+
         "Can run a second run on a workflow with cached inputs and outputs" {
             // Update file #1 and add a new File #4
             Files.write(sampleFilesDir.resolve("test-1.txt"), "I am an updated file".toByteArray())
             val file4 = Files.createFile(sampleFilesDir.resolve("test-4.txt"))
             Files.write(file4, "I am a new file".toByteArray())
 
-            val executor = runWorkflow(2)
+            val executor = runWorkflow(3, "task-param-2")
 
-            val runPath = testDir.resolve("run/2/")
+            val runPath = testDir.resolve("run/3/")
             val inputsPath = runPath.resolve("inputs")
             for (i in 1..4) {
                 inputsPath.resolve("test-$i.txt").shouldExist()
@@ -106,9 +130,6 @@ class LocalExecutorTests : StringSpec() {
             verifyExecuteWithOutput(executor, "gzip/test-3.b64.gz", 0)
             verifyExecuteWithOutput(executor, "gzip/test-4.b64.gz")
 
-            // Confirm the first run directory was deleted
-            testDir.resolve("run/1/").shouldNotExist()
-
             // Confirm that an html report was generated
             runPath.resolve(REPORT_FILENAME).shouldExist()
         }
@@ -117,8 +138,8 @@ class LocalExecutorTests : StringSpec() {
     /**
      * Convenience function that runs the SimpleWorkflow and returns a LocalExecutor spy
      */
-    private fun runWorkflow(runTimestampOverride: Long): LocalExecutor {
-        val parsedConfig = ConfigFactory.parseString(config)
+    private fun runWorkflow(runTimestampOverride: Long, taskParam: String): LocalExecutor {
+        val parsedConfig = ConfigFactory.parseString(config(taskParam))
         val workflow = localFilesWorkflow.build(createParamsForConfig(parsedConfig))
         val workflowConfig = createWorkflowConfig(parsedConfig, workflow)
         val executor = spyk(LocalExecutor(workflowConfig))

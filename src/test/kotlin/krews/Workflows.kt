@@ -18,36 +18,35 @@ data class TestComplexInputType (
     val cacheIgnoredVal: Double
 ) : TestBaseInputType
 
+data class Bast64TaskParams(val someVal: String)
+
 val localFilesWorkflow = workflow("local-files-workflow") {
     val params = params<LocalWorkflowParams>()
     val sampleFiles = Files.newDirectoryStream(Paths.get(params.sampleFilesDir)).sortedBy { f -> f.fileName }
         .map { TestComplexInputType(LocalInputFile(it.toAbsolutePath().toString(), it.fileName.toString()), Math.random()) }
         .toFlux()
 
-    val base64 = task<TestBaseInputType, File>("base64") {
+    val base64 = task<TestBaseInputType, File>("base64", sampleFiles) {
+        val taskParams = taskParams<Bast64TaskParams>()
+        val file = input.file
         dockerImage = "alpine:3.8"
-
-        input = sampleFiles
-        outputFn { OutputFile("base64/${inputEl.file.filenameNoExt()}.b64") }
-        commandFn {
+        output = OutputFile("base64/${file.filenameNoExt()}.b64")
+        command =
             """
+            echo ${taskParams.someVal}
             mkdir -p /data/base64
-            base64 /data/${inputEl.file.path} > /data/base64/${inputEl.file.filenameNoExt()}.b64
+            base64 /data/${file.path} > /data/base64/${file.filenameNoExt()}.b64
             """
-        }
     }
 
-    task<File, File>("gzip") {
+    task<File, File>("gzip", base64.outputPub) {
         dockerImage = "alpine:3.8"
-
-        input = base64.output
-        outputFn { OutputFile("gzip/${inputEl.filename()}.gz") }
-        commandFn {
+        output = OutputFile("gzip/${input.filename()}.gz")
+        command =
             """
             mkdir -p /data/gzip
-            gzip /data/${inputEl.path} > /data/gzip/${inputEl.filename()}.gz
+            gzip /data/${input.path} > /data/gzip/${input.filename()}.gz
             """
-        }
     }
 }
 
@@ -63,29 +62,23 @@ val gsFilesWorkflow = workflow("gs-files-workflow") {
         .map { GSInputFile(params.inputFilesBucket, "${params.inputFilesBaseDir}/$it", it) }
         .toFlux()
 
-    val base64 = task<File, File>("base64") {
+    val base64 = task<File, File>("base64", inputFiles) {
         dockerImage = "alpine:3.8"
-
-        input = inputFiles
-        outputFn { OutputFile("base64/${inputEl.filenameNoExt()}.b64") }
-        commandFn {
+        output = OutputFile("base64/${input.filenameNoExt()}.b64")
+        command =
             """
             mkdir -p /data/base64
-            base64 /data/${inputEl.path} > /data/base64/${inputEl.filenameNoExt()}.b64
+            base64 /data/${input.path} > /data/base64/${input.filenameNoExt()}.b64
             """
-        }
     }
 
-    task<File, File>("gzip") {
+    task<File, File>("gzip", base64.outputPub) {
         dockerImage = "alpine:3.8"
-
-        input = base64.output
-        outputFn { OutputFile("gzip/${inputEl.filename()}.gz") }
-        commandFn {
+        output = OutputFile("gzip/${input.filename()}.gz")
+        command =
             """
             mkdir -p /data/gzip
-            gzip /data/${inputEl.path} > /data/gzip/${inputEl.filename()}.gz
+            gzip /data/${input.path} > /data/gzip/${input.filename()}.gz
             """
-        }
     }
 }

@@ -1,5 +1,6 @@
 package krews.core
 
+import org.reactivestreams.Publisher
 import reactor.core.publisher.Flux
 
 class Workflow internal constructor(
@@ -8,11 +9,11 @@ class Workflow internal constructor(
     internal val fileImports: Map<String, FileImport<*>>
 ) {
     @Suppress("UNCHECKED_CAST")
-    fun <I> taskInput(taskName: String) = tasks[taskName]!!.input as Flux<I>
+    fun <I> taskInputPub(taskName: String) = tasks[taskName]!!.inputPub as Publisher<I>
 
     @Suppress("UNCHECKED_CAST")
-    fun <O> taskOutput(taskName: String) = tasks[taskName]!!.output as Flux<O>
+    fun <O> taskOutputPub(taskName: String) = tasks[taskName]!!.outputPub as Flux<O>
 
     @Suppress("UNCHECKED_CAST")
-    fun <O> fileImportOutput(fileImportName: String) = fileImports[fileImportName]!!.output as Flux<O>
+    fun <O> fileImportOutputPub(fileImportName: String) = fileImports[fileImportName]!!.output as Flux<O>
 }

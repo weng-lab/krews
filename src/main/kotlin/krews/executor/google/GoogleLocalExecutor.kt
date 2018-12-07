@@ -4,6 +4,7 @@ import com.google.api.services.genomics.v2alpha1.model.*
 import krews.config.CapacityType
 import krews.config.TaskConfig
 import krews.config.WorkflowConfig
+import krews.core.TaskRunContext
 import krews.executor.*
 import krews.file.InputFile
 import krews.file.OutputFile
@@ -62,9 +63,14 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
         }
     }
 
-    override fun executeTask(workflowRunDir: String, taskRunId: Int, taskConfig: TaskConfig, dockerImage: String,
-                             dockerDataDir: String, command: String?, outputFilesIn: Set<OutputFile>, outputFilesOut: Set<OutputFile>,
-                             cachedInputFiles: Set<CachedInputFile>, downloadInputFiles: Set<InputFile>) {
+    override fun executeTask(workflowRunDir: String,
+                             taskRunId: Int,
+                             taskConfig: TaskConfig,
+                             taskRunContext: TaskRunContext<*, *>,
+                             outputFilesIn: Set<OutputFile>,
+                             outputFilesOut: Set<OutputFile>,
+                             cachedInputFiles: Set<CachedInputFile>,
+                             downloadInputFiles: Set<InputFile>) {
         val run = createRunPipelineRequest(googleConfig)
         val actions = run.pipeline.actions
 
@@ -88,43 +94,43 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
         actions.add(createPeriodicLogsAction(logPath, googleConfig.logUploadInterval))
 
         // Create actions to download InputFiles from remote sources
-        val downloadRemoteInputFileActions = downloadInputFiles.map { createDownloadRemoteFileAction(it, dockerDataDir) }
+        val downloadRemoteInputFileActions = downloadInputFiles.map { createDownloadRemoteFileAction(it, taskRunContext.dockerDataDir) }
         actions.addAll(downloadRemoteInputFileActions)
 
         // Create actions to download InputFiles from our GCS run directories
         val downloadLocalInputFileActions = cachedInputFiles.map {
             val inputFileObject = gcsPath(bucket, gcsBase, it.workflowInputsDir, it.path)
-            createDownloadAction(inputFileObject, dockerDataDir, it.path)
+            createDownloadAction(inputFileObject, taskRunContext.dockerDataDir, it.path)
         }
         actions.addAll(downloadLocalInputFileActions)
 
         // Create actions to download each task input OutputFile from the current GCS run directory
         val downloadOutputFileActions = outputFilesIn.map {
             val outputFileObject = gcsPath(bucket, gcsBase, workflowRunDir, OUTPUTS_DIR, it.path)
-            createDownloadAction(outputFileObject, dockerDataDir, it.path)
+            createDownloadAction(outputFileObject, taskRunContext.dockerDataDir, it.path)
         }
         actions.addAll(downloadOutputFileActions)
 
         // Create the action that runs the task
-        actions.add(createExecuteTaskAction(dockerImage, dockerDataDir, command, taskConfig.env))
+        actions.add(createExecuteTaskAction(taskRunContext.dockerImage, taskRunContext.dockerDataDir, taskRunContext.command, taskRunContext.env))
 
         // Create the actions to upload each downloaded remote InputFile
         val uploadInputFileActions = downloadInputFiles.map {
             val inputFileObject = gcsPath(bucket, gcsBase, workflowRunDir, INPUTS_DIR, it.path)
-            createUploadAction(inputFileObject, dockerDataDir, it.path)
+            createUploadAction(inputFileObject, taskRunContext.dockerDataDir, it.path)
         }
         actions.addAll(uploadInputFileActions)
 
         // Create the actions to upload each task output OutputFile
         val uploadActions = outputFilesOut.map {
             val outputFileObject = gcsPath(bucket, gcsBase, workflowRunDir, OUTPUTS_DIR, it.path)
-            createUploadAction(outputFileObject, dockerDataDir, it.path)
+            createUploadAction(outputFileObject, taskRunContext.dockerDataDir, it.path)
         }
         actions.addAll(uploadActions)
 
         // Create the action to upload all data dir files to diagnostic-output directory if execution fails
         val diagnosticsGSPath = gcsPath(bucket, gcsBase, workflowRunDir, DIAGNOSTICS_DIR, taskRunId.toString())
-        val diagnosticsAction = createDiagnosticUploadAction(diagnosticsGSPath, dockerDataDir)
+        val diagnosticsAction = createDiagnosticUploadAction(diagnosticsGSPath, taskRunContext.dockerDataDir)
         actions.add(diagnosticsAction)
 
         // Create action to copy logs to GCS after everything else is complete

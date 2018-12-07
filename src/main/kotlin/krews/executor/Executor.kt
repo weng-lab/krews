@@ -1,6 +1,7 @@
 package krews.executor
 
 import krews.config.TaskConfig
+import krews.core.TaskRunContext
 import krews.file.InputFile
 import krews.file.OutputFile
 import java.nio.file.Path
@@ -51,9 +52,14 @@ interface LocallyDirectedExecutor {
      * @param cachedInputFiles: Input files that exist in the current environment's storage.
      * @param downloadInputFiles: Input files that need to be downloaded from original sources.
      */
-    fun executeTask(workflowRunDir: String, taskRunId: Int, taskConfig: TaskConfig, dockerImage: String,
-                    dockerDataDir: String, command: String?, outputFilesIn: Set<OutputFile>, outputFilesOut: Set<OutputFile>,
-                    cachedInputFiles: Set<CachedInputFile>, downloadInputFiles: Set<InputFile>)
+    fun executeTask(workflowRunDir: String,
+                    taskRunId: Int,
+                    taskConfig: TaskConfig,
+                    taskRunContext: TaskRunContext<*, *>,
+                    outputFilesIn: Set<OutputFile>,
+                    outputFilesOut: Set<OutputFile>,
+                    cachedInputFiles: Set<CachedInputFile>,
+                    downloadInputFiles: Set<InputFile>)
 
     /**
      * Download input files from remote sources and load them into /run/$run-timestamp/inputs directory.

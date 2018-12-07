@@ -23,7 +23,7 @@ fun verifyCachedInputFile(executorSpy: LocallyDirectedExecutor, path: String) {
 fun verifyDownloadInputFile(executorSpy: LocallyDirectedExecutor, path: String) {
     log.debug { "Verifying download for input file with path $path" }
     verify {
-        executorSpy.executeTask(any(), any(), any(), any(), any(), any(), any(), any(), setOf(),
+        executorSpy.executeTask(any(), any(), any(), any(), any(), any(), setOf(),
             match { if (it.isEmpty()) false else it.iterator().next().path == path })
     }
 }
@@ -36,7 +36,7 @@ fun verifyDownloadInputFile(executorSpy: LocallyDirectedExecutor, path: String) 
 fun verifyExecuteWithOutput(executorSpy: LocallyDirectedExecutor, path: String, times: Int = 1) {
     log.debug { "Verifying task execute for output file with path $path exactly $times times" }
     verify(exactly = times) {
-        executorSpy.executeTask(any(), any(), any(), any(), any(), any(), any(),
+        executorSpy.executeTask(any(), any(), any(), any(), any(),
             match { if (it.isEmpty()) false else it.iterator().next().path == path },
             any(), any())
     }

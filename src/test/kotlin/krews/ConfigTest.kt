@@ -35,27 +35,22 @@ private var parsedParams: TestWorkflowParams? = null
 private fun configSampleWorkflow() = workflow("config-sample") {
     parsedParams = params<TestWorkflowParams>()
 
-    task<String, String>("sample") {
+    task<String, String>("sample", "".toMono()) {
         dockerImage = "test"
-        input = "".toMono()
-        outputFn { "" }
-        commandFn { "" }
+        output = ""
+        command = ""
     }
 
-    task<String, String>("sample2") {
-        labels = listOf("small")
+    task<String, String>("sample2", "".toMono(), "small") {
         dockerImage = "test"
-        input = "".toMono()
-        outputFn { "" }
-        commandFn { "" }
+        output = ""
+        command = ""
     }
 
-    task<String, String>("sample3") {
-        labels = listOf("large")
+    task<String, String>("sample3", "".toMono(), "large") {
         dockerImage = "test"
-        input = "".toMono()
-        outputFn { "" }
-        commandFn { "" }
+        output = ""
+        command = ""
     }
 }
 
@@ -126,7 +121,7 @@ private val completeTestConfig =
 
         task.default {
             env {
-                MY_SHARED_THING = someval
+                my-shared-thing = someval
             }
 
             google {
@@ -145,11 +140,11 @@ private val completeTestConfig =
 
         # Overrides for gzip krews.core.task
         task.sample {
-            env {
-                MY_SHARED_THING = override
-                DB_URL = "postgresql://somewhere:5432/mydb"
-                DB_USER = admin
-                DB_PASSWORD = "Password123!"
+            params {
+                my-shared-thing = override
+                db-url = "postgresql://somewhere:5432/mydb"
+                db-user = admin
+                db-password = "Password123!"
             }
             google {
                 disk-size = 30GB
@@ -161,10 +156,9 @@ class ConfigTests : StringSpec({
     "Parsing params without missing not-nullable field should throw exception" {
         val config = ConfigFactory.parseString(brokenParamsConfig)
         val params = createParamsForConfig(config)
-        val exception = shouldThrow<MissingKotlinParameterException> {
+        shouldThrow<MissingKotlinParameterException> {
             configSampleWorkflow().build(params)
         }
-        //exception.cause.shouldBeInstanceOf<MissingKotlinParameterException>()
     }
 
     "Parsing workflow params with defaults and nullability should work" {
@@ -198,11 +192,11 @@ class ConfigTests : StringSpec({
         )
         workflowConfig.local shouldBe null
         workflowConfig.tasks["sample"] shouldBe TaskConfig(
-            env = mapOf(
-                "MY_SHARED_THING" to "override",
-                "DB_URL" to "postgresql://somewhere:5432/mydb",
-                "DB_USER" to "admin",
-                "DB_PASSWORD" to "Password123!"
+            params = mapOf(
+                "my-shared-thing" to "override",
+                "db-url" to "postgresql://somewhere:5432/mydb",
+                "db-user" to "admin",
+                "db-password" to "Password123!"
             ),
             google = GoogleTaskConfig(
                 machineType = "n1-standard-2",
@@ -211,8 +205,8 @@ class ConfigTests : StringSpec({
         )
 
         workflowConfig.tasks["sample2"] shouldBe TaskConfig(
-            env = mapOf(
-                "MY_SHARED_THING" to "someval"
+            params = mapOf(
+                "my-shared-thing" to "someval"
             ),
             google = GoogleTaskConfig(
                 machineType = "n1-standard-1",
@@ -221,8 +215,8 @@ class ConfigTests : StringSpec({
         )
 
         workflowConfig.tasks["sample3"] shouldBe TaskConfig(
-            env = mapOf(
-                "MY_SHARED_THING" to "someval"
+            params = mapOf(
+                "my-shared-thing" to "someval"
             ),
             google = GoogleTaskConfig(
                 machineType = "n1-standard-2",

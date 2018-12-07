@@ -1,19 +1,18 @@
 package krews
 
 import com.typesafe.config.ConfigFactory
-import io.kotlintest.*
+import io.kotlintest.Description
+import io.kotlintest.TestResult
 import io.kotlintest.matchers.numerics.shouldBeLessThanOrEqual
+import io.kotlintest.shouldBe
 import io.kotlintest.specs.StringSpec
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.slot
 import krews.config.createParamsForConfig
 import krews.config.createWorkflowConfig
 import krews.core.WorkflowRunner
 import krews.core.workflow
 import krews.executor.LocallyDirectedExecutor
-import krews.executor.local.LocalExecutor
-import mu.KotlinLogging
 import reactor.core.publisher.Mono
 import reactor.core.publisher.toFlux
 import reactor.core.publisher.toMono
@@ -21,8 +20,6 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.max
-
-private val log = KotlinLogging.logger {}
 
 class ConcurrencyTest : StringSpec(){
     override fun tags() = setOf(Unit)
@@ -48,19 +45,17 @@ class ConcurrencyTest : StringSpec(){
     private lateinit var outputsCaptured: Mono<List<Int>>
     private val testWorkflow = workflow("test") {
         val i = (1..30).toFlux()
-        val task1 = task<Int, Int>("task1") {
+        val task1 = task<Int, Int>("task1", i) {
             dockerImage = "task1"
-            input = i
-            outputFn { inputEl }
-            commandFn { "" }
+            output = input
+            command = ""
         }
-        val task2 = task<Int,Int>("task2") {
+        val task2 = task<Int,Int>("task2", task1.outputPub) {
             dockerImage = "task2"
-            input = task1.output
-            outputFn { inputEl }
-            commandFn { "" }
+            output = input
+            command = ""
         }
-        outputsCaptured = task2.output.buffer().toMono()
+        outputsCaptured = task2.outputPub.buffer().toMono()
     }
 
     override fun afterTest(description: Description, result: TestResult) {
@@ -76,7 +71,7 @@ class ConcurrencyTest : StringSpec(){
             val task1Tracker = AtomicInteger()
             val task1MaxConcurrent = AtomicInteger()
             every {
-                executor.executeTask(any(), any(), any(), "task1", any(), any(), any(), any(), any(), any())
+                executor.executeTask(any(), any(), any(), match { it.dockerImage == "task1" }, any(), any(), any(), any())
             } answers {
                 val runningTasks = task1Tracker.incrementAndGet()
                 runningTasks shouldBeLessThanOrEqual 10
@@ -94,7 +89,7 @@ class ConcurrencyTest : StringSpec(){
             val taskTracker = AtomicInteger()
             val taskMaxConcurrent = AtomicInteger()
             every {
-                executor.executeTask(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+                executor.executeTask(any(), any(), any(), any(), any(), any(), any(), any())
             } answers {
                 val runningTasks = taskTracker.incrementAndGet()
                 runningTasks shouldBeLessThanOrEqual 10
@@ -116,14 +111,6 @@ class ConcurrencyTest : StringSpec(){
         val workflow = testWorkflow.build(createParamsForConfig(parsedConfig))
         val workflowConfig = createWorkflowConfig(parsedConfig, workflow)
         val executor = mockk<LocallyDirectedExecutor>(relaxed = true)
-        /*val localExecutor = LocalExecutor(workflowConfig)
-
-        val dlFile = slot<String>()
-        every {
-            executor.downloadFile(capture(dlFile))
-        } answers {
-            localExecutor.downloadFile(dlFile.captured)
-        }*/
         val runner = WorkflowRunner(workflow, workflowConfig, executor)
         return ExecutorAndRunner(executor, runner)
     }

@@ -10,6 +10,7 @@ import com.github.dockerjava.core.command.WaitContainerResultCallback
 import krews.config.DockerConfig
 import krews.config.TaskConfig
 import krews.config.WorkflowConfig
+import krews.core.TaskRunContext
 import krews.executor.*
 import krews.file.InputFile
 import krews.file.OutputFile
@@ -47,16 +48,21 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
         }
     }
 
-    override fun executeTask(workflowRunDir: String, taskRunId: Int, taskConfig: TaskConfig, dockerImage: String,
-                             dockerDataDir: String, command: String?, outputFilesIn: Set<OutputFile>, outputFilesOut: Set<OutputFile>,
-                             cachedInputFiles: Set<CachedInputFile>, downloadInputFiles: Set<InputFile>) {
+    override fun executeTask(workflowRunDir: String,
+                             taskRunId: Int,
+                             taskConfig: TaskConfig,
+                             taskRunContext: TaskRunContext<*, *>,
+                             outputFilesIn: Set<OutputFile>,
+                             outputFilesOut: Set<OutputFile>,
+                             cachedInputFiles: Set<CachedInputFile>,
+                             downloadInputFiles: Set<InputFile>) {
         val runBasePath = workflowBasePath.resolve(workflowRunDir)
         val runInputsPath = runBasePath.resolve(INPUTS_DIR)
         val runOutputsPath = runBasePath.resolve(OUTPUTS_DIR)
 
         // Pull image from remote
-        log.info { "Pulling image \"$dockerImage\" from remote..." }
-        dockerClient.pullImageCmd(dockerImage).exec(PullImageResultCallback()).awaitSuccess()
+        log.info { "Pulling image \"${taskRunContext.dockerImage}\" from remote..." }
+        dockerClient.pullImageCmd(taskRunContext.dockerImage).exec(PullImageResultCallback()).awaitSuccess()
 
         // Create a temp directory to use as a mount for input data
         val mountDir = workflowBasePath.resolve("task-$taskRunId-mount")
@@ -64,17 +70,17 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
 
         // Download InputFiles from remote sources
         for (downloadInputFile in downloadInputFiles) {
-            downloadRemoteInputFile(dockerClient, downloadInputFile, dockerDataDir, mountDir)
+            downloadRemoteInputFile(dockerClient, downloadInputFile, taskRunContext.dockerDataDir, mountDir)
         }
 
         // Create the task execution docker container from config
-        log.info { "Creating container from image \"$dockerImage\" with mount $mountDir" }
-        val volume = Volume(dockerDataDir)
-        val containerCreationCmd = dockerClient.createContainerCmd(dockerImage)
+        log.info { "Creating container from image \"${taskRunContext.dockerImage}\" with mount $mountDir" }
+        val volume = Volume(taskRunContext.dockerDataDir)
+        val containerCreationCmd = dockerClient.createContainerCmd(taskRunContext.dockerImage)
             .withVolumes(volume)
             .withBinds(Bind(mountDir.toString(), volume))
-        if (command != null) containerCreationCmd.withCmd("/bin/sh", "-c", command)
-        if (taskConfig.env != null) containerCreationCmd.withEnv(taskConfig.env.map { "${it.key}=${it.value}" })
+        if (taskRunContext.command != null) containerCreationCmd.withCmd("/bin/sh", "-c", taskRunContext.command)
+        if (taskRunContext.env.isNotEmpty()) containerCreationCmd.withEnv(taskRunContext.env.map { "${it.key}=${it.value}" })
         val createContainerResponse = containerCreationCmd.exec()
         val containerId = createContainerResponse.id!!
 
