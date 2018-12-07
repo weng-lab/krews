@@ -276,7 +276,7 @@ class WorkflowRunner(
     }
 
     private fun generateReport() {
-        val reportFile = "$RUN_DIR/${workflowRun.id.value}/$REPORT_FILENAME"
+        val reportFile = "$RUN_DIR/${workflowRun.startTime}/$REPORT_FILENAME"
         val reportPath = Paths.get(workflowConfig.localFilesBaseDir, reportFile)
         Files.createDirectories(reportPath.parent)
         val writer = Files.newBufferedWriter(reportPath, StandardCharsets.UTF_8, StandardOpenOption.CREATE,
