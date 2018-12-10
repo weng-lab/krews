@@ -4,6 +4,7 @@ import com.google.api.services.genomics.v2alpha1.model.*
 import krews.WORKFLOW_RUN_TIMESTAMP_ENV_VAR
 import krews.config.WorkflowConfig
 import krews.executor.LOGS_DIR
+import krews.executor.REPORT_FILENAME
 import krews.executor.RUN_DIR
 import krews.executor.RemoteDirectedExecutor
 import mu.KotlinLogging
@@ -66,8 +67,11 @@ class GoogleExecutor(workflowConfig: WorkflowConfig) : RemoteDirectedExecutor {
         val actions = mutableListOf<Action>()
         pipeline.actions = actions
 
+        val runObjectPath = gcsObjectPath(gcsBase, RUN_DIR, workflowTime.millis.toString())
+        val runPath = gcsPath(bucket, runObjectPath)
+
         // Create action to periodically copy logs to GCS
-        val logPath = gcsPath(bucket, gcsBase, RUN_DIR, workflowTime.millis.toString(), LOGS_DIR, MASTER_LOG_DIR, LOG_FILE_NAME)
+        val logPath = gcsPath(bucket, runObjectPath, LOGS_DIR, MASTER_LOG_DIR, LOG_FILE_NAME)
         actions.add(createPeriodicLogsAction(logPath, googleConfig.logUploadInterval))
 
         // Create action to download executable
@@ -86,8 +90,19 @@ class GoogleExecutor(workflowConfig: WorkflowConfig) : RemoteDirectedExecutor {
         googleGenomicsClient.projects().operations()
         val initialOp: Operation = googleGenomicsClient.pipelines().run(run).execute()
 
-        log.info { "Pipeline job submitted. Operation returned: \"${initialOp.name}\". " +
-                "You can check on the status of the job by checking logs at $logPath" }
+        val reportPath = gcsPath(bucket, bucket, runObjectPath, REPORT_FILENAME)
+        log.info {
+            """
+            |Master pipeline job submitted
+            |See operation: "${initialOp.name}".
+            |
+            |All results for this run will be under $runPath
+            |
+            |You can check on the status of the job by checking:
+            |    - The status report at $reportPath
+            |    - The master logs at $logPath
+            |""".trimMargin()
+        }
     }
 }
 

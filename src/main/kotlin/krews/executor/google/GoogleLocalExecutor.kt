@@ -31,7 +31,7 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
         val localFilePath = Paths.get(workflowConfig.localFilesBaseDir, path)
         log.info { "Deleting local copy of $path if it exists" }
         Files.deleteIfExists(localFilePath)
-        Files.createDirectories(Paths.get(workflowConfig.localFilesBaseDir))
+        Files.createDirectories(localFilePath.parent)
 
         log.info { "Attempting to download $path from bucket $bucket..." }
         val storageObject = gcsObjectPath(gcsBase, path)
