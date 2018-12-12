@@ -2,9 +2,6 @@ package krews.core
 
 import krews.config.convertConfigMap
 import krews.file.File
-import krews.misc.mapper
-import org.reactivestreams.Publisher
-import reactor.core.publisher.Flux
 
 class TaskRunContextBuilder<I : Any, O : Any> internal constructor(
     val input: I,
@@ -14,7 +11,7 @@ class TaskRunContextBuilder<I : Any, O : Any> internal constructor(
     var dockerDataDir: String = DEFAULT_DOCKER_DATA_DIR
     var command: String? = null
     var output: O? = null
-    var env: MutableMap<String, String> = mutableMapOf()
+    var env: Map<String, String>? = null
     @PublishedApi internal var taskParams: Any? = null
     @PublishedApi internal var taskParamsClass: Class<*>? = null
 
@@ -46,7 +43,10 @@ data class TaskRunContext<I: Any, O: Any>(
     val input: I,
     val output: O,
     val command: String?,
-    val env: Map<String, String>,
+    val env: Map<String, String>?,
+    val cpus: Int?,
+    val memory: Capacity?,
+    val diskSize: Capacity?,
     val taskParams: Any?,
     val taskParamsClass: Class<*>?
 )

@@ -1,7 +1,7 @@
 package krews.executor.google
 
 import com.google.api.services.genomics.v2alpha1.model.*
-import krews.config.CapacityType
+import krews.core.CapacityType
 import krews.config.TaskConfig
 import krews.config.WorkflowConfig
 import krews.core.TaskRunContext

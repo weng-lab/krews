@@ -8,6 +8,8 @@ import io.kotlintest.shouldThrow
 import io.kotlintest.specs.StringSpec
 import krews.config.*
 import krews.core.CacheIgnored
+import krews.core.Capacity
+import krews.core.CapacityType
 import krews.core.workflow
 import krews.file.File
 import krews.file.InputFile

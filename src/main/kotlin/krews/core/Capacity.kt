@@ -1,4 +1,4 @@
-package krews.config
+package krews.core
 
 import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.core.TreeNode
@@ -25,6 +25,24 @@ enum class CapacityType(val bytesMultiplier: Long) {
     GB(MB.bytesMultiplier*1024),
     TB(GB.bytesMultiplier*1024)
 }
+
+val Int.B: Capacity get() = Capacity(this.toLong(), CapacityType.B)
+val Int.KB: Capacity get() = Capacity(this.toLong(), CapacityType.KB)
+val Int.MB: Capacity get() = Capacity(this.toLong(), CapacityType.MB)
+val Int.GB: Capacity get() = Capacity(this.toLong(), CapacityType.GB)
+val Int.TB: Capacity get() = Capacity(this.toLong(), CapacityType.TB)
+
+val Double.KB: Capacity get() = Capacity(this.toLong(), CapacityType.KB)
+val Double.MB: Capacity get() = Capacity(this.toLong(), CapacityType.MB)
+val Double.GB: Capacity get() = Capacity(this.toLong(), CapacityType.GB)
+val Double.TB: Capacity get() = Capacity(this.toLong(), CapacityType.TB)
+
+fun Capacity.inB() = this.toType(CapacityType.B).toLong()
+fun Capacity.inKB() = this.toType(CapacityType.KB)
+fun Capacity.inMB() = this.toType(CapacityType.MB)
+fun Capacity.inGB() = this.toType(CapacityType.GB)
+fun Capacity.inTB() = this.toType(CapacityType.TB)
+
 
 internal fun stringToCapacity(str: String): Capacity {
     val regex = """(\d+)\s*([KMGT]?B)""".toRegex()

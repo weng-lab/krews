@@ -80,7 +80,7 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
             .withVolumes(volume)
             .withBinds(Bind(mountDir.toString(), volume))
         if (taskRunContext.command != null) containerCreationCmd.withCmd("/bin/sh", "-c", taskRunContext.command)
-        if (taskRunContext.env.isNotEmpty()) containerCreationCmd.withEnv(taskRunContext.env.map { "${it.key}=${it.value}" })
+        if (taskRunContext.env?.isNotEmpty() == true) containerCreationCmd.withEnv(taskRunContext.env.map { "${it.key}=${it.value}" })
         val createContainerResponse = containerCreationCmd.exec()
         val containerId = createContainerResponse.id!!
 
