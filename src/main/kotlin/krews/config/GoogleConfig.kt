@@ -1,9 +1,6 @@
 package krews.config
 
-import krews.core.Capacity
-import krews.core.CapacityType
-import krews.core.GB
-import krews.core.inGB
+import krews.core.*
 
 
 data class GoogleWorkflowConfig(
@@ -19,8 +16,19 @@ data class GoogleWorkflowConfig(
 )
 
 data class GoogleTaskConfig(
+    // A native google compute engine machine type. If this is set, it's always used regardless of other configs.
     val machineType: String? = null,
-    val diskSize: Capacity = 500.GB,
+    // A class of machine. Useful for when you don't know the needed resources until runtime.
+    val machineClass: GoogleMachineClass? = null,
+    // Number of cpus. Can be used to override the runtime value.
+    val cpus: Int? = null,
+    // Memory capacity. Can be used to override the runtime value.
+    val mem: Capacity? = null,
+    // An optional memory per cpu ratio used when you don't have both fields available and don't want to use a machine class.
+    val memPerCpu: Capacity? = null,
+    // Disk Size. Can be used to override the runtime value.
+    val diskSize: Capacity? = null,
+    // Type of disk, HDD vs SSD.
     val diskType: GoogleDiskType = GoogleDiskType.HDD
 )
 
@@ -32,7 +40,7 @@ private class MachineSpecs(val cpus: Int, val mem: Capacity)
 
 private fun specs(cpus: Int, mem: Capacity) = MachineSpecs(cpus, mem)
 
-enum class GoogleMachineClass(protected val prefix: String, protected val availableSpecs: List<MachineSpecs>? = null) {
+enum class GoogleMachineClass(internal val prefix: String, protected val availableSpecs: List<MachineSpecs>? = null) {
     STANDARD(
         "n1-standard",
         listOf(
@@ -79,35 +87,71 @@ enum class GoogleMachineClass(protected val prefix: String, protected val availa
         )
     ),
     CUSTOM("custom") {
-        val minMemPerCpu = 0.9.GB
-        val maxMemPerCpu = 6.5.GB
-        val defaultMemPerCpu = 3.75.GB
-
-        fun customMachineType(cpus: Int?, mem: Capacity?, memPerCpu: Capacity?) {
-            if () {
-
-            }
-        }
-
-        override fun machineType(cpus: Int?, mem: Capacity?): String {
-            if (cpus == null || mem == null) {
-                return STANDARD.machineType(cpus, mem)
-            }
-            var cpusUsed = checkNotNull(cpus) { "CPUs must be set to use custom machine class" }
-            var memUsed = checkNotNull(mem) { "Memory must be set to use custom machine class" }
-            // CPUs can only be 1 or even numbers
-            if (cpusUsed > 1 && cpusUsed % 2 == 1) {
-                cpusUsed++
-            }
-            // If cpu-to-mem ratio too low
-            if (cpusUsed * minMemPerCpu.inGB() > memUsed.inGB()) {
-
-            }
-            return "$prefix-$cpusUsed-$memUsed"
-        }
+        override fun machineType(cpus: Int?, mem: Capacity?) =
+            throw Exception("machineType should not be called for GoogleMachineClass.CUSTOM")
     };
 
+    private fun cpusToMachineType(cpus: Int) = "$prefix-$cpus"
+
     open fun machineType(cpus: Int?, mem: Capacity?): String {
-        TODO()
+        // If we have no cpu or machine type default to the first available machine type
+        if (cpus == null && mem == null) return cpusToMachineType(availableSpecs!![0].cpus)
+
+        // If we don't know cpus, match the memory specs for available machine types to the highest without going over.
+        val cpusUsed = cpus ?: availableSpecs!!.last { mem!!.inB() < it.mem.inB() }.cpus
+        return cpusToMachineType(cpusUsed)
     }
+}
+
+private val minMemPerCpu = 0.9.GB
+private val maxMemPerCpu = 6.5.GB
+
+fun googleMachineType(googleConfig: GoogleTaskConfig?, runtimeCpus: Int?, runtimeMem: Capacity?): String {
+    if (googleConfig?.machineType != null) return googleConfig.machineType
+
+    val machineClass = googleConfig?.machineClass
+        ?: if (googleConfig?.memPerCpu != null) GoogleMachineClass.CUSTOM else GoogleMachineClass.STANDARD
+
+    if (machineClass != GoogleMachineClass.CUSTOM) {
+        return machineClass.machineType(googleConfig?.cpus, googleConfig?.mem)
+    }
+
+    var cpus = googleConfig?.cpus ?: runtimeCpus
+    var mem = googleConfig?.mem ?: runtimeMem
+    var memPerCpu = googleConfig?.memPerCpu
+
+    if (cpus == null && mem == null) {
+        return GoogleMachineClass.STANDARD.machineType(null, null)
+    }
+
+    // CPUs can only be 1 or even numbers
+    if (cpus != null && cpus > 1 && cpus % 2 == 1) cpus++
+
+    if (cpus == null || mem == null) {
+        // We need to fill in either cpus or memory
+        if (memPerCpu == null) {
+            // We weren't given a cpuToMem ratio, so just use a cheaper standard with the default ratio.
+            return GoogleMachineClass.STANDARD.machineType(cpus, mem)
+        } else {
+            // We were given a memPerCpu ratio, so we will compute the missing attribute
+
+            // If the given memPerCpu is lower than minimum, set to minimum
+            if (memPerCpu.inB() < minMemPerCpu.inB()) memPerCpu = minMemPerCpu
+            // If the given memPerCpu is greater than maximum, set to maximum
+            if (memPerCpu.inB() < minMemPerCpu.inB()) memPerCpu = maxMemPerCpu
+
+            if (cpus == null) {
+                cpus = (mem!!.inB() / memPerCpu.inB()).toInt()
+                if (cpus > 1 && cpus % 2 == 1) cpus++
+            }
+            if (mem == null) mem = (cpus * memPerCpu.inB()).B
+        }
+    }
+
+    // Do a final cpu to memory ratio check, adjusting memory up or down as needed
+    val computedMemPerCpu = (cpus / mem.inB()).B
+    if (computedMemPerCpu.inB() < minMemPerCpu.inB()) mem = (cpus * minMemPerCpu.inB()).B
+    if (computedMemPerCpu.inB() > maxMemPerCpu.inB()) mem = (cpus * minMemPerCpu.inB()).B
+
+    return "${machineClass.prefix}-$cpus-$mem"
 }

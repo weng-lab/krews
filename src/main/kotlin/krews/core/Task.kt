@@ -8,6 +8,7 @@ import org.reactivestreams.Publisher
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import reactor.core.publisher.TopicProcessor
+import reactor.util.concurrent.Queues
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 import java.util.function.Supplier
@@ -23,7 +24,7 @@ class Task<I : Any, O : Any> @PublishedApi internal constructor(
     internal val outputClass: Class<O>,
     private val taskRunContextInit: TaskRunContextBuilder<I, O>.() -> Unit
 ) {
-    val outputPub: Flux<O> = TopicProcessor.create<O>()
+    val outputPub: Flux<O> = TopicProcessor.create<O>("$name-topic", 1024)
 
     internal fun connect(taskConfig: TaskConfig?,
                          executeFn: (TaskRunContext<I, O>) -> Unit,
