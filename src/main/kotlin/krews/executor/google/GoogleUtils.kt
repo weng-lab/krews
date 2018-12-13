@@ -66,7 +66,7 @@ internal fun createRunPipelineRequest(googleConfig: GoogleWorkflowConfig): RunPi
 internal fun createPeriodicLogsAction(logPath: String, frequency: Int): Action {
     val action = Action()
     action.imageUri = CLOUD_SDK_IMAGE
-    action.commands = listOf("sh", "-c", "while true; do sleep $frequency; gsutil cp /google/logs/output $logPath; done")
+    action.commands = listOf("sh", "-c", "while true; do sleep $frequency; gsutil -q cp /google/logs/output $logPath; done")
     action.flags = listOf("RUN_IN_BACKGROUND")
     return action
 }
@@ -77,7 +77,7 @@ internal fun createPeriodicLogsAction(logPath: String, frequency: Int): Action {
 internal fun createLogsAction(logPath: String): Action {
     val action = Action()
     action.imageUri = CLOUD_SDK_IMAGE
-    action.commands = listOf("sh", "-c", "gsutil cp /google/logs/output $logPath")
+    action.commands = listOf("sh", "-c", "gsutil -q cp /google/logs/output $logPath")
     action.flags = listOf("ALWAYS_RUN")
     return action
 }
