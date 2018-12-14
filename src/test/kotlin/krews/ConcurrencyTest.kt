@@ -3,6 +3,9 @@ package krews
 import com.typesafe.config.ConfigFactory
 import io.kotlintest.Description
 import io.kotlintest.TestResult
+import io.kotlintest.matchers.numerics.shouldBeGreaterThan
+import io.kotlintest.matchers.numerics.shouldBeGreaterThanOrEqual
+import io.kotlintest.matchers.numerics.shouldBeLessThan
 import io.kotlintest.matchers.numerics.shouldBeLessThanOrEqual
 import io.kotlintest.shouldBe
 import io.kotlintest.specs.StringSpec
@@ -13,11 +16,14 @@ import krews.config.createWorkflowConfig
 import krews.core.WorkflowRunner
 import krews.core.workflow
 import krews.executor.LocallyDirectedExecutor
+import mu.KotlinLogging
 import reactor.core.publisher.Mono
 import reactor.core.publisher.toFlux
 import reactor.core.publisher.toMono
 import java.nio.file.Files
 import java.nio.file.Paths
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.max
 
@@ -81,7 +87,7 @@ class ConcurrencyTest : StringSpec(){
             }
             runner.run()
             task1MaxConcurrent.get() shouldBe 10
-            outputsCaptured.block() shouldBe (1..30).toList()
+            outputsCaptured.block()?.toSet() shouldBe (1..30).toSet()
         }
 
         "Per workflow parallelism should be enforced" {
@@ -99,7 +105,31 @@ class ConcurrencyTest : StringSpec(){
             }
             runner.run()
             taskMaxConcurrent.get() shouldBe 10
-            outputsCaptured.block() shouldBe (1..30).toList()
+            outputsCaptured.block()?.toSet() shouldBe (1..30).toSet()
+        }
+
+        "Tasks should be run depth-first" {
+            val (executor , runner) = runWorkflow(baseConfig)
+            val task1Count = AtomicInteger()
+            val task2Latch = CountDownLatch(1)
+            every {
+                executor.executeTask(any(), any(), any(), match { it.dockerImage == "task1" }, any(), any(), any(), any())
+            } answers {
+                val task1s = task1Count.incrementAndGet()
+                if (task1s > 1) {
+                    val timedOut = !task2Latch.await(500, TimeUnit.MILLISECONDS)
+                    timedOut shouldBe false
+                }
+            }
+
+            every {
+                executor.executeTask(any(), any(), any(), match { it.dockerImage == "task2" }, any(), any(), any(), any())
+            } answers {
+                task2Latch.countDown()
+            }
+
+            runner.run()
+            outputsCaptured.block()
         }
 
     }

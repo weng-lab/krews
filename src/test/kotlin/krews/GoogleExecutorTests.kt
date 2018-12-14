@@ -5,7 +5,6 @@ import com.google.api.services.storage.model.Bucket
 import com.google.api.services.storage.model.StorageObject
 import com.typesafe.config.ConfigFactory
 import io.kotlintest.*
-import io.kotlintest.matchers.file.shouldExist
 import io.kotlintest.specs.StringSpec
 import io.mockk.spyk
 import krews.config.createParamsForConfig
