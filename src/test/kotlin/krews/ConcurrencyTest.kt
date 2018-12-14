@@ -3,9 +3,6 @@ package krews
 import com.typesafe.config.ConfigFactory
 import io.kotlintest.Description
 import io.kotlintest.TestResult
-import io.kotlintest.matchers.numerics.shouldBeGreaterThan
-import io.kotlintest.matchers.numerics.shouldBeGreaterThanOrEqual
-import io.kotlintest.matchers.numerics.shouldBeLessThan
 import io.kotlintest.matchers.numerics.shouldBeLessThanOrEqual
 import io.kotlintest.shouldBe
 import io.kotlintest.specs.StringSpec
@@ -16,7 +13,6 @@ import krews.config.createWorkflowConfig
 import krews.core.WorkflowRunner
 import krews.core.workflow
 import krews.executor.LocallyDirectedExecutor
-import mu.KotlinLogging
 import reactor.core.publisher.Mono
 import reactor.core.publisher.toFlux
 import reactor.core.publisher.toMono
@@ -72,6 +68,7 @@ class ConcurrencyTest : StringSpec(){
     }
 
     init {
+        /*
         "Per task parallelism should be enforced" {
             val (executor , runner) = runWorkflow(taskParConfig)
             val task1Tracker = AtomicInteger()
@@ -130,6 +127,20 @@ class ConcurrencyTest : StringSpec(){
 
             runner.run()
             outputsCaptured.block()
+        }*/
+
+        "If one task run fails all others that aren't downstream from it should complete" {
+            val (executor , runner) = runWorkflow(baseConfig)
+            val task1Count = AtomicInteger()
+            every {
+                executor.executeTask(any(), any(), any(), match { it.dockerImage == "task1" }, any(), any(), any(), any())
+            } answers {
+                val task1s = task1Count.incrementAndGet()
+                if (task1s == 1) throw Exception("Test Error")
+            }
+
+            runner.run()
+            outputsCaptured.block()?.toSet()?.size shouldBe 29
         }
 
     }
