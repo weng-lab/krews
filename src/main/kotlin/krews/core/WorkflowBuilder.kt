@@ -2,11 +2,9 @@ package krews.core
 
 import krews.config.convertConfigMap
 import org.reactivestreams.Publisher
-import reactor.core.publisher.Flux
 
 class WorkflowBuilder internal constructor(val name: String, private val init: WorkflowBuilder.() -> Unit) {
     @PublishedApi internal val tasks: MutableMap<String, Task<*, *>> = mutableMapOf()
-    private val fileImports: MutableMap<String, FileImport<*>> = mutableMapOf()
     @PublishedApi internal lateinit var rawParams: Map<String, Any>
     @PublishedApi internal var params: Any? = null
 
@@ -33,17 +31,10 @@ class WorkflowBuilder internal constructor(val name: String, private val init: W
         return task
     }
 
-    fun <I : Any> fileImport(name: String, input: Publisher<I>, dockerDataDir: String?): FileImport<I> {
-        val inFlux: Flux<I> = if (input is Flux) input else Flux.from(input)
-        val fileImport = FileImport(name, inFlux, dockerDataDir ?: DEFAULT_DOCKER_DATA_DIR)
-        this.fileImports[fileImport.name] = fileImport
-        return fileImport
-    }
-
     internal fun build(rawParams: Map<String, Any>): Workflow {
         this.rawParams = rawParams
         this.init()
-        return Workflow(name, tasks, fileImports)
+        return Workflow(name, tasks)
     }
 }
 

@@ -8,7 +8,8 @@ import reactor.core.publisher.Flux
 
 class TaskRunContextBuilder<I : Any, O : Any> internal constructor(
     val input: I,
-    @PublishedApi internal val rawTaskParams: Map<String, Any>
+    @PublishedApi internal val rawTaskParams: Map<String, Any>,
+    val outputClass: Class<O>
 ) {
     var dockerImage: String? = null
     var dockerDataDir: String = DEFAULT_DOCKER_DATA_DIR
@@ -33,6 +34,7 @@ class TaskRunContextBuilder<I : Any, O : Any> internal constructor(
         dockerDataDir = dockerDataDir,
         input = input,
         output = checkNotNull(output),
+        outputClass = outputClass,
         command = command?.trimIndent(),
         env = env,
         taskParams = taskParams,
@@ -45,6 +47,7 @@ data class TaskRunContext<I: Any, O: Any>(
     val dockerDataDir: String,
     val input: I,
     val output: O,
+    val outputClass: Class<O>,
     val command: String?,
     val env: Map<String, String>,
     val taskParams: Any?,

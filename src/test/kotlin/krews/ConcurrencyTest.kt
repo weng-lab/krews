@@ -3,7 +3,6 @@ package krews
 import com.typesafe.config.ConfigFactory
 import io.kotlintest.Description
 import io.kotlintest.TestResult
-import io.kotlintest.matchers.numerics.shouldBeLessThanOrEqual
 import io.kotlintest.shouldBe
 import io.kotlintest.specs.StringSpec
 import io.mockk.every

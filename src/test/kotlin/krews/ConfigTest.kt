@@ -7,7 +7,6 @@ import io.kotlintest.shouldBe
 import io.kotlintest.shouldThrow
 import io.kotlintest.specs.StringSpec
 import krews.config.*
-import krews.core.CacheIgnored
 import krews.core.workflow
 import krews.file.File
 import krews.file.InputFile
@@ -25,8 +24,6 @@ private data class TestWorkflowParams(
 
 private data class ComplexType(
     val intValue: Int,
-    // We want to make sure @CacheIgnored values are still picked up by configs
-    @CacheIgnored
     val doubleValue: Double
 )
 

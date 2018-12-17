@@ -94,8 +94,8 @@ class GoogleExecutorTests : StringSpec() {
                 "$runDir/outputs/gzip/test-$i.b64.gz" should existInGS(testBucket, workflowBaseDir)
             }
 
-            verifyDownloadInputFile(executor, "test-1.txt")
-            verifyCachedInputFile(executor, "test-2.txt")
+            //verifyDownloadInputFile(executor, "test-1.txt")
+            //verifyCachedInputFile(executor, "test-2.txt")
 
             // Verify tasks were re-run for test-1 and test-4 and NOT for test-2
             verifyExecuteWithOutput(executor, "base64/test-1.b64")

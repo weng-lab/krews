@@ -30,25 +30,25 @@ class Task<I : Any, O : Any> @PublishedApi internal constructor(
     val outputPub: Flux<O> = TopicProcessor.create<O>("$name-topic", 1024)
 
     internal fun connect(taskConfig: TaskConfig?,
-                         executeFn: (TaskRunContext<I, O>) -> Unit,
-                         executorService: ExecutorService) {
+                         executeFn: (TaskRunContext<I, O>) -> O,
+                         pool: ExecutorService) {
         val rawTaskParams = taskConfig?.params ?: mapOf()
         val inputFlux: Flux<out I> = if (inputPub is Flux) inputPub else Flux.from(inputPub)
         val processed = inputFlux.flatMap({
             Mono.fromFuture(CompletableFuture.supplyAsync(Supplier {
                 processInput(it, rawTaskParams, executeFn)
-            }, executorService))
+            }, pool))
         }, parToMaxConcurrency(taskConfig?.parallelism))
         processed.subscribe(outputPub as TopicProcessor)
     }
 
-    private fun processInput(input: I, rawTaskParams: Map<String, Any>, executeFn: (TaskRunContext<I, O>) -> Unit): O {
+    private fun processInput(input: I, rawTaskParams: Map<String, Any>, executeFn: (TaskRunContext<I, O>) -> Any): O {
         log.info { "In processInput for task $name" }
-        val taskRunContextBuilder = TaskRunContextBuilder<I, O>(input, rawTaskParams)
+        val taskRunContextBuilder = TaskRunContextBuilder(input, rawTaskParams, outputClass)
         taskRunContextBuilder.taskRunContextInit()
         val taskRunContext = taskRunContextBuilder.build()
-        executeFn(taskRunContext)
-        return taskRunContext.output
+        @Suppress("UNCHECKED_CAST")
+        return executeFn(taskRunContext) as O
     }
 }
 

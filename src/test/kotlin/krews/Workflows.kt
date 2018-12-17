@@ -1,6 +1,5 @@
 package krews
 
-import krews.core.CacheIgnored
 import krews.core.workflow
 import krews.file.*
 import reactor.core.publisher.toFlux
@@ -13,9 +12,7 @@ private data class LocalWorkflowParams(
 
 interface TestBaseInputType { val file: File }
 data class TestComplexInputType (
-    override val file: File,
-    @CacheIgnored
-    val cacheIgnoredVal: Double
+    override val file: File
 ) : TestBaseInputType
 
 data class Bast64TaskParams(val someVal: String)
@@ -23,7 +20,7 @@ data class Bast64TaskParams(val someVal: String)
 val localFilesWorkflow = workflow("local-files-workflow") {
     val params = params<LocalWorkflowParams>()
     val sampleFiles = Files.newDirectoryStream(Paths.get(params.sampleFilesDir)).sortedBy { f -> f.fileName }
-        .map { TestComplexInputType(LocalInputFile(it.toAbsolutePath().toString(), it.fileName.toString()), Math.random()) }
+        .map { TestComplexInputType(LocalInputFile(it.toAbsolutePath().toString(), it.fileName.toString(), true)) }
         .toFlux()
 
     val base64 = task<TestBaseInputType, File>("base64", sampleFiles) {
@@ -44,6 +41,7 @@ val localFilesWorkflow = workflow("local-files-workflow") {
         output = OutputFile("gzip/${input.filename()}.gz")
         command =
             """
+            echo running gzip on ${input.path}
             mkdir -p /data/gzip
             gzip /data/${input.path} > /data/gzip/${input.filename()}.gz
             """
