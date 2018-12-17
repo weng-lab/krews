@@ -26,6 +26,7 @@ import java.nio.file.Paths
 import java.nio.file.StandardOpenOption
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.stream.Collectors
 
 
@@ -97,10 +98,15 @@ class WorkflowRunner(
             leafOutputs.removeAll(taskParents)
         }
 
+        val successful = AtomicBoolean(true)
         try {
             // Trigger workflow by subscribing to leaf task outputs...
             val leavesFlux = Flux.merge(leafOutputs)
-            leavesFlux.subscribeOn(Schedulers.elastic())
+                .onErrorContinue { t: Throwable, _ ->
+                    successful.set(false)
+                    log.error(t) { }
+                }
+                .subscribeOn(Schedulers.elastic())
 
             // and block until it's done
             leavesFlux.blockLast()
@@ -113,13 +119,16 @@ class WorkflowRunner(
                     }
                     WorkflowRuns.deleteWhere { WorkflowRuns.id neq workflowRun.id }
                 }
-                workflowRun.completedSuccessfully = true
-                workflowRun.completedTime = DateTime.now().millis
             }
         } catch (e: Exception) {
-            transaction(db) { workflowRun.completedTime = DateTime.now().millis }
+            successful.set(false)
             throw e
         } finally {
+            transaction(db) {
+                workflowRun.completedSuccessfully = successful.get()
+                workflowRun.completedTime = DateTime.now().millis
+            }
+
             // Stop the periodic report generation executor service and generate one final report.
             reportExecutorService.shutdown()
             reportExecutorService.awaitTermination(3000, TimeUnit.SECONDS)
