@@ -102,11 +102,11 @@ class WorkflowRunner(
         try {
             // Trigger workflow by subscribing to leaf task outputs...
             val leavesFlux = Flux.merge(leafOutputs)
-            leavesFlux.subscribeOn(Schedulers.elastic())
-            leavesFlux.subscribe({}, { e ->
-                successful.set(false)
-                log.error(e) { }
-            })
+                .onErrorContinue { t: Throwable, _ ->
+                    successful.set(false)
+                    log.error(t) { }
+                }
+                .subscribeOn(Schedulers.elastic())
 
             // and block until it's done
             leavesFlux.blockLast()
