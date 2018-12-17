@@ -31,3 +31,7 @@ val mapper by lazy {
     mapper.propertyNamingStrategy = PropertyNamingStrategy.KEBAB_CASE
     mapper
 }
+
+internal class ConfigView
+internal class DisplayView
+internal class CacheView

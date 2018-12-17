@@ -13,11 +13,15 @@ import krews.config.WorkflowConfig
 import krews.core.TaskRunContext
 import krews.executor.*
 import krews.file.InputFile
+import krews.file.LocalInputFile
 import krews.file.OutputFile
 import mu.KotlinLogging
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.*
+import java.util.stream.Collectors
+import java.util.stream.Collectors.toSet
+import kotlin.streams.toList
 
 private val log = KotlinLogging.logger {}
 
@@ -29,24 +33,8 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
     override fun downloadFile(path: String) {}
     override fun uploadFile(path: String) {}
 
-    override fun outputFileLastModified(runOutputsDir: String, outputFile: OutputFile): Long {
-        val filePath = Paths.get(workflowBasePath.toString(), runOutputsDir, outputFile.path)
-        return Files.getLastModifiedTime(filePath).toMillis()
-    }
-
-    override fun copyCachedFiles(fromDir: String, toDir: String, files: Set<String>) {
-        val fromBasePath = Paths.get(workflowBasePath.toString(), fromDir)
-        val toBasePath = Paths.get(workflowBasePath.toString(), toDir)
-        for (file in files) {
-            val fromPath = fromBasePath.resolve(file)
-            val toPath = toBasePath.resolve(file)
-            log.info { "Copying cached file from $fromPath to $toPath" }
-            Files.createDirectories(toPath.parent)
-            Files.copy(fromPath, toPath)
-            val fromLastModified = Files.getLastModifiedTime(fromPath)
-            Files.setLastModifiedTime(toPath, fromLastModified)
-        }
-    }
+    override fun fileExists(path: String) = Files.exists(Paths.get(path))
+    override fun fileLastModified(path: String) = Files.getLastModifiedTime(Paths.get(path)).toMillis()
 
     override fun executeTask(workflowRunDir: String,
                              taskRunId: Int,
@@ -54,7 +42,7 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
                              taskRunContext: TaskRunContext<*, *>,
                              outputFilesIn: Set<OutputFile>,
                              outputFilesOut: Set<OutputFile>,
-                             cachedInputFiles: Set<CachedInputFile>,
+                             cachedInputFiles: Set<InputFile>,
                              downloadInputFiles: Set<InputFile>) {
         val runBasePath = workflowBasePath.resolve(workflowRunDir)
         val runInputsPath = runBasePath.resolve(INPUTS_DIR)
@@ -86,7 +74,7 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
 
         // Copy localInputFiles into the docker container
         for (cachedInputFile in cachedInputFiles) {
-            Files.copy(Paths.get(workflowBasePath.toString(), cachedInputFile.workflowInputsDir, cachedInputFile.path),
+            Files.copy(Paths.get(workflowBasePath.toString(), INPUTS_DIR, cachedInputFile.path),
                 mountDir.resolve(cachedInputFile.path))
         }
 
@@ -138,16 +126,6 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
                 .exec(logCallback).awaitCompletion()
         }
 
-        // Copy newly downloaded input files out of docker container into run inputs dir
-        if (downloadInputFiles.isNotEmpty()) {
-            log.info { "Copying downloaded input files $downloadInputFiles out of mounted data dir $mountDir" }
-        }
-        downloadInputFiles.map { it.path }.forEach {
-            val to = runInputsPath.resolve(it)
-            Files.createDirectories(to.parent)
-            Files.copy(mountDir.resolve(it), to)
-        }
-
         // Copy output files out of docker container into run outputs dir
         if (outputFilesOut.isNotEmpty()) {
             log.info { "Copying output files $outputFilesOut for task output out of mounted data dir $mountDir" }
@@ -170,22 +148,23 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
             .forEach { Files.delete(it) }
     }
 
-    override fun downloadRemoteInputFiles(inputFiles: Set<InputFile>, dockerDataDir: String, workflowInputsDir: String) {
-        val mountDir = workflowBasePath.resolve("download-inputs-${UUID.randomUUID()}")
-        val runInputsPath = Paths.get(workflowBasePath.toString(), workflowInputsDir)
-        for (inputFile in inputFiles) {
-            downloadRemoteInputFile(dockerClient, inputFile, dockerDataDir, mountDir)
-            Files.copy(mountDir.resolve(inputFile.path), runInputsPath.resolve(inputFile.path))
+    override fun downloadInputFile(inputFile: InputFile) {
+        if (inputFile is LocalInputFile) {
+            Files.copy(Paths.get(inputFile.localPath), workflowBasePath.resolve(inputFile.path))
+            return
         }
-        Files.walk(mountDir)
-            .sorted(Comparator.reverseOrder())
-            .forEach { Files.delete(it) }
+        inputFile.downloadLocal(workflowBasePath)
     }
 
-    override fun deleteDirectory(dir: String){
-        Files.walk(workflowBasePath.resolve(dir))
-            .sorted(Comparator.reverseOrder())
-            .forEach { Files.delete(it) }
+    override fun listFiles(baseDir: String): Set<String> {
+        return Files.walk(workflowBasePath.resolve(baseDir))
+            .filter { Files.isRegularFile(it) }
+            .map { it.toString() }
+            .toList().toSet()
+    }
+
+    override fun deleteFile(file: String){
+        Files.delete(workflowBasePath.resolve(file))
     }
 
 }

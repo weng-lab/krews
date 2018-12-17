@@ -8,6 +8,7 @@ import com.typesafe.config.Config
 import com.typesafe.config.ConfigValue
 import krews.core.Task
 import krews.core.Workflow
+import krews.misc.ConfigView
 import krews.misc.mapper
 
 const val DEFAULT_TASK_CONFIG_NAME = "default"
@@ -19,7 +20,7 @@ const val DEFAULT_TASK_CONFIG_NAME = "default"
 }
 
 @PublishedApi internal inline fun <reified T> convertConfigMap(raw: Map<String, Any>) =
-    mapper.readValue<T>(noDefaultTypesMapper.writeValueAsBytes(raw))
+    mapper.readerWithView(ConfigView::class.java).readValue<T>(noDefaultTypesMapper.writeValueAsBytes(raw))
 
 
 @Suppress("UNCHECKED_CAST")

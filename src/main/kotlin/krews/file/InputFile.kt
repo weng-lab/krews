@@ -1,5 +1,9 @@
 package krews.file
 
+import com.fasterxml.jackson.annotation.JsonView
+import krews.misc.ConfigView
+import java.nio.file.Path
+
 /**
  * Remote files downloaded and used for tasks.
  *
@@ -10,7 +14,11 @@ package krews.file
  *      /run/$run-timestamp/inputs directory, as well as the local task docker container path.
  */
 abstract class InputFile(path: String) : File(path) {
+
     val lastModified: Long by lazy { fetchLastModified() }
+
+    @JsonView(ConfigView::class)
+    var cache: Boolean = false
 
     /**
      * Retrieve the last modified timestamp
@@ -28,4 +36,11 @@ abstract class InputFile(path: String) : File(path) {
      * @param containerBaseDir: The container local directory that the input file will be downloaded to
      */
     internal abstract fun downloadFileCommand(containerBaseDir: String): String
+
+    /**
+     * Download locally on the master process.
+     *
+     * @param toBaseDir: The local directory that the input file will be downloaded to
+     */
+    internal abstract fun downloadLocal(toBaseDir: Path)
 }

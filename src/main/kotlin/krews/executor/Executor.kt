@@ -32,14 +32,15 @@ interface LocallyDirectedExecutor {
     fun uploadFile(path: String)
 
     /**
-     * @return The last modified date for the given output file as timestamp
+     * @return True if the given file exists on the executor's file system, false otherwise.
      */
-    fun outputFileLastModified(runOutputsDir: String, outputFile: OutputFile): Long
+    fun fileExists(path: String): Boolean
 
     /**
-     * Copy cached output files from one workflow run directory to another
+     * @return The last modified date for the given path on the executor's file system.
+     * Throws Exception if file does not exist
      */
-    fun copyCachedFiles(fromDir: String, toDir: String, files: Set<String>)
+    fun fileLastModified(path: String): Long
 
     /**
      * Execute task for the environment. Will consist of running a docker container to complete the task, and another
@@ -58,11 +59,11 @@ interface LocallyDirectedExecutor {
                     taskRunContext: TaskRunContext<*, *>,
                     outputFilesIn: Set<OutputFile>,
                     outputFilesOut: Set<OutputFile>,
-                    cachedInputFiles: Set<CachedInputFile>,
+                    cachedInputFiles: Set<InputFile>,
                     downloadInputFiles: Set<InputFile>)
 
     /**
-     * Download input files from remote sources and load them into /run/$run-timestamp/inputs directory.
+     * Download input file from remote source and load it into /inputs directory.
      *
      * Should involve running a docker container defined in [InputFile.downloadFileImage] with the command
      * in [InputFile.downloadFileCommand].
@@ -70,22 +71,15 @@ interface LocallyDirectedExecutor {
      * This functionality also needs to exist in [executeTask]. This function is separate because the implementation
      * may differ when we need to run it alone.
      */
-    fun downloadRemoteInputFiles(inputFiles: Set<InputFile>, dockerDataDir: String, workflowInputsDir: String)
+    fun downloadInputFile(inputFile: InputFile)
+
+    fun listFiles(baseDir: String): Set<String>
 
     /**
-     * Deletes the given directory. Used for deleting old run directories.
+     * Deletes the given file. Used for cleaning up unused files.
      */
-    fun deleteDirectory(dir: String)
+    fun deleteFile(file: String)
 }
-
-/**
- * A representation for a file that exists in an executor environment workflow run directory
- *
- * @param path: The relative file path
- * @param workflowInputsDir: The executor specific /run/$run-timestamp/inputs directory where the file lives
- * @param lastModified: last modified date of file
- */
-data class CachedInputFile(val path: String, val workflowInputsDir: String, val lastModified: Long)
 
 /**
  * Interface that deals with environment specific functionality when directing a workflow remotely.

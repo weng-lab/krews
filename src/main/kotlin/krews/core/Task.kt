@@ -31,13 +31,13 @@ class Task<I : Any, O : Any> @PublishedApi internal constructor(
 
     internal fun connect(taskConfig: TaskConfig?,
                          executeFn: (TaskRunContext<I, O>) -> Unit,
-                         executorService: ExecutorService) {
+                         pool: ExecutorService) {
         val rawTaskParams = taskConfig?.params ?: mapOf()
         val inputFlux: Flux<out I> = if (inputPub is Flux) inputPub else Flux.from(inputPub)
         val processed = inputFlux.flatMap({
             Mono.fromFuture(CompletableFuture.supplyAsync(Supplier {
                 processInput(it, rawTaskParams, executeFn)
-            }, executorService))
+            }, pool))
         }, parToMaxConcurrency(taskConfig?.parallelism))
         processed.subscribe(outputPub as TopicProcessor)
     }

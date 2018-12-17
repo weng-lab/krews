@@ -22,8 +22,8 @@ data class WorkflowConfig (
     val tasks: Map<String, TaskConfig>,
     // The maximum allowed parallelism for the system as a whole. Also see per-task parallelism
     val parallelism: Parallelism = UnlimitedParallelism,
-    // Delete old runs from db and file storage (run dirs) when the current run succeeds
-    val cleanOldRuns: Boolean = true,
+    // Delete outputs and copied inputs that were not created during the current run if it succeeds
+    val cleanOldFiles: Boolean = true,
     // Delay between generating updated status reports (in seconds)
     val reportGenerationDelay: Long = 60
 )

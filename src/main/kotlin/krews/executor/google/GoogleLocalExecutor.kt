@@ -1,11 +1,13 @@
 package krews.executor.google
 
+import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.api.services.genomics.v2alpha1.model.*
 import krews.config.CapacityType
 import krews.config.TaskConfig
 import krews.config.WorkflowConfig
 import krews.core.TaskRunContext
 import krews.executor.*
+import krews.file.GSInputFile
 import krews.file.InputFile
 import krews.file.OutputFile
 import mu.KotlinLogging
@@ -19,6 +21,8 @@ const val CLOUD_SDK_IMAGE = "google/cloud-sdk:alpine"
 
 // Default VM machine type if not define in task configuration
 const val DEFAULT_MACHINE_TYPE = "n1-standard-1"
+
+const val DEFAULT_INPUT_DOWNLOAD_DIR = "/data"
 
 class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
 
@@ -50,17 +54,17 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
         uploadObject(googleStorageClient, bucket, storageObject, localFilePath)
     }
 
-    override fun outputFileLastModified(runOutputsDir: String, outputFile: OutputFile): Long {
-        val objectPath = gcsObjectPath(gcsBase, runOutputsDir, outputFile.path)
-        return googleStorageClient.objects().get(bucket, objectPath).execute().updated.value
+    override fun fileExists(path: String): Boolean {
+        try {
+            googleStorageClient.objects().get(bucket, gcsObjectPath(gcsBase, path)).execute()
+        } catch (e: GoogleJsonResponseException) {
+            if (e.statusCode == 404) return false
+        }
+        return true
     }
 
-    override fun copyCachedFiles(fromDir: String, toDir: String, files: Set<String>) {
-        for (file in files) {
-            val fromObject = gcsObjectPath(gcsBase, fromDir, file)
-            val toObject = gcsObjectPath(gcsBase, toDir, file)
-            copyObject(googleStorageClient, bucket, fromObject, bucket, toObject)
-        }
+    override fun fileLastModified(path: String): Long {
+        return googleStorageClient.objects().get(bucket, gcsObjectPath(gcsBase, path)).execute().updated.value
     }
 
     override fun executeTask(workflowRunDir: String,
@@ -69,7 +73,7 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
                              taskRunContext: TaskRunContext<*, *>,
                              outputFilesIn: Set<OutputFile>,
                              outputFilesOut: Set<OutputFile>,
-                             cachedInputFiles: Set<CachedInputFile>,
+                             cachedInputFiles: Set<InputFile>,
                              downloadInputFiles: Set<InputFile>) {
         val run = createRunPipelineRequest(googleConfig)
         val actions = run.pipeline.actions
@@ -99,7 +103,7 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
 
         // Create actions to download InputFiles from our GCS run directories
         val downloadLocalInputFileActions = cachedInputFiles.map {
-            val inputFileObject = gcsPath(bucket, gcsBase, it.workflowInputsDir, it.path)
+            val inputFileObject = gcsPath(bucket, gcsBase, INPUTS_DIR, it.path)
             createDownloadAction(inputFileObject, taskRunContext.dockerDataDir, it.path)
         }
         actions.addAll(downloadLocalInputFileActions)
@@ -113,13 +117,6 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
 
         // Create the action that runs the task
         actions.add(createExecuteTaskAction(taskRunContext.dockerImage, taskRunContext.dockerDataDir, taskRunContext.command, taskRunContext.env))
-
-        // Create the actions to upload each downloaded remote InputFile
-        val uploadInputFileActions = downloadInputFiles.map {
-            val inputFileObject = gcsPath(bucket, gcsBase, workflowRunDir, INPUTS_DIR, it.path)
-            createUploadAction(inputFileObject, taskRunContext.dockerDataDir, it.path)
-        }
-        actions.addAll(uploadInputFileActions)
 
         // Create the actions to upload each task output OutputFile
         val uploadActions = outputFilesOut.map {
@@ -139,26 +136,27 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
         submitJobAndWait(run, googleConfig.jobCompletionPollInterval, "task run $taskRunId")
     }
 
-    override fun downloadRemoteInputFiles(inputFiles: Set<InputFile>, dockerDataDir: String, workflowInputsDir: String) {
-        val run = createRunPipelineRequest(googleConfig)
-        val actions = inputFiles.map { createDownloadRemoteFileAction(it, dockerDataDir) }
-        run.pipeline.actions.addAll(actions)
-
-        // Create the actions to upload each downloaded remote InputFile
-        val uploadInputFileActions = inputFiles.map {
-            val inputFileObject = gcsPath(bucket, gcsBase, workflowInputsDir, it.path)
-            createUploadAction(inputFileObject, dockerDataDir, it.path)
+    override fun downloadInputFile(inputFile: InputFile) {
+        // If the other file is another google storage file, we can copy directly from bucket to bucket without downloading first
+        if (inputFile is GSInputFile) {
+            copyObject(googleStorageClient, inputFile.bucket, inputFile.objectPath, bucket, gcsObjectPath(gcsBase, inputFile.path))
+            return
         }
-        run.pipeline.actions.addAll(uploadInputFileActions)
 
-        submitJobAndWait(run, googleConfig.jobCompletionPollInterval, "remote file download")
+        val downloadBasePath = Paths.get(DEFAULT_INPUT_DOWNLOAD_DIR)
+        val downloadedPath = downloadBasePath.resolve(inputFile.path)
+        inputFile.downloadLocal(downloadBasePath)
+        uploadObject(googleStorageClient, bucket, gcsObjectPath(gcsBase, inputFile.path), downloadedPath)
+        Files.delete(downloadedPath)
     }
 
-    override fun deleteDirectory(dir: String) {
-        log.info { "DELETING: $dir" }
-        val bucketContents = googleStorageClient.objects().list(bucket).setPrefix(gcsObjectPath(gcsBase, dir)).execute()
-        log.info { "BUCKET_CONTENTS: ${bucketContents.toPrettyString()}" }
-        bucketContents.items?.forEach { googleStorageClient.objects().delete(bucket, it.name).execute() }
+    override fun listFiles(baseDir: String): Set<String> {
+        val bucketContents = googleStorageClient.objects().list(bucket).setPrefix(gcsObjectPath(gcsBase, baseDir)).execute()
+        return bucketContents.items.map { it.name }.toSet()
+    }
+
+    override fun deleteFile(file: String) {
+        googleStorageClient.objects().delete(bucket, gcsObjectPath(gcsBase, file)).execute()
     }
 
 }
