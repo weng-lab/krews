@@ -3,6 +3,7 @@ package krews
 import com.typesafe.config.ConfigFactory
 import io.kotlintest.Description
 import io.kotlintest.TestResult
+import io.kotlintest.matchers.numerics.shouldBeLessThan
 import io.kotlintest.shouldBe
 import io.kotlintest.specs.StringSpec
 import io.mockk.every
@@ -146,10 +147,6 @@ class ConcurrencyTest : StringSpec(){
                     task1BeforeErrorLatch.await()
                     throw Exception("Test Error")
                 }
-                if (task1s > 6) {
-                    // Using a latch here doesn't work. Whatever you need to wait for after the error happens in Reactor.
-                    Thread.sleep(500)
-                }
             }
 
             val task2Count = AtomicInteger()
@@ -161,7 +158,7 @@ class ConcurrencyTest : StringSpec(){
 
             runner.run()
             task1Count.get() shouldBe 15
-            task2Count.get() shouldBe 5
+            task2Count.get() shouldBeLessThan 5
         }
 
     }
