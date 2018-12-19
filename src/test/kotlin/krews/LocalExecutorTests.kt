@@ -47,9 +47,9 @@ class LocalExecutorTests : StringSpec() {
 
     override fun afterSpec(description: Description, spec: Spec) {
         // Clean up temporary dirs
-        //Files.walk(testDir)
-        //    .sorted(Comparator.reverseOrder())
-        //    .forEach { Files.delete(it) }
+        Files.walk(testDir)
+            .sorted(Comparator.reverseOrder())
+            .forEach { Files.delete(it) }
     }
 
     init {

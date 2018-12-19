@@ -148,7 +148,8 @@ class TaskRunner(private val workflowRun: WorkflowRun,
                 val cachedOutputFilePaths = cachedOutput.outputFiles.split(",")
                 for (outputFilePath in cachedOutputFilePaths) {
                     if (!executor.fileExists("$OUTPUTS_DIR/$outputFilePath")) {
-                        log.info { "Output file from cache $outputFilePath not found in output directory. Cache will not be used." }
+                        log.info { "$loggingPrefix Output file from cache $outputFilePath not found in output directory. Cache will not be used." }
+                        transaction(db) { cachedOutput.delete() }
                         useCache = false
                         break
                     }
