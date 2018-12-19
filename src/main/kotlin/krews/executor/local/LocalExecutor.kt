@@ -150,7 +150,9 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
     }
 
     override fun listFiles(baseDir: String): Set<String> {
-        return Files.walk(workflowBasePath.resolve(baseDir))
+        val listDir = workflowBasePath.resolve(baseDir)
+        if (!Files.exists(listDir)) return setOf()
+        return Files.walk(listDir)
             .filter { Files.isRegularFile(it) }
             .map { it.toString() }
             .toList().toSet()

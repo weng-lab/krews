@@ -15,7 +15,7 @@ data class TestComplexInputType (
     override val file: File
 ) : TestBaseInputType
 
-data class Bast64TaskParams(val someVal: String)
+data class Bast64TaskParams(val someVal: String, val someFiles: List<File>?)
 
 val localFilesWorkflow = workflow("local-files-workflow") {
     val params = params<LocalWorkflowParams>()

@@ -25,7 +25,8 @@ class LocalExecutorTests : StringSpec() {
     private val testDir = Paths.get("local-workflow-test")!!
     private val inputsDir = testDir.resolve("inputs")
     private val outputsDir = testDir.resolve("outputs")
-    private val sampleFilesDir = testDir.resolve("sample-files-dir")!!
+    private val sampleFilesDir = testDir.resolve("sample-files")
+    private val unusedFilesDir = testDir.resolve("unused-files")
     private val base64Dir = outputsDir.resolve("base64")
     private val gzipDir = outputsDir.resolve("gzip")
 
@@ -37,12 +38,30 @@ class LocalExecutorTests : StringSpec() {
         }
         task.base64.params = {
             some-val = $taskParam
+            some-files = [
+                {
+                    -type = "krews.file.LocalInputFile"
+                    local-path = $unusedFilesDir/unused-1.txt
+                    path = unused-1.txt
+                    cache = true
+                },
+                {
+                    -type = "krews.file.LocalInputFile"
+                    local-path = $unusedFilesDir/unused-2.txt
+                    path = unused-2.txt
+                }
+            ]
         }
         """.trimIndent()
 
     override fun beforeSpec(description: Description, spec: Spec) {
         // Create temp sample files dir (and parent test dir) to use for this set of tests
         Files.createDirectories(sampleFilesDir)
+        Files.createDirectories(unusedFilesDir)
+        val unusedFile1 = Files.createFile(unusedFilesDir.resolve("unused-1.txt"))
+        Files.write(unusedFile1, "I am an unused task input file".toByteArray())
+        val unusedFile2 = Files.createFile(unusedFilesDir.resolve("unused-2.txt"))
+        Files.write(unusedFile2, "I am an unused task input file".toByteArray())
     }
 
     override fun afterSpec(description: Description, spec: Spec) {
@@ -64,6 +83,14 @@ class LocalExecutorTests : StringSpec() {
 
             val dbPath = testDir.resolve(Paths.get("state", "metadata.db"))
             dbPath.shouldExist()
+
+            inputsDir.resolve("unused-1.txt").shouldExist()
+            inputsDir.resolve("unused-2.txt").shouldNotExist()
+
+            // Even though this file was required for each task, make sure it only tried to download once.
+            verifyInputFileCached(executor, "unused-1.txt", 1)
+            // This file is downloaded by each task execution, not cached
+            verifyInputFileCached(executor, "unused-2.txt", 0)
 
             for (i in 1..3) {
                 inputsDir.resolve("test-$i.txt").shouldExist()
@@ -135,8 +162,9 @@ class LocalExecutorTests : StringSpec() {
             runPath.resolve(REPORT_FILENAME).shouldExist()
         }
 
-        "Cache should be invalidated if output file is removed manually" {
+        "Cache should be invalidated if input file or output file is removed manually" {
             Files.delete(outputsDir.resolve("base64/test-2.b64"))
+            Files.delete(inputsDir.resolve("test-3.txt"))
 
             val executor = runWorkflow(4, "task-param-2")
 
@@ -144,10 +172,15 @@ class LocalExecutorTests : StringSpec() {
                 inputsDir.resolve("test-$i.txt").shouldExist()
                 base64Dir.resolve("test-$i.b64").shouldExist()
                 gzipDir.resolve("test-$i.b64.gz").shouldExist()
-                verifyInputFileCached(executor, "test-$i.txt", 0)
             }
 
+            verifyInputFileCached(executor, "test-2.txt", 0)
+            verifyInputFileCached(executor, "test-3.txt")
+            verifyInputFileCached(executor, "test-4.txt", 0)
+
             verifyExecuteWithOutput(executor, "base64/test-2.b64")
+            // Although it downloads the input file again, it doesn't need to reprocess the task
+            // because it's source is the same file with the same last mod date
             verifyExecuteWithOutput(executor, "base64/test-3.b64", 0)
             verifyExecuteWithOutput(executor, "base64/test-4.b64", 0)
 
