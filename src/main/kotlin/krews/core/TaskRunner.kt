@@ -70,6 +70,7 @@ class TaskRunner(private val workflowRun: WorkflowRun,
                 this.image = taskRunContext.dockerImage
             }
         }
+
         val taskRunId: Int = transaction(db) { taskRun.id.value }
         log.info { "Task run created with id $taskRunId." }
         val loggingPrefix = "Task Run ${task.name} - $taskRunId:"

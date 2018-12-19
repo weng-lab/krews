@@ -38,6 +38,7 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
     override fun downloadFile(path: String) {}
     override fun uploadFile(path: String) {}
 
+<<<<<<< HEAD
     override fun fileExists(path: String) = Files.exists(workflowBasePath.resolve(path))
     override fun fileLastModified(path: String) = Files.getLastModifiedTime(workflowBasePath.resolve(path)).toMillis()
 
@@ -51,6 +52,26 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
         cachedInputFiles: Set<InputFile>,
         downloadInputFiles: Set<InputFile>
     ) {
+=======
+    override fun fileExists(path: String) = Files.exists(Paths.get(path))
+    override fun fileLastModified(path: String) = Files.getLastModifiedTime(Paths.get(path)).toMillis()
+
+    override fun executeTask(workflowRunDir: String,
+                             taskRunId: Int,
+                             taskConfig: TaskConfig,
+                             taskRunContext: TaskRunContext<*, *>,
+                             outputFilesIn: Set<OutputFile>,
+                             outputFilesOut: Set<OutputFile>,
+                             cachedInputFiles: Set<InputFile>,
+                             downloadInputFiles: Set<InputFile>) {
+        val runBasePath = workflowBasePath.resolve(workflowRunDir)
+        val runInputsPath = runBasePath.resolve(INPUTS_DIR)
+        val runOutputsPath = runBasePath.resolve(OUTPUTS_DIR)
+
+        // Pull image from remote
+        log.info { "Pulling image \"${taskRunContext.dockerImage}\" from remote..." }
+        dockerClient.pullImageCmd(taskRunContext.dockerImage).exec(PullImageResultCallback()).awaitSuccess()
+>>>>>>> d99a133607a399d1618d7334e219e82b656d08d5
 
         // Create a temp directory to use as a mount for input data
         val mountDir = workflowBasePath.resolve("task-$taskRunId-mount")
@@ -59,6 +80,7 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
         try {
             val runBasePath = workflowBasePath.resolve(workflowRunDir)
 
+<<<<<<< HEAD
             // Pull image from remote
             log.info { "Pulling image \"${taskRunContext.dockerImage}\" from remote..." }
             dockerClient.pullImageCmd(taskRunContext.dockerImage).exec(PullImageResultCallback()).awaitSuccess()
@@ -67,6 +89,24 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
             for (downloadInputFile in downloadInputFiles) {
                 downloadRemoteInputFile(dockerClient, downloadInputFile, taskRunContext.dockerDataDir, mountDir)
             }
+=======
+        // Create the task execution docker container from config
+        log.info { "Creating container from image \"${taskRunContext.dockerImage}\" with mount $mountDir" }
+        val volume = Volume(taskRunContext.dockerDataDir)
+        val containerCreationCmd = dockerClient.createContainerCmd(taskRunContext.dockerImage)
+            .withVolumes(volume)
+            .withBinds(Bind(mountDir.toString(), volume))
+        if (taskRunContext.command != null) containerCreationCmd.withCmd("/bin/sh", "-c", taskRunContext.command)
+        if (taskRunContext.env.isNotEmpty()) containerCreationCmd.withEnv(taskRunContext.env.map { "${it.key}=${it.value}" })
+        val createContainerResponse = containerCreationCmd.exec()
+        val containerId = createContainerResponse.id!!
+
+        // Copy localInputFiles into the docker container
+        for (cachedInputFile in cachedInputFiles) {
+            Files.copy(Paths.get(workflowBasePath.toString(), INPUTS_DIR, cachedInputFile.path),
+                mountDir.resolve(cachedInputFile.path))
+        }
+>>>>>>> d99a133607a399d1618d7334e219e82b656d08d5
 
             // Create the task execution docker container from config
             val containerId = createContainer(dockerClient, taskRunContext, mountDir)
@@ -131,6 +171,7 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
                 Files.createDirectories(to.parent)
                 Files.copy(mountDir.resolve(it), to, StandardCopyOption.REPLACE_EXISTING)
             }
+<<<<<<< HEAD
         } finally {
             // Clean up temporary mount dir
             Files.walk(mountDir)
@@ -145,6 +186,42 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
             Files.createDirectories(toPath.parent)
             Files.copy(Paths.get(inputFile.localPath), toPath, StandardCopyOption.REPLACE_EXISTING)
             return
+=======
+            dockerClient.logContainerCmd(containerId)
+                .withStdOut(true)
+                .withStdErr(true)
+                .exec(logCallback).awaitCompletion()
+        }
+
+        // Copy output files out of docker container into run outputs dir
+        if (outputFilesOut.isNotEmpty()) {
+            log.info { "Copying output files $outputFilesOut for task output out of mounted data dir $mountDir" }
+        } else {
+            log.info { "No output files to copy for this task run." }
+        }
+        outputFilesOut.map { it.path }.forEach {
+            val to = runOutputsPath.resolve(it)
+            Files.createDirectories(to.parent)
+            Files.copy(mountDir.resolve(it), to)
+>>>>>>> d99a133607a399d1618d7334e219e82b656d08d5
+        }
+        inputFile.downloadLocal(workflowBasePath)
+    }
+
+<<<<<<< HEAD
+    override fun listFiles(baseDir: String): Set<String> {
+        return Files.walk(workflowBasePath.resolve(baseDir))
+            .filter { Files.isRegularFile(it) }
+            .map { it.toString() }
+            .toList().toSet()
+    }
+
+    override fun deleteFile(file: String) {
+=======
+    override fun downloadInputFile(inputFile: InputFile) {
+        if (inputFile is LocalInputFile) {
+            Files.copy(Paths.get(inputFile.localPath), workflowBasePath.resolve(inputFile.path))
+            return
         }
         inputFile.downloadLocal(workflowBasePath)
     }
@@ -156,7 +233,8 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
             .toList().toSet()
     }
 
-    override fun deleteFile(file: String) {
+    override fun deleteFile(file: String){
+>>>>>>> d99a133607a399d1618d7334e219e82b656d08d5
         Files.delete(workflowBasePath.resolve(file))
     }
 

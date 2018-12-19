@@ -3,7 +3,6 @@ package krews.config
 import com.fasterxml.jackson.databind.PropertyNamingStrategy
 import com.fasterxml.jackson.module.kotlin.convertValue
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import com.fasterxml.jackson.module.kotlin.readValue
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigValue
 import krews.core.Task
