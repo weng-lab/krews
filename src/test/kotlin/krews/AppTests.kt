@@ -12,6 +12,10 @@ class AppTests : StringSpec() {
     override fun tags() = setOf(Integration)
 
     private val testDir = Paths.get("app-test").toAbsolutePath()!!
+    private val inputsDir = testDir.resolve("inputs")
+    private val outputsDir = testDir.resolve("outputs")
+    private val base64Path = outputsDir.resolve("base64")
+    private val gzipPath = outputsDir.resolve("gzip")
     private val sampleFilesDir = testDir.resolve("sample-files-dir")!!
     private val configFile = testDir.resolve("app-test.conf")!!
     private val config =
@@ -19,6 +23,9 @@ class AppTests : StringSpec() {
         local-files-base-dir = $testDir
         params {
             sample-files-dir = $sampleFilesDir
+        }
+        task.base64.params = {
+            some-val = test
         }
         """.trimIndent()
 
@@ -40,17 +47,12 @@ class AppTests : StringSpec() {
 
     init {
         "App run() should execute a simple workflow locally" {
-            run(localFilesWorkflow, arrayOf("-o", "local", "-c", "$configFile"))
+            run(localFilesWorkflow(), arrayOf("-o", "local", "-c", "$configFile"))
 
             val dbPath = testDir.resolve(Paths.get("state", "metadata.db"))
             dbPath.shouldExist()
 
-            val runPath = Files.list(testDir.resolve("run")).iterator().next()!!
-            val inputsPath = runPath.resolve("inputs")
-            val outputsPath = runPath.resolve("outputs")
-            val base64Path = outputsPath.resolve("base64")
-            val gzipPath = outputsPath.resolve("gzip")
-            inputsPath.resolve("test.txt").shouldExist()
+            inputsDir.resolve("test.txt").shouldExist()
             base64Path.resolve("test.b64").shouldExist()
             gzipPath.resolve("test.b64.gz").shouldExist()
         }

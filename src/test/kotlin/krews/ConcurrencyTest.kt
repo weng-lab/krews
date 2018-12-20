@@ -3,7 +3,7 @@ package krews
 import com.typesafe.config.ConfigFactory
 import io.kotlintest.Description
 import io.kotlintest.TestResult
-import io.kotlintest.matchers.numerics.shouldBeLessThanOrEqual
+import io.kotlintest.matchers.numerics.shouldBeLessThan
 import io.kotlintest.shouldBe
 import io.kotlintest.specs.StringSpec
 import io.mockk.every
@@ -18,8 +18,9 @@ import reactor.core.publisher.toFlux
 import reactor.core.publisher.toMono
 import java.nio.file.Files
 import java.nio.file.Paths
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.math.max
 
 class ConcurrencyTest : StringSpec(){
     override fun tags() = setOf(Unit)
@@ -44,7 +45,7 @@ class ConcurrencyTest : StringSpec(){
 
     private lateinit var outputsCaptured: Mono<List<Int>>
     private val testWorkflow = workflow("test") {
-        val i = (1..30).toFlux()
+        val i = (1..15).toFlux()
         val task1 = task<Int, Int>("task1", i) {
             dockerImage = "task1"
             output = input
@@ -68,38 +69,96 @@ class ConcurrencyTest : StringSpec(){
     init {
         "Per task parallelism should be enforced" {
             val (executor , runner) = runWorkflow(taskParConfig)
-            val task1Tracker = AtomicInteger()
-            val task1MaxConcurrent = AtomicInteger()
+            val task1Count = AtomicInteger()
+            val task1Latch = CountDownLatch(11)
             every {
                 executor.executeTask(any(), any(), any(), match { it.dockerImage == "task1" }, any(), any(), any(), any())
             } answers {
-                val runningTasks = task1Tracker.incrementAndGet()
-                runningTasks shouldBeLessThanOrEqual 10
-                task1MaxConcurrent.updateAndGet { current -> max(current, runningTasks) }
-                Thread.sleep(500)
-                task1Tracker.decrementAndGet()
+                val task1s = task1Count.incrementAndGet()
+                task1Latch.countDown()
+                val timedOut = !task1Latch.await(500, TimeUnit.MILLISECONDS)
+                if (task1s <= 10) {
+                    timedOut shouldBe true
+                } else {
+                    timedOut shouldBe false
+                }
             }
             runner.run()
-            task1MaxConcurrent.get() shouldBe 10
-            outputsCaptured.block() shouldBe (1..30).toList()
+            outputsCaptured.block()?.toSet() shouldBe (1..15).toSet()
         }
 
         "Per workflow parallelism should be enforced" {
             val (executor , runner) = runWorkflow(workflowParConfig)
-            val taskTracker = AtomicInteger()
-            val taskMaxConcurrent = AtomicInteger()
+            val taskCount = AtomicInteger()
+            val taskLatch = CountDownLatch(21)
             every {
                 executor.executeTask(any(), any(), any(), any(), any(), any(), any(), any())
             } answers {
-                val runningTasks = taskTracker.incrementAndGet()
-                runningTasks shouldBeLessThanOrEqual 10
-                taskMaxConcurrent.updateAndGet { current -> max(current, runningTasks) }
-                Thread.sleep(500)
-                taskTracker.decrementAndGet()
+                val task1s = taskCount.incrementAndGet()
+                taskLatch.countDown()
+                val timedOut = !taskLatch.await(500, TimeUnit.MILLISECONDS)
+                if (task1s <= 20) {
+                    timedOut shouldBe true
+                } else {
+                    timedOut shouldBe false
+                }
             }
             runner.run()
-            taskMaxConcurrent.get() shouldBe 10
-            outputsCaptured.block() shouldBe (1..30).toList()
+            outputsCaptured.block()?.toSet() shouldBe (1..15).toSet()
+        }
+
+        "Tasks should be run depth-first" {
+            val (executor , runner) = runWorkflow(baseConfig)
+            val task1Count = AtomicInteger()
+            val task2Latch = CountDownLatch(1)
+            every {
+                executor.executeTask(any(), any(), any(), match { it.dockerImage == "task1" }, any(), any(), any(), any())
+            } answers {
+                val task1s = task1Count.incrementAndGet()
+                if (task1s > 1) {
+                    val timedOut = !task2Latch.await(500, TimeUnit.MILLISECONDS)
+                    timedOut shouldBe false
+                }
+            }
+
+            every {
+                executor.executeTask(any(), any(), any(), match { it.dockerImage == "task2" }, any(), any(), any(), any())
+            } answers {
+                task2Latch.countDown()
+            }
+
+            runner.run()
+            outputsCaptured.block()
+        }
+
+        "If one task run fails all others that aren't downstream should complete" {
+            val (executor , runner) = runWorkflow(baseConfig)
+            val task1Count = AtomicInteger()
+            val task1BeforeErrorLatch = CountDownLatch(5)
+            every {
+                executor.executeTask(any(), any(), any(), match { it.dockerImage == "task1" }, any(), any(), any(), any())
+            } answers {
+                val task1s = task1Count.incrementAndGet()
+                if (task1s < 6) {
+                    task1BeforeErrorLatch.countDown()
+                }
+                if (task1s == 6) {
+                    // Ensure 5 task runs complete before throwing an error.
+                    task1BeforeErrorLatch.await()
+                    throw Exception("Test Error")
+                }
+            }
+
+            val task2Count = AtomicInteger()
+            every {
+                executor.executeTask(any(), any(), any(), match { it.dockerImage == "task2" }, any(), any(), any(), any())
+            } answers {
+                task2Count.incrementAndGet()
+            }
+
+            runner.run()
+            task1Count.get() shouldBe 15
+            task2Count.get() shouldBeLessThan 5
         }
 
     }

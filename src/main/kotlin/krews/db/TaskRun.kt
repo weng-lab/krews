@@ -15,9 +15,6 @@ object TaskRuns : IntIdTable("task_run") {
     val command = text("command").nullable()
     val image = text("image")
     val outputJson = text("output_json").nullable()
-    init {
-        uniqueIndex("task_run_by_inputs", taskName, inputJson, paramsJson, command, image)
-    }
 }
 
 class TaskRun(id: EntityID<Int>) : IntEntity(id) {

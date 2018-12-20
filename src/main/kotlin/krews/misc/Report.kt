@@ -50,7 +50,7 @@ private fun createReport(workflowRun: WorkflowRun, taskRuns: Iterable<TaskRun>, 
                             h4 { +"Run failed" }
                             p {
                                 +("Find out what went wrong by checking failed tasks below, logs (/run/${workflowRun.startTime}/$LOGS_DIR) " +
-                                        "and diagnostic outputs (/run/${workflowRun.startTime}/$DIAGNOSTICS_DIR")
+                                        "and diagnostic outputs (/run/${workflowRun.startTime}/$DIAGNOSTICS_DIR)")
                             }
                         }
                     }
