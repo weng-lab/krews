@@ -32,8 +32,8 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
 
     private val dockerClient = buildDockerClient(workflowConfig.local?.docker ?: DockerConfig())
     private val workflowBasePath = Paths.get(workflowConfig.localFilesBaseDir).toAbsolutePath()!!
-    private val runInputsPath = workflowBasePath.resolve(INPUTS_DIR)
-    private val runOutputsPath = workflowBasePath.resolve(OUTPUTS_DIR)
+    private val inputsPath = workflowBasePath.resolve(INPUTS_DIR)
+    private val outputsPath = workflowBasePath.resolve(OUTPUTS_DIR)
 
     override fun downloadFile(path: String) {}
     override fun uploadFile(path: String) {}
@@ -86,7 +86,7 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
             for (outputFile in outputFilesIn) {
                 val toPath = mountDir.resolve(outputFile.path)
                 Files.createDirectories(toPath.parent)
-                Files.copy(runOutputsPath.resolve(outputFile.path), toPath)
+                Files.copy(outputsPath.resolve(outputFile.path), toPath)
             }
 
             // Start the container and wait for it to finish processing
@@ -127,7 +127,7 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
                 log.info { "No output files to copy for this task run." }
             }
             outputFilesOut.map { it.path }.forEach {
-                val to = runOutputsPath.resolve(it)
+                val to = outputsPath.resolve(it)
                 Files.createDirectories(to.parent)
                 Files.copy(mountDir.resolve(it), to, StandardCopyOption.REPLACE_EXISTING)
             }
@@ -141,12 +141,12 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
 
     override fun downloadInputFile(inputFile: InputFile) {
         if (inputFile is LocalInputFile) {
-            val toPath = runInputsPath.resolve(inputFile.path)
+            val toPath = inputsPath.resolve(inputFile.path)
             Files.createDirectories(toPath.parent)
             Files.copy(Paths.get(inputFile.localPath), toPath, StandardCopyOption.REPLACE_EXISTING)
             return
         }
-        inputFile.downloadLocal(workflowBasePath)
+        inputFile.downloadLocal(inputsPath)
     }
 
     override fun listFiles(baseDir: String): Set<String> {

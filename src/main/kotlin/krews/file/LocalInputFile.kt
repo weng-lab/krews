@@ -18,7 +18,11 @@ class LocalInputFile(val localPath: String, path: String = defaultPath(localPath
         Files.copy(Paths.get(localPath), toBaseDir.resolve(path), StandardCopyOption.REPLACE_EXISTING)
     }
 
-    override fun fetchLastModified() = Files.getLastModifiedTime(Paths.get(localPath)).toMillis()
+    override fun fetchLastModified(): Long {
+        val localPath = Paths.get(this.localPath)
+        if (!Files.exists(localPath)) return -1
+        return Files.getLastModifiedTime(localPath).toMillis()
+    }
     override fun downloadFileImage() = throw exception
     override fun downloadFileCommand(containerBaseDir: String) = throw exception
 

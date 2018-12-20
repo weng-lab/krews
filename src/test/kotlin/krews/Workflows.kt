@@ -17,7 +17,7 @@ data class TestComplexInputType (
 
 data class Bast64TaskParams(val someVal: String, val someFiles: List<File>?)
 
-val localFilesWorkflow = workflow("local-files-workflow") {
+fun localFilesWorkflow() = workflow("local-files-workflow") {
     val params = params<LocalWorkflowParams>()
     val sampleFiles = Files.newDirectoryStream(Paths.get(params.sampleFilesDir)).sortedBy { f -> f.fileName }
         .map { TestComplexInputType(LocalInputFile(it.toAbsolutePath().toString(), it.fileName.toString(), true)) }
@@ -51,13 +51,14 @@ val localFilesWorkflow = workflow("local-files-workflow") {
 private data class GSWorkflowParams(
     val inputFilesBucket: String,
     val inputFilesBaseDir: String,
-    val inputFiles: List<String>
+    val inputFiles: List<String>,
+    val cacheInputFiles: Boolean
 )
 
-val gsFilesWorkflow = workflow("gs-files-workflow") {
+fun gsFilesWorkflow() = workflow("gs-files-workflow") {
     val params = params<GSWorkflowParams>()
     val inputFiles = params.inputFiles
-        .map { GSInputFile(params.inputFilesBucket, "${params.inputFilesBaseDir}/$it", it) }
+        .map { GSInputFile(params.inputFilesBucket, "${params.inputFilesBaseDir}/$it", it, cache = params.cacheInputFiles) }
         .toFlux()
 
     val base64 = task<File, File>("base64", inputFiles) {

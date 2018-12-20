@@ -2,6 +2,7 @@ package krews.executor.google
 
 import com.google.api.services.genomics.v2alpha1.model.*
 import krews.WORKFLOW_RUN_TIMESTAMP_ENV_VAR
+import krews.config.CapacityType
 import krews.config.WorkflowConfig
 import krews.executor.LOGS_DIR
 import krews.executor.REPORT_FILENAME
@@ -112,7 +113,7 @@ class GoogleExecutor(workflowConfig: WorkflowConfig) : RemoteDirectedExecutor {
 internal fun createExecuteWorkflowAction(executableFilename: String, configFilename: String, workflowTime: DateTime): Action {
     val action = Action()
     action.imageUri = MASTER_IMAGE
-    action.mounts = listOf(createMount(MASTER_RUN_DIR))
+    action.mounts = listOf(createMount(DEFAULT_INPUT_DOWNLOAD_DIR))
     action.environment = mapOf(WORKFLOW_RUN_TIMESTAMP_ENV_VAR to "${workflowTime.millis}")
     val cmd =
         """

@@ -14,7 +14,7 @@ import java.nio.file.Path
  *      /run/$run-timestamp/inputs directory, as well as the local task docker container path.
  */
 abstract class InputFile(path: String,
-                         @JsonView(ConfigView::class) val cache: Boolean = false) : File(path) {
+                         @field:JsonView(ConfigView::class) val cache: Boolean = false) : File(path) {
 
     val lastModified: Long by lazy { fetchLastModified() }
 

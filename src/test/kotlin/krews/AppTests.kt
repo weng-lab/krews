@@ -47,7 +47,7 @@ class AppTests : StringSpec() {
 
     init {
         "App run() should execute a simple workflow locally" {
-            run(localFilesWorkflow, arrayOf("-o", "local", "-c", "$configFile"))
+            run(localFilesWorkflow(), arrayOf("-o", "local", "-c", "$configFile"))
 
             val dbPath = testDir.resolve(Paths.get("state", "metadata.db"))
             dbPath.shouldExist()

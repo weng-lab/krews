@@ -112,8 +112,7 @@ internal fun createDiagnosticUploadAction(diagnosticsGSPath: String, dataDir: St
 internal fun createUploadAction(objectToUpload: String, dataDir: String, file: String): Action {
     val action = Action()
     action.imageUri = CLOUD_SDK_IMAGE
-    // -n flag make sure it does not try to upload objects that already exist
-    action.commands = listOf("sh", "-c", "gsutil cp -n $dataDir/$file $objectToUpload")
+    action.commands = listOf("sh", "-c", "gsutil cp $dataDir/$file $objectToUpload")
     action.mounts = listOf(createMount(dataDir))
     return action
 }

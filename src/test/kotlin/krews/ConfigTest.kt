@@ -11,6 +11,8 @@ import krews.core.workflow
 import krews.file.File
 import krews.file.InputFile
 import krews.file.LocalInputFile
+import krews.misc.CacheView
+import krews.misc.mapper
 import reactor.core.publisher.toMono
 
 private data class TestWorkflowParams(
@@ -117,7 +119,7 @@ private val completeTestConfig =
         }
 
         task.default {
-            env {
+            params {
                 my-shared-thing = someval
             }
 
@@ -220,6 +222,14 @@ class ConfigTests : StringSpec({
                 diskSize = Capacity(10, CapacityType.GB)
             )
         )
+    }
+
+    "Json writer with CacheView should not write InputFile.cache" {
+        val json = mapper
+            .writerWithView(CacheView::class.java)
+            .forType(File::class.java)
+            .writeValueAsString(LocalInputFile("local/path", "path", true))
+        json shouldBe """{"-type":"krews.file.LocalInputFile","local-path":"local/path","path":"path","last-modified":-1}"""
     }
 
 })

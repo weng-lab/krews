@@ -23,7 +23,7 @@ data class WorkflowConfig (
     // The maximum allowed parallelism for the system as a whole. Also see per-task parallelism
     val parallelism: Parallelism = UnlimitedParallelism,
     // Delete outputs and copied inputs that were not created during the current run if it succeeds
-    val cleanOldFiles: Boolean = true,
+    val cleanOldFiles: Boolean = false,
     // Delay between generating updated status reports (in seconds)
     val reportGenerationDelay: Long = 60
 )

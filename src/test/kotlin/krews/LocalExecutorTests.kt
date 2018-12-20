@@ -33,6 +33,7 @@ class LocalExecutorTests : StringSpec() {
     private fun config(taskParam: String) =
         """
         local-files-base-dir = $testDir
+        clean-old-files = true
         params {
             sample-files-dir = $sampleFilesDir
         }
@@ -201,7 +202,7 @@ class LocalExecutorTests : StringSpec() {
      */
     private fun runWorkflow(runTimestampOverride: Long, taskParam: String): LocalExecutor {
         val parsedConfig = ConfigFactory.parseString(config(taskParam))
-        val workflow = localFilesWorkflow.build(createParamsForConfig(parsedConfig))
+        val workflow = localFilesWorkflow().build(createParamsForConfig(parsedConfig))
         val workflowConfig = createWorkflowConfig(parsedConfig, workflow)
         val executor = spyk(LocalExecutor(workflowConfig))
         val runner = WorkflowRunner(workflow, workflowConfig, executor, runTimestampOverride)

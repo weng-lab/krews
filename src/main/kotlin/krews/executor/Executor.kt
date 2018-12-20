@@ -64,15 +64,6 @@ interface LocallyDirectedExecutor {
 
     /**
      * Download input file from remote source and load it into /inputs directory.
-<<<<<<< HEAD
-=======
-     *
-     * Should involve running a docker container defined in [InputFile.downloadFileImage] with the command
-     * in [InputFile.downloadFileCommand].
-     *
-     * This functionality also needs to exist in [executeTask]. This function is separate because the implementation
-     * may differ when we need to run it alone.
->>>>>>> d99a133607a399d1618d7334e219e82b656d08d5
      */
     fun downloadInputFile(inputFile: InputFile)
 

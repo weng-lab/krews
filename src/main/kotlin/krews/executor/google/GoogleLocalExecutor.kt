@@ -110,7 +110,7 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
 
         // Create actions to download each task input OutputFile from the current GCS run directory
         val downloadOutputFileActions = outputFilesIn.map {
-            val outputFileObject = gcsPath(bucket, gcsBase, workflowRunDir, OUTPUTS_DIR, it.path)
+            val outputFileObject = gcsPath(bucket, gcsBase, OUTPUTS_DIR, it.path)
             createDownloadAction(outputFileObject, taskRunContext.dockerDataDir, it.path)
         }
         actions.addAll(downloadOutputFileActions)
@@ -120,7 +120,7 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
 
         // Create the actions to upload each task output OutputFile
         val uploadActions = outputFilesOut.map {
-            val outputFileObject = gcsPath(bucket, gcsBase, workflowRunDir, OUTPUTS_DIR, it.path)
+            val outputFileObject = gcsPath(bucket, gcsBase, OUTPUTS_DIR, it.path)
             createUploadAction(outputFileObject, taskRunContext.dockerDataDir, it.path)
         }
         actions.addAll(uploadActions)
@@ -137,22 +137,24 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
     }
 
     override fun downloadInputFile(inputFile: InputFile) {
+        val toObjectPath = gcsObjectPath(gcsBase, INPUTS_DIR, inputFile.path)
+
         // If the other file is another google storage file, we can copy directly from bucket to bucket without downloading first
         if (inputFile is GSInputFile) {
-            copyObject(googleStorageClient, inputFile.bucket, inputFile.objectPath, bucket, gcsObjectPath(gcsBase, inputFile.path))
+            copyObject(googleStorageClient, inputFile.bucket, inputFile.objectPath, bucket, toObjectPath)
             return
         }
 
         val downloadBasePath = Paths.get(DEFAULT_INPUT_DOWNLOAD_DIR)
         val downloadedPath = downloadBasePath.resolve(inputFile.path)
         inputFile.downloadLocal(downloadBasePath)
-        uploadObject(googleStorageClient, bucket, gcsObjectPath(gcsBase, inputFile.path), downloadedPath)
+        uploadObject(googleStorageClient, bucket, toObjectPath, downloadedPath)
         Files.delete(downloadedPath)
     }
 
     override fun listFiles(baseDir: String): Set<String> {
         val bucketContents = googleStorageClient.objects().list(bucket).setPrefix(gcsObjectPath(gcsBase, baseDir)).execute()
-        return bucketContents.items.map { it.name }.toSet()
+        return bucketContents.items?.map { it.name }?.toSet() ?: setOf()
     }
 
     override fun deleteFile(file: String) {
