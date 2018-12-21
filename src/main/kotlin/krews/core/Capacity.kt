@@ -12,7 +12,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeType
 
 @JsonDeserialize(using = CapacityDeserializer::class)
 data class Capacity(val bytes: Long) {
-    constructor (value: Double, type: CapacityType) : this((value * type.bytesMultiplier).toLong())
+    constructor (value: Number, type: CapacityType) : this((value.toDouble() * type.bytesMultiplier).toLong())
     fun toType(type: CapacityType): Double {
         return bytes / type.bytesMultiplier.toDouble()
     }
@@ -32,11 +32,11 @@ enum class CapacityType(val bytesMultiplier: Long) {
     TB(GB.bytesMultiplier*1024)
 }
 
-val Number.B: Capacity get() = Capacity(this.toDouble(), CapacityType.B)
-val Number.KB: Capacity get() = Capacity(this.toDouble(), CapacityType.KB)
-val Number.MB: Capacity get() = Capacity(this.toDouble(), CapacityType.MB)
-val Number.GB: Capacity get() = Capacity(this.toDouble(), CapacityType.GB)
-val Number.TB: Capacity get() = Capacity(this.toDouble(), CapacityType.TB)
+val Number.B: Capacity get() = Capacity(this, CapacityType.B)
+val Number.KB: Capacity get() = Capacity(this, CapacityType.KB)
+val Number.MB: Capacity get() = Capacity(this, CapacityType.MB)
+val Number.GB: Capacity get() = Capacity(this, CapacityType.GB)
+val Number.TB: Capacity get() = Capacity(this, CapacityType.TB)
 
 
 internal fun stringToCapacity(str: String): Capacity {
