@@ -2,6 +2,7 @@ package krews.misc
 
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.databind.JavaType
+import com.fasterxml.jackson.databind.MapperFeature
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.PropertyNamingStrategy
 import com.fasterxml.jackson.databind.jsontype.TypeResolverBuilder
@@ -29,6 +30,7 @@ val mapper by lazy {
     mapper.setDefaultTyping(typer)
 
     mapper.propertyNamingStrategy = PropertyNamingStrategy.KEBAB_CASE
+    mapper.enable(MapperFeature.ACCEPT_CASE_INSENSITIVE_ENUMS)
     mapper
 }
 

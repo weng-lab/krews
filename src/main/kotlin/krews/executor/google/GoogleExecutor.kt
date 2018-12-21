@@ -2,7 +2,6 @@ package krews.executor.google
 
 import com.google.api.services.genomics.v2alpha1.model.*
 import krews.WORKFLOW_RUN_TIMESTAMP_ENV_VAR
-import krews.config.CapacityType
 import krews.config.WorkflowConfig
 import krews.executor.LOGS_DIR
 import krews.executor.REPORT_FILENAME

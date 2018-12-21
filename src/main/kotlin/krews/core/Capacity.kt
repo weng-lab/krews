@@ -12,7 +12,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeType
 
 @JsonDeserialize(using = CapacityDeserializer::class)
 data class Capacity(val bytes: Long) {
-    constructor (value: Long, type: CapacityType) : this(value * type.bytesMultiplier)
+    constructor (value: Double, type: CapacityType) : this((value * type.bytesMultiplier).toLong())
     fun toType(type: CapacityType): Double {
         return bytes / type.bytesMultiplier.toDouble()
     }
@@ -32,18 +32,18 @@ enum class CapacityType(val bytesMultiplier: Long) {
     TB(GB.bytesMultiplier*1024)
 }
 
-val Number.B: Capacity get() = Capacity(this.toLong(), CapacityType.B)
-val Number.KB: Capacity get() = Capacity(this.toLong(), CapacityType.KB)
-val Number.MB: Capacity get() = Capacity(this.toLong(), CapacityType.MB)
-val Number.GB: Capacity get() = Capacity(this.toLong(), CapacityType.GB)
-val Number.TB: Capacity get() = Capacity(this.toLong(), CapacityType.TB)
+val Number.B: Capacity get() = Capacity(this.toDouble(), CapacityType.B)
+val Number.KB: Capacity get() = Capacity(this.toDouble(), CapacityType.KB)
+val Number.MB: Capacity get() = Capacity(this.toDouble(), CapacityType.MB)
+val Number.GB: Capacity get() = Capacity(this.toDouble(), CapacityType.GB)
+val Number.TB: Capacity get() = Capacity(this.toDouble(), CapacityType.TB)
 
 
 internal fun stringToCapacity(str: String): Capacity {
     val regex = """(\d+)\s*([KMGT]?B)""".toRegex()
     val matchResult = regex.find(str.toUpperCase())
     val (value, type) = matchResult!!.destructured
-    return Capacity(value.toLong(), CapacityType.valueOf(type))
+    return Capacity(value.toDouble(), CapacityType.valueOf(type))
 }
 
 class CapacityDeserializer : StdDeserializer<Capacity>(Capacity::class.java) {

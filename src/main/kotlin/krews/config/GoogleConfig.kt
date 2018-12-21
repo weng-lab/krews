@@ -1,6 +1,7 @@
 package krews.config
 
 import krews.core.*
+import kotlin.math.roundToInt
 
 
 data class GoogleWorkflowConfig(
@@ -94,12 +95,16 @@ enum class GoogleMachineClass(internal val prefix: String, protected val availab
     private fun cpusToMachineType(cpus: Int) = "$prefix-$cpus"
 
     open fun machineType(cpus: Int?, mem: Capacity?): String {
-        // If we have no cpu or machine type default to the first available machine type
-        if (cpus == null && mem == null) return cpusToMachineType(availableSpecs!![0].cpus)
+        // If we're calling this function, assume availableSpecs is not null
+        val availableSpecs = availableSpecs!!
 
-        // If we don't know cpus, match the memory specs for available machine types to the highest without going over.
-        val cpusUsed = cpus ?: availableSpecs!!.last { mem!!.inB() < it.mem.inB() }.cpus
-        return cpusToMachineType(cpusUsed)
+        // Find the specs required to fulfill the given cpus requirement
+        val specsNeededForCpus = if (cpus == null) availableSpecs[0] else availableSpecs.firstOrNull { cpus <= it.cpus }?: availableSpecs.last()
+
+        // Find the specs required to fulfill the given memory requirement
+        val specsNeededForMem = if (mem == null) availableSpecs[0] else availableSpecs.firstOrNull { mem.inB() <= it.mem.inB() }?: availableSpecs.last()
+
+        return cpusToMachineType(Math.max(specsNeededForCpus.cpus, specsNeededForMem.cpus))
     }
 }
 
@@ -109,16 +114,16 @@ private val maxMemPerCpu = 6.5.GB
 fun googleMachineType(googleConfig: GoogleTaskConfig?, runtimeCpus: Int?, runtimeMem: Capacity?): String {
     if (googleConfig?.machineType != null) return googleConfig.machineType
 
-    val machineClass = googleConfig?.machineClass
-        ?: if (googleConfig?.memPerCpu != null) GoogleMachineClass.CUSTOM else GoogleMachineClass.STANDARD
-
-    if (machineClass != GoogleMachineClass.CUSTOM) {
-        return machineClass.machineType(googleConfig?.cpus, googleConfig?.mem)
-    }
-
     var cpus = googleConfig?.cpus ?: runtimeCpus
     var mem = googleConfig?.mem ?: runtimeMem
     var memPerCpu = googleConfig?.memPerCpu
+
+    val machineClass = googleConfig?.machineClass
+        ?: if (memPerCpu != null) GoogleMachineClass.CUSTOM else GoogleMachineClass.STANDARD
+
+    if (machineClass != GoogleMachineClass.CUSTOM) {
+        return machineClass.machineType(cpus, mem)
+    }
 
     if (cpus == null && mem == null) {
         return GoogleMachineClass.STANDARD.machineType(null, null)
@@ -138,7 +143,7 @@ fun googleMachineType(googleConfig: GoogleTaskConfig?, runtimeCpus: Int?, runtim
             // If the given memPerCpu is lower than minimum, set to minimum
             if (memPerCpu.inB() < minMemPerCpu.inB()) memPerCpu = minMemPerCpu
             // If the given memPerCpu is greater than maximum, set to maximum
-            if (memPerCpu.inB() < minMemPerCpu.inB()) memPerCpu = maxMemPerCpu
+            if (memPerCpu.inB() > maxMemPerCpu.inB()) memPerCpu = maxMemPerCpu
 
             if (cpus == null) {
                 cpus = (mem!!.inB() / memPerCpu.inB()).toInt()
@@ -149,9 +154,9 @@ fun googleMachineType(googleConfig: GoogleTaskConfig?, runtimeCpus: Int?, runtim
     }
 
     // Do a final cpu to memory ratio check, adjusting memory up or down as needed
-    val computedMemPerCpu = (cpus / mem.inB()).B
+    val computedMemPerCpu = (mem.inB().toDouble() / cpus).B
     if (computedMemPerCpu.inB() < minMemPerCpu.inB()) mem = (cpus * minMemPerCpu.inB()).B
     if (computedMemPerCpu.inB() > maxMemPerCpu.inB()) mem = (cpus * minMemPerCpu.inB()).B
 
-    return "${machineClass.prefix}-$cpus-$mem"
+    return "${machineClass.prefix}-$cpus-${mem.inMB().roundToInt()}"
 }

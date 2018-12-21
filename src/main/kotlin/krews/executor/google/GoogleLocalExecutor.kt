@@ -5,6 +5,7 @@ import com.google.api.services.genomics.v2alpha1.model.*
 import krews.core.CapacityType
 import krews.config.TaskConfig
 import krews.config.WorkflowConfig
+import krews.config.googleMachineType
 import krews.core.TaskRunContext
 import krews.executor.*
 import krews.file.GSInputFile
@@ -18,9 +19,6 @@ import java.nio.file.Paths
 private val log = KotlinLogging.logger {}
 
 const val CLOUD_SDK_IMAGE = "google/cloud-sdk:alpine"
-
-// Default VM machine type if not define in task configuration
-const val DEFAULT_MACHINE_TYPE = "n1-standard-1"
 
 const val DEFAULT_INPUT_DOWNLOAD_DIR = "/data"
 
@@ -80,7 +78,7 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
 
         val virtualMachine = VirtualMachine()
         run.pipeline.resources.virtualMachine = virtualMachine
-        virtualMachine.machineType = taskConfig.google?.machineType ?: DEFAULT_MACHINE_TYPE
+        virtualMachine.machineType = googleMachineType(taskConfig.google, taskRunContext.cpus, taskRunContext.memory)
 
         val serviceAccount = ServiceAccount()
         virtualMachine.serviceAccount = serviceAccount

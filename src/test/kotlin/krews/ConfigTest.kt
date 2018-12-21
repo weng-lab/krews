@@ -9,6 +9,7 @@ import io.kotlintest.specs.StringSpec
 import krews.config.*
 import krews.core.Capacity
 import krews.core.CapacityType
+import krews.core.GB
 import krews.core.workflow
 import krews.file.File
 import krews.file.InputFile
@@ -201,7 +202,7 @@ class ConfigTests : StringSpec({
             ),
             google = GoogleTaskConfig(
                 machineType = "n1-standard-2",
-                diskSize = Capacity(30, CapacityType.GB)
+                diskSize = 30.GB
             )
         )
 
@@ -211,7 +212,7 @@ class ConfigTests : StringSpec({
             ),
             google = GoogleTaskConfig(
                 machineType = "n1-standard-1",
-                diskSize = Capacity(5, CapacityType.GB)
+                diskSize = 5.GB
             )
         )
 
@@ -221,7 +222,7 @@ class ConfigTests : StringSpec({
             ),
             google = GoogleTaskConfig(
                 machineType = "n1-standard-2",
-                diskSize = Capacity(10, CapacityType.GB)
+                diskSize = 10.GB
             )
         )
     }
