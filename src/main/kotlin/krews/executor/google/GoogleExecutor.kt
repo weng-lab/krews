@@ -16,7 +16,7 @@ private val log = KotlinLogging.logger {}
 const val REMOTE_BIN_DIR = "bin"
 const val DIRECTOR_MACHINE_TYPE = "n1-standard-1"
 const val MASTER_LOG_DIR = "master"
-const val MASTER_RUN_DIR = "/run"
+const val MASTER_RUN_DIR = "/app"
 const val MASTER_IMAGE = "openjdk:8"
 
 class GoogleExecutor(workflowConfig: WorkflowConfig) : RemoteDirectedExecutor {
@@ -112,10 +112,12 @@ class GoogleExecutor(workflowConfig: WorkflowConfig) : RemoteDirectedExecutor {
 internal fun createExecuteWorkflowAction(executableFilename: String, configFilename: String, workflowTime: DateTime): Action {
     val action = Action()
     action.imageUri = MASTER_IMAGE
-    action.mounts = listOf(createMount(DEFAULT_INPUT_DOWNLOAD_DIR))
+    action.mounts = listOf(createMount(MASTER_RUN_DIR))
     action.environment = mapOf(WORKFLOW_RUN_TIMESTAMP_ENV_VAR to "${workflowTime.millis}")
     val cmd =
         """
+        set -x
+        ls -l $MASTER_RUN_DIR
         ${if (executableFilename.endsWith(".jar")) "java -jar " else ""}$MASTER_RUN_DIR/$executableFilename \
             --on google-local \
             --config $MASTER_RUN_DIR/$configFilename
