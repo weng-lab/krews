@@ -13,6 +13,7 @@ import krews.executor.google.GoogleExecutor
 import krews.executor.google.GoogleLocalExecutor
 import krews.executor.local.LocalExecutor
 import java.io.File
+import java.nio.file.Files
 import java.nio.file.Paths
 
 
@@ -40,6 +41,7 @@ class KrewsApp(private val workflowBuilder: WorkflowBuilder) : CliktCommand() {
         .convert { Paths.get(it) }
 
     override fun run() {
+        if (config != null && !Files.exists(config)) throw Exception("Given config $config not found")
         val hoconConfig = if (config != null) ConfigFactory.parseFile(config!!.toFile()) else ConfigFactory.empty()
         val params = createParamsForConfig(hoconConfig)
         val workflow = workflowBuilder.build(params)
