@@ -18,7 +18,7 @@ const val DEFAULT_TASK_CONFIG_NAME = "default"
     mapper
 }
 
-@PublishedApi internal inline fun <reified T> convertConfigMap(raw: Map<String, Any>) =
+@PublishedApi internal inline fun <reified T> convertConfigMap(raw: Map<String, Any>): T =
     mapper.readerWithView(ConfigView::class.java).forType(T::class.java).readValue<T>(noDefaultTypesMapper.writeValueAsBytes(raw))
 
 

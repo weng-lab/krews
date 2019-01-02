@@ -6,14 +6,16 @@ import org.reactivestreams.Publisher
 class WorkflowBuilder internal constructor(val name: String, private val init: WorkflowBuilder.() -> Unit) {
     @PublishedApi internal val tasks: MutableMap<String, Task<*, *>> = mutableMapOf()
     @PublishedApi internal lateinit var rawParams: Map<String, Any>
-    @PublishedApi internal var params: Any? = null
+    @PublishedApi internal var paramsOverride: Any? = null
 
-    inline fun <reified P> params(): P {
-        if (params == null || params !is P) {
-            params = convertConfigMap<P>(rawParams)
-        }
-        return params as P
+    fun importWorkflow(workflowBuilder: WorkflowBuilder, params: Any? = null): Workflow {
+        workflowBuilder.paramsOverride = params
+        val imported = workflowBuilder.build(mapOf())
+        this.tasks.putAll(imported.tasks)
+        return imported
     }
+
+    inline fun <reified P> params(): P = if (paramsOverride != null && paramsOverride is P) paramsOverride as P else convertConfigMap(rawParams)
 
     inline fun <reified I : Any, reified O : Any> task(name: String,
                                                        inputPub: Publisher<out I>,
