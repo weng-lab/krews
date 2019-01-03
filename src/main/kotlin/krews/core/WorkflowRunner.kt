@@ -157,7 +157,9 @@ class WorkflowRunner(
     private fun <I : Any, O : Any> connectTask(task: Task<I, O>, taskRunner: TaskRunner, workerPool: ExecutorService) {
         val taskConfig = workflowConfig.tasks[task.name]
         val executeFn: (TaskRunContext<I, O>) -> O = { taskRunContext ->
-            taskRunner.run(task, taskRunContext)
+            val output = taskRunner.run(task, taskRunContext)
+            executor.uploadFile(DB_FILENAME)
+            output
         }
 
         task.connect(taskConfig, executeFn, workerPool)
