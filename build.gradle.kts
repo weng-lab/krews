@@ -2,13 +2,13 @@ import com.jfrog.bintray.gradle.BintrayExtension
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-    kotlin("jvm") version "1.3.10"
+    kotlin("jvm") version "1.3.11"
     id("maven-publish")
     id("com.jfrog.bintray") version "1.8.1"
 }
 
 group = "io.krews"
-version = "0.4.6"
+version = "0.4.7"
 
 repositories {
     maven { setUrl("http://dl.bintray.com/kotlin/kotlin-eap") }

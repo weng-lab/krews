@@ -101,6 +101,9 @@ class GoogleExecutor(workflowConfig: WorkflowConfig) : RemoteDirectedExecutor {
             |You can check on the status of the job by checking:
             |    - The status report at $reportPath
             |    - The master logs at $logPath
+            |
+            |You can stop the pipeline (both master and all running task nodes) with the following:
+            |   gcloud alpha genomics operations cancel ${initialOp.name}
             |""".trimMargin()
         }
     }

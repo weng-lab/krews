@@ -14,6 +14,7 @@ import krews.file.OutputFile
 import mu.KotlinLogging
 import java.nio.file.Files
 import java.nio.file.Paths
+import java.util.concurrent.ConcurrentHashMap
 
 
 private val log = KotlinLogging.logger {}
@@ -28,6 +29,7 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
         { "google workflow config must be present to use Google Local Executor" }
     private val bucket = googleConfig.storageBucket
     private val gcsBase = googleConfig.storageBaseDir
+    private val runningOperations: MutableSet<String> = ConcurrentHashMap.newKeySet<String>()
 
     override fun downloadFile(path: String) {
         val localFilePath = Paths.get(workflowConfig.localFilesBaseDir, path)
@@ -131,7 +133,14 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
         // Create action to copy logs to GCS after everything else is complete
         actions.add(createLogsAction(logPath))
 
-        submitJobAndWait(run, googleConfig.jobCompletionPollInterval, "task run $taskRunId")
+        submitJobAndWait(run, googleConfig.jobCompletionPollInterval, "task run $taskRunId", runningOperations)
+    }
+
+    override fun shutdownRunningTasks() {
+        for(op in runningOperations) {
+            log.info { "Canceling operation $op..." }
+            googleGenomicsClient.projects().operations().cancel(op, null)
+        }
     }
 
     override fun downloadInputFile(inputFile: InputFile) {
@@ -188,10 +197,11 @@ internal fun createDownloadRemoteFileAction(inputFile: InputFile, dataDir: Strin
  * Submits a job to the pipelines api and polls periodically until the job is complete.
  * The current thread will be blocked until the job is complete.
  */
-internal fun submitJobAndWait(run: RunPipelineRequest, jobCompletionPollInterval: Int, context: String) {
+internal fun submitJobAndWait(run: RunPipelineRequest, jobCompletionPollInterval: Int, context: String, runningOperations: MutableSet<String>) {
     log.info { "Submitting pipeline job for task run: $run" }
     googleGenomicsClient.projects().operations()
     val initialOp: Operation = googleGenomicsClient.pipelines().run(run).execute()
+    runningOperations.add(initialOp.name)
 
     log.info { "Pipeline job submitted. Operation returned: \"${initialOp.name}\". " +
             "Will check for completion every $jobCompletionPollInterval seconds" }
@@ -199,6 +209,7 @@ internal fun submitJobAndWait(run: RunPipelineRequest, jobCompletionPollInterval
         Thread.sleep(jobCompletionPollInterval * 1000L)
         val op: Operation = googleGenomicsClient.projects().operations().get(initialOp.name).execute()
         if (op.done) {
+            runningOperations.remove(op.name)
             if (op.error != null) {
                 throw Exception("Error occurred during $context (${op.name}) execution. Operation Response: ${op.toPrettyString()}")
             }

@@ -15,7 +15,6 @@ import java.util.concurrent.ExecutorService
 import java.util.function.Supplier
 
 const val DEFAULT_DOCKER_DATA_DIR = "/data"
-const val DEFAULT_TASK_PARALLELISM = 256
 
 private val log = KotlinLogging.logger {}
 
@@ -54,5 +53,6 @@ class Task<I : Any, O : Any> @PublishedApi internal constructor(
 
 internal fun parToMaxConcurrency(par: Parallelism?) = when (par) {
     is LimitedParallelism -> par.limit
-    null, is UnlimitedParallelism -> DEFAULT_TASK_PARALLELISM
+    // If "Unlimited" use an arbitrarily high number (that's an exponent of two) as required by Reactor's flatMap
+    null, is UnlimitedParallelism -> 262144
 }

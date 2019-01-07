@@ -21,6 +21,7 @@ import java.nio.file.Paths
 import java.nio.file.StandardOpenOption
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.stream.Collectors
@@ -36,10 +37,13 @@ class WorkflowRunner(
 ) {
     private val db: Database
     private lateinit var workflowRun: WorkflowRun
+    private val reportPool: ScheduledExecutorService
 
     init {
         executor.downloadFile(DB_FILENAME)
         db = migrateAndConnectDb(Paths.get(workflowConfig.localFilesBaseDir, DB_FILENAME))
+        val reportThreadFactory = BasicThreadFactory.Builder().namingPattern("report-gen-%d").build()
+        reportPool = Executors.newSingleThreadScheduledExecutor(reportThreadFactory)
     }
 
     fun run() {
@@ -55,8 +59,6 @@ class WorkflowRunner(
         log.info { "Workflow run created successfully!" }
 
         // Create an executor service for periodically generating reports
-        val reportThreadFactory = BasicThreadFactory.Builder().namingPattern("report-gen-%d").build()
-        val reportPool = Executors.newSingleThreadScheduledExecutor(reportThreadFactory)
         reportPool.scheduleWithFixedDelay({ generateReport() },
             workflowConfig.reportGenerationDelay, workflowConfig.reportGenerationDelay, TimeUnit.SECONDS)
 
@@ -104,12 +106,7 @@ class WorkflowRunner(
             }
         }
 
-        // Stop the periodic report generation executor service and generate one final report.
-        reportPool.shutdown()
-        reportPool.awaitTermination(3000, TimeUnit.SECONDS)
-        generateReport()
-
-        executor.uploadFile(DB_FILENAME)
+        onShutdown()
     }
 
     private fun runWorkflow(): Boolean {
@@ -163,6 +160,15 @@ class WorkflowRunner(
         }
 
         task.connect(taskConfig, executeFn, workerPool)
+    }
+
+    fun onShutdown() {
+        reportPool.shutdown()
+        executor.uploadFile(DB_FILENAME)
+
+        // Stop the periodic report generation executor service and generate one final report.
+        reportPool.awaitTermination(1000, TimeUnit.SECONDS)
+        generateReport()
     }
 
     private fun generateReport() {

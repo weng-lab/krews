@@ -2,7 +2,10 @@ package krews.file
 
 import com.fasterxml.jackson.annotation.JsonView
 import krews.misc.ConfigView
+import mu.KotlinLogging
 import java.nio.file.Path
+
+private val log = KotlinLogging.logger {}
 
 /**
  * Remote files downloaded and used for tasks.
@@ -16,7 +19,14 @@ import java.nio.file.Path
 abstract class InputFile(path: String,
                          @field:JsonView(ConfigView::class) val cache: Boolean = false) : File(path) {
 
-    val lastModified: Long by lazy { fetchLastModified() }
+    val lastModified: Long by lazy {
+        try {
+            fetchLastModified()
+        } catch(e: Exception) {
+            log.error { "Error fetching last modified date for InputFile with path $path" }
+            throw e
+        }
+    }
 
     /**
      * Retrieve the last modified timestamp

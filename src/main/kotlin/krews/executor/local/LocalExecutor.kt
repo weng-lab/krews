@@ -22,6 +22,7 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.nio.file.StandardCopyOption
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.streams.toList
 
 private val log = KotlinLogging.logger {}
@@ -32,6 +33,8 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
     private val workflowBasePath = Paths.get(workflowConfig.localFilesBaseDir).toAbsolutePath()!!
     private val inputsPath = workflowBasePath.resolve(INPUTS_DIR)
     private val outputsPath = workflowBasePath.resolve(OUTPUTS_DIR)
+
+    private val runningContainers: MutableSet<String> = ConcurrentHashMap.newKeySet<String>()
 
     override fun downloadFile(path: String) {}
     override fun uploadFile(path: String) {}
@@ -90,6 +93,7 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
             // Start the container and wait for it to finish processing
             log.info { "Starting container $containerId..." }
             dockerClient.startContainerCmd(containerId).exec()
+            runningContainers.add(containerId)
 
             val logBasePath = runBasePath.resolve(LOGS_DIR).resolve(taskRunId.toString())
 
@@ -97,6 +101,7 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
                 log.info { "Waiting for container $containerId to finish..." }
                 val statusCode =
                     dockerClient.waitContainerCmd(containerId).exec(WaitContainerResultCallback()).awaitStatusCode()
+                runningContainers.remove(containerId)
                 if (statusCode > 0) {
                     // Copy all files in mounted docker data directory to task diagnostics directory
                     val taskDiagnosticsDir = runBasePath.resolve(DIAGNOSTICS_DIR).resolve(taskRunId.toString())
@@ -134,6 +139,13 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
             Files.walk(mountDir)
                 .sorted(Comparator.reverseOrder())
                 .forEach { Files.delete(it) }
+        }
+    }
+
+    override fun shutdownRunningTasks() {
+        for(containerId in runningContainers) {
+            log.info { "Stopping container $containerId..." }
+            dockerClient.stopContainerCmd(containerId).exec()
         }
     }
 

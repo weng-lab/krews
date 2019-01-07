@@ -46,6 +46,8 @@ interface LocallyDirectedExecutor {
      * Execute task for the environment. Will consist of running a docker container to complete the task, and another
      * for downloading the given input files from remote sources, and possibly more for environment specific requirements.
      *
+     * This function should block until the task is complete.
+     *
      * @param outputFilesIn: Output files coming from a task's current "Input Element." These will already exist in the
      * current environment's storage.
      * @param outputFilesOut: Output files coming from a task's current "Output Element." These need to end up in the
@@ -61,6 +63,12 @@ interface LocallyDirectedExecutor {
                     outputFilesOut: Set<OutputFile>,
                     cachedInputFiles: Set<InputFile>,
                     downloadInputFiles: Set<InputFile>)
+
+    /**
+     * Shuts down all tasks currently executing.
+     * This function should NOT block if possible. This will run on SIGTERM. Fire-and-forget shutdown signalling is ok here.
+     */
+    fun shutdownRunningTasks()
 
     /**
      * Download input file from remote source and load it into /inputs directory.

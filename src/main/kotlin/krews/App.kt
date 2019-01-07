@@ -56,6 +56,13 @@ class KrewsApp(private val workflowBuilder: WorkflowBuilder) : CliktCommand() {
 
             val runTimestampOverride = System.getenv(WORKFLOW_RUN_TIMESTAMP_ENV_VAR)?.toLong()
             val runner = WorkflowRunner(workflow, workflowConfig, executor, runTimestampOverride)
+
+            // Add shutdown hook to stop all running tasks and other cleanup work if master is stopped.
+            Runtime.getRuntime().addShutdownHook(Thread {
+                executor.shutdownRunningTasks()
+                runner.onShutdown()
+            })
+
             runner.run()
         } else {
             val executor = when(on) {
