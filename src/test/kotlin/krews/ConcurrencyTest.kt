@@ -8,11 +8,14 @@ import io.kotlintest.shouldBe
 import io.kotlintest.specs.StringSpec
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.spyk
 import krews.config.createParamsForConfig
 import krews.config.createWorkflowConfig
+import krews.core.Workflow
 import krews.core.WorkflowRunner
 import krews.core.workflow
 import krews.executor.LocallyDirectedExecutor
+import mu.KotlinLogging
 import reactor.core.publisher.Mono
 import reactor.core.publisher.toFlux
 import reactor.core.publisher.toMono
@@ -21,6 +24,8 @@ import java.nio.file.Paths
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+
+private val log = KotlinLogging.logger {}
 
 class ConcurrencyTest : StringSpec(){
     override fun tags() = setOf(Unit)
@@ -158,7 +163,7 @@ class ConcurrencyTest : StringSpec(){
 
             runner.run()
             task1Count.get() shouldBe 15
-            task2Count.get() shouldBeLessThan 5
+            task2Count.get() shouldBe 14
         }
 
     }

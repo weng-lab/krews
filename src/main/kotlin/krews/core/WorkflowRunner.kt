@@ -8,8 +8,7 @@ import krews.executor.*
 import krews.misc.createReport
 import mu.KotlinLogging
 import org.apache.commons.lang3.concurrent.BasicThreadFactory
-import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.deleteWhere
+import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.joda.time.DateTime
 import reactor.core.Scannable
@@ -135,20 +134,19 @@ class WorkflowRunner(
             leafOutputs.removeAll(taskParents)
         }
 
-        val successful = AtomicBoolean(true)
-
         // Trigger workflow by subscribing to leaf task outputs...
         val leavesFlux = Flux.merge(leafOutputs)
-            .onErrorContinue { t: Throwable, _ ->
-                successful.set(false)
-                log.error(t) { }
-            }
             .subscribeOn(Schedulers.elastic())
 
         // and block until it's done
         leavesFlux.blockLast()
 
-        return successful.get()
+        val failedTasks = transaction(db) {
+            TaskRuns.select {
+                TaskRuns.workflowRunId eq workflowRun.id and TaskRuns.completedSuccessfully.eq(false)
+            }.count()
+        }
+        return failedTasks == 0
     }
 
     private fun <I : Any, O : Any> connectTask(task: Task<I, O>, taskRunner: TaskRunner, workerPool: ExecutorService) {

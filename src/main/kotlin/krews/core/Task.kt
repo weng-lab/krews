@@ -37,7 +37,10 @@ class Task<I : Any, O : Any> @PublishedApi internal constructor(
             Mono.fromFuture(CompletableFuture.supplyAsync(Supplier {
                 processInput(it, rawTaskParams, executeFn)
             }, pool))
-        }, parToMaxConcurrency(taskConfig?.parallelism))
+        }, parToMaxConcurrency(taskConfig?.parallelism)).onErrorContinue { t: Throwable, _ ->
+            log.error(t) { }
+        }
+
         processed.subscribe(outputPub as TopicProcessor)
     }
 
