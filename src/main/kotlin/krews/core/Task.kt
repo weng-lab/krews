@@ -45,7 +45,6 @@ class Task<I : Any, O : Any> @PublishedApi internal constructor(
     }
 
     private fun processInput(input: I, rawTaskParams: Map<String, Any>, executeFn: (TaskRunContext<I, O>) -> Any): O {
-        log.info { "In processInput for task $name" }
         val taskRunContextBuilder = TaskRunContextBuilder(input, rawTaskParams, outputClass)
         taskRunContextBuilder.taskRunContextInit()
         val taskRunContext = taskRunContextBuilder.build()

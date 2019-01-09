@@ -24,6 +24,8 @@ data class WorkflowConfig (
     val parallelism: Parallelism = UnlimitedParallelism,
     // Delete outputs and copied inputs that were not created during the current run if it succeeds
     val cleanOldFiles: Boolean = false,
+    // Delay between uploading the latest database to project working storage
+    val dbUploadDelay: Long = 60,
     // Delay between generating updated status reports (in seconds)
     val reportGenerationDelay: Long = 60
 )

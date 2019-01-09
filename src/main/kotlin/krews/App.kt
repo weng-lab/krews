@@ -12,10 +12,13 @@ import krews.core.*
 import krews.executor.google.GoogleExecutor
 import krews.executor.google.GoogleLocalExecutor
 import krews.executor.local.LocalExecutor
+import mu.KotlinLogging
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Paths
 
+
+private val log = KotlinLogging.logger {}
 
 // The name of an environment variable used for overriding the timestamp associated with used for workflow runs
 // Required for remote executors logging. Should never be used directly by users.
@@ -65,6 +68,9 @@ class KrewsApp(private val workflowBuilder: WorkflowBuilder) : CliktCommand() {
 
             runner.run()
         } else {
+            val maxHeapSize = Runtime.getRuntime().maxMemory()
+            log.info { "Krews running with max heap size $maxHeapSize" }
+
             val executor = when(on) {
                 Executors.GOOGLE -> GoogleExecutor(workflowConfig)
                 else -> throw Exception("Unsupported executor")

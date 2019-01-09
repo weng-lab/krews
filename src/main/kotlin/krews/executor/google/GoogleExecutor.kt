@@ -121,7 +121,7 @@ internal fun createExecuteWorkflowAction(executableFilename: String, configFilen
         """
         set -x
         ls -l $MASTER_RUN_DIR
-        ${if (executableFilename.endsWith(".jar")) "java -jar " else ""}$MASTER_RUN_DIR/$executableFilename \
+        ${if (executableFilename.endsWith(".jar")) "java -Xmx3g -jar " else ""}$MASTER_RUN_DIR/$executableFilename \
             --on google-local \
             --config $MASTER_RUN_DIR/$configFilename
         """.trimIndent()

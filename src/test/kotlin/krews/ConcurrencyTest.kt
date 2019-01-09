@@ -9,6 +9,7 @@ import io.kotlintest.specs.StringSpec
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.spyk
+import io.mockk.verify
 import krews.config.createParamsForConfig
 import krews.config.createWorkflowConfig
 import krews.core.Workflow
@@ -61,7 +62,12 @@ class ConcurrencyTest : StringSpec(){
             output = input
             command = ""
         }
-        outputsCaptured = task2.outputPub.buffer().toMono()
+        val task3 = task<Int,Int>("task3", task2.outputPub) {
+            dockerImage = "task3"
+            output = input
+            command = ""
+        }
+        outputsCaptured = task3.outputPub.buffer().toMono()
     }
 
     override fun afterTest(description: Description, result: TestResult) {
@@ -158,13 +164,30 @@ class ConcurrencyTest : StringSpec(){
             every {
                 executor.executeTask(any(), any(), any(), match { it.dockerImage == "task2" }, any(), any(), any(), any())
             } answers {
-                task2Count.incrementAndGet()
+                val count = task2Count.incrementAndGet()
+                if (count == 10) {
+                    throw Exception("Test Error 2")
+                }
+            }
+
+            val task3Count = AtomicInteger()
+            every {
+                executor.executeTask(any(), any(), any(), match { it.dockerImage == "task3" }, any(), any(), any(), any())
+            } answers {
+                // Make sure onShutdown doesn't happen before the workflow is complete
+                verify(exactly = 0) { runner.onShutdown() }
+                task3Count.incrementAndGet()
             }
 
             runner.run()
+            verify(exactly = 1) { runner.onShutdown() }
             task1Count.get() shouldBe 15
             task2Count.get() shouldBe 14
+            task3Count.get() shouldBe 13
+
         }
+
+
 
     }
 
@@ -175,7 +198,7 @@ class ConcurrencyTest : StringSpec(){
         val workflow = testWorkflow.build(createParamsForConfig(parsedConfig))
         val workflowConfig = createWorkflowConfig(parsedConfig, workflow)
         val executor = mockk<LocallyDirectedExecutor>(relaxed = true)
-        val runner = WorkflowRunner(workflow, workflowConfig, executor)
+        val runner = spyk(WorkflowRunner(workflow, workflowConfig, executor))
         return ExecutorAndRunner(executor, runner)
     }
 

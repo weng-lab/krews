@@ -37,10 +37,15 @@ class WorkflowRunner(
     private val db: Database
     private lateinit var workflowRun: WorkflowRun
     private val reportPool: ScheduledExecutorService
+    private val dbUploadPool: ScheduledExecutorService
 
     init {
         executor.downloadFile(DB_FILENAME)
         db = migrateAndConnectDb(Paths.get(workflowConfig.localFilesBaseDir, DB_FILENAME))
+
+        val dbUploadThreadFactory = BasicThreadFactory.Builder().namingPattern("db-upload-%d").build()
+        dbUploadPool = Executors.newSingleThreadScheduledExecutor(dbUploadThreadFactory)
+
         val reportThreadFactory = BasicThreadFactory.Builder().namingPattern("report-gen-%d").build()
         reportPool = Executors.newSingleThreadScheduledExecutor(reportThreadFactory)
     }
@@ -57,9 +62,15 @@ class WorkflowRunner(
         }
         log.info { "Workflow run created successfully!" }
 
+        // Create an executor service for periodically uploading the db file
+        val dbUploadDelay = Math.max(workflowConfig.dbUploadDelay, 30)
+        dbUploadPool.scheduleWithFixedDelay({ uploadDb() },
+            dbUploadDelay, dbUploadDelay, TimeUnit.SECONDS)
+
         // Create an executor service for periodically generating reports
+        val reportGenerationDelay = Math.max(workflowConfig.reportGenerationDelay, 30)
         reportPool.scheduleWithFixedDelay({ generateReport() },
-            workflowConfig.reportGenerationDelay, workflowConfig.reportGenerationDelay, TimeUnit.SECONDS)
+            reportGenerationDelay, reportGenerationDelay, TimeUnit.SECONDS)
 
         var workflowRunSuccessful: Boolean
         try {
@@ -152,9 +163,7 @@ class WorkflowRunner(
     private fun <I : Any, O : Any> connectTask(task: Task<I, O>, taskRunner: TaskRunner, workerPool: ExecutorService) {
         val taskConfig = workflowConfig.tasks[task.name]
         val executeFn: (TaskRunContext<I, O>) -> O = { taskRunContext ->
-            val output = taskRunner.run(task, taskRunContext)
-            executor.uploadFile(DB_FILENAME)
-            output
+            taskRunner.run(task, taskRunContext)
         }
 
         task.connect(taskConfig, executeFn, workerPool)
@@ -162,12 +171,16 @@ class WorkflowRunner(
 
     fun onShutdown() {
         reportPool.shutdown()
-        executor.uploadFile(DB_FILENAME)
-
-        // Stop the periodic report generation executor service and generate one final report.
+        dbUploadPool.shutdown()
+        // Stop the periodic db upload and report generation executor service and generate one final report.
         reportPool.awaitTermination(1000, TimeUnit.SECONDS)
+        dbUploadPool.awaitTermination(1000, TimeUnit.SECONDS)
+
+        uploadDb()
         generateReport()
     }
+
+    private fun uploadDb() = executor.uploadFile(DB_FILENAME)
 
     private fun generateReport() {
         val reportFile = "$RUN_DIR/${workflowRun.startTime}/$REPORT_FILENAME"
