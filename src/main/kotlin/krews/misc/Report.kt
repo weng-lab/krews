@@ -110,7 +110,6 @@ private fun createReport(workflowRun: WorkflowRun, taskRuns: Iterable<TaskRun>, 
                 }
             }
 
-            script(src = "https://cdn.jsdelivr.net/npm/foundation-sites@6.5.1/dist/js/foundation.min.js") {}
             script(src = "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@9.13.1/build/highlight.min.js") {}
             script { unsafe { raw("hljs.initHighlightingOnLoad();") } }
             script(src = "https://code.jquery.com/jquery-3.2.1.slim.min.js") {}

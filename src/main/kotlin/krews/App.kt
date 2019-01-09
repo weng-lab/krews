@@ -57,6 +57,9 @@ class KrewsApp(private val workflowBuilder: WorkflowBuilder) : CliktCommand() {
                 else -> throw Exception("Unsupported executor")
             }
 
+            val maxHeapSize = Runtime.getRuntime().maxMemory()
+            log.info { "Krews running with max heap size $maxHeapSize" }
+
             val runTimestampOverride = System.getenv(WORKFLOW_RUN_TIMESTAMP_ENV_VAR)?.toLong()
             val runner = WorkflowRunner(workflow, workflowConfig, executor, runTimestampOverride)
 
@@ -68,9 +71,6 @@ class KrewsApp(private val workflowBuilder: WorkflowBuilder) : CliktCommand() {
 
             runner.run()
         } else {
-            val maxHeapSize = Runtime.getRuntime().maxMemory()
-            log.info { "Krews running with max heap size $maxHeapSize" }
-
             val executor = when(on) {
                 Executors.GOOGLE -> GoogleExecutor(workflowConfig)
                 else -> throw Exception("Unsupported executor")
