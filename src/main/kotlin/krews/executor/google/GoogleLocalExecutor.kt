@@ -12,6 +12,7 @@ import krews.file.GSInputFile
 import krews.file.InputFile
 import krews.file.OutputFile
 import mu.KotlinLogging
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.concurrent.ConcurrentHashMap
@@ -47,9 +48,9 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
         }
     }
 
-    override fun uploadFile(path: String) {
-        val localFilePath = Paths.get(workflowConfig.localFilesBaseDir, path)
-        val storageObject = gcsObjectPath(gcsBase, path)
+    override fun uploadFile(fromPath: String, toPath: String) {
+        val localFilePath = Paths.get(workflowConfig.localFilesBaseDir, fromPath)
+        val storageObject = gcsObjectPath(gcsBase, toPath)
         log.info { "Pushing file $localFilePath to object $storageObject in bucket $bucket" }
         uploadObject(googleStorageClient, bucket, storageObject, localFilePath)
     }
@@ -201,21 +202,46 @@ internal fun submitJobAndWait(run: RunPipelineRequest, jobCompletionPollInterval
     log.info { "Submitting pipeline job for task run: $run" }
     googleGenomicsClient.projects().operations()
     val initialOp: Operation = googleGenomicsClient.pipelines().run(run).execute()
-    runningOperations.add(initialOp.name)
+    val opName = initialOp.name
+    runningOperations.add(opName)
 
-    log.info { "Pipeline job submitted. Operation returned: \"${initialOp.name}\". " +
+    log.info { "Pipeline job submitted. Operation returned: \"$opName\". " +
             "Will check for completion every $jobCompletionPollInterval seconds" }
+    var retry = false
+    var retryCount = 0
     do {
-        Thread.sleep(jobCompletionPollInterval * 1000L)
-        val op: Operation = googleGenomicsClient.projects().operations().get(initialOp.name).execute()
-        if (op.done) {
-            runningOperations.remove(op.name)
-            if (op.error != null) {
-                throw Exception("Error occurred during $context (${op.name}) execution. Operation Response: ${op.toPrettyString()}")
-            }
-            log.info { "Pipeline job for $context (${op.name}) completed successfully. Results: ${op.toPrettyString()}" }
+        var done = false
+        if (retry) {
+            retry = false
+            retryCount++
         } else {
-            log.info { "Pipeline job for task run $context (${op.name}) still running..." }
+            Thread.sleep(jobCompletionPollInterval * 1000L)
+            retryCount = 0
         }
-    } while (!op.done)
+        try {
+            val op: Operation = googleGenomicsClient.projects().operations().get(opName).execute()
+            if (op.done) {
+                runningOperations.remove(opName)
+                if (op.error != null) {
+                    throw Exception("Error occurred during $context ($opName) execution. Operation Response: ${op.toPrettyString()}")
+                }
+                log.info { "Pipeline job for $context ($opName) completed successfully. Results: ${op.toPrettyString()}" }
+            } else {
+                log.info { "Pipeline job for task run $context ($opName) still running..." }
+            }
+            done = op.done
+        }catch(e: IOException) {
+            // 503 is service unavailable. When we catch this error, retry up to 2 times before failing.
+            if (e is GoogleJsonResponseException && e.statusCode == 503) {
+                if (retryCount < 2) {
+                    log.info { "Pipeline request for $context ($opName) failed with 503. Retrying..." }
+                    retry = true
+                } else {
+                    throw Exception("Pipeline request for $context ($opName) failed with 503 too many times.", e)
+                }
+            } else {
+                throw Exception("Pipeline request for $context ($opName) failed.", e)
+            }
+        }
+    } while (!done)
 }

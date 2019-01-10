@@ -9,6 +9,7 @@ import krews.misc.createReport
 import mu.KotlinLogging
 import org.apache.commons.lang3.concurrent.BasicThreadFactory
 import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.joda.time.DateTime
 import reactor.core.Scannable
@@ -22,11 +23,12 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.stream.Collectors
 
 
 private val log = KotlinLogging.logger {}
+
+const val DB_SNAPSHOT_FILENAME = "$DB_FILENAME.snapshot"
 
 class WorkflowRunner(
     private val workflow: Workflow,
@@ -180,7 +182,18 @@ class WorkflowRunner(
         generateReport()
     }
 
-    private fun uploadDb() = executor.uploadFile(DB_FILENAME)
+    /*
+     * Backs up the sqlite database file and uploads the backup.
+     * This is needed because it's not safe to copy a file that's currently open for writes.
+     */
+    private fun uploadDb() {
+        // Create backup db file
+        val dbSnapshotPath = Paths.get(workflowConfig.localFilesBaseDir, DB_SNAPSHOT_FILENAME)
+        transaction(db) {
+            TransactionManager.current().connection.createStatement().use { it.executeUpdate("backup to $dbSnapshotPath") }
+        }
+        executor.uploadFile(DB_SNAPSHOT_FILENAME, DB_FILENAME)
+    }
 
     private fun generateReport() {
         val reportFile = "$RUN_DIR/${workflowRun.startTime}/$REPORT_FILENAME"
@@ -190,6 +203,6 @@ class WorkflowRunner(
             StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)
         createReport(db, workflowRun, writer)
         writer.flush()
-        executor.uploadFile(reportFile)
+        executor.uploadFile(reportFile, reportFile)
     }
 }

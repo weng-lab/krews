@@ -29,7 +29,7 @@ interface LocallyDirectedExecutor {
     /**
      * Upload the given file
      */
-    fun uploadFile(path: String)
+    fun uploadFile(fromPath: String, toPath: String)
 
     /**
      * @return True if the given file exists on the executor's file system, false otherwise.
