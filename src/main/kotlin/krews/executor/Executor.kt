@@ -28,8 +28,9 @@ interface LocallyDirectedExecutor {
 
     /**
      * Upload the given file
+     * @param backup: If a file exists at toPath already back it up after copying over it.
      */
-    fun uploadFile(fromPath: String, toPath: String)
+    fun uploadFile(fromPath: String, toPath: String = fromPath, backup: Boolean = false)
 
     /**
      * @return True if the given file exists on the executor's file system, false otherwise.

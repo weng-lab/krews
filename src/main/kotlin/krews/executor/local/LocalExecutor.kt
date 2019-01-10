@@ -37,7 +37,7 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
     private val runningContainers: MutableSet<String> = ConcurrentHashMap.newKeySet<String>()
 
     override fun downloadFile(path: String) {}
-    override fun uploadFile(fromPath: String, toPath: String) {}
+    override fun uploadFile(fromPath: String, toPath: String, backup: Boolean) {}
 
     override fun fileExists(path: String) = Files.exists(workflowBasePath.resolve(path))
     override fun fileLastModified(path: String) = Files.getLastModifiedTime(workflowBasePath.resolve(path)).toMillis()

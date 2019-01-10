@@ -48,11 +48,18 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
         }
     }
 
-    override fun uploadFile(fromPath: String, toPath: String) {
+    override fun uploadFile(fromPath: String, toPath: String, backup: Boolean) {
         val localFilePath = Paths.get(workflowConfig.localFilesBaseDir, fromPath)
         val storageObject = gcsObjectPath(gcsBase, toPath)
+
         log.info { "Pushing file $localFilePath to object $storageObject in bucket $bucket" }
         uploadObject(googleStorageClient, bucket, storageObject, localFilePath)
+
+        if (backup) {
+            val backupObject = "$storageObject.backup"
+            log.info { "Backing up file $storageObject to $backupObject" }
+            copyObject(googleStorageClient, bucket, storageObject, bucket, backupObject)
+        }
     }
 
     override fun fileExists(path: String): Boolean {

@@ -192,7 +192,7 @@ class WorkflowRunner(
         transaction(db) {
             TransactionManager.current().connection.createStatement().use { it.executeUpdate("backup to $dbSnapshotPath") }
         }
-        executor.uploadFile(DB_SNAPSHOT_FILENAME, DB_FILENAME)
+        executor.uploadFile(DB_SNAPSHOT_FILENAME, DB_FILENAME, backup = true)
     }
 
     private fun generateReport() {
@@ -203,6 +203,6 @@ class WorkflowRunner(
             StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)
         createReport(db, workflowRun, writer)
         writer.flush()
-        executor.uploadFile(reportFile, reportFile)
+        executor.uploadFile(reportFile)
     }
 }
