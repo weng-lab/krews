@@ -20,12 +20,22 @@ abstract class InputFile(path: String,
                          @field:JsonView(ConfigView::class) val cache: Boolean = false) : File(path) {
 
     val lastModified: Long by lazy {
-        try {
-            fetchLastModified()
-        } catch(e: Exception) {
-            log.error { "Error fetching last modified date for InputFile with path $path" }
-            throw e
+        var lastModified: Long? = null
+        var attempts = 0
+        while (lastModified == null) {
+            attempts++
+            try {
+                lastModified = fetchLastModified()
+            } catch (e: Exception) {
+                val errorMsg = "Error fetching last modified date for InputFile with path $path - attempt $attempts"
+                if (attempts < 3) {
+                    log.error(e) { errorMsg }
+                } else {
+                    throw Exception(errorMsg, e)
+                }
+            }
         }
+        lastModified!!
     }
 
     /**
