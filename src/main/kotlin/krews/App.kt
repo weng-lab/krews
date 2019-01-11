@@ -65,6 +65,7 @@ class KrewsApp(private val workflowBuilder: WorkflowBuilder) : CliktCommand() {
 
             // Add shutdown hook to stop all running tasks and other cleanup work if master is stopped.
             Runtime.getRuntime().addShutdownHook(Thread {
+                log.info { "Shutdown detecting. Cleaning up..." }
                 executor.shutdownRunningTasks()
                 runner.onShutdown()
             })

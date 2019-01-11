@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "io.krews"
-version = "0.4.13"
+version = "0.4.14"
 
 repositories {
     maven { setUrl("http://dl.bintray.com/kotlin/kotlin-eap") }
@@ -53,7 +53,6 @@ val sourcesJar by tasks.creating(Jar::class) {
     classifier = "sources"
     from(java.sourceSets["main"].allSource)
 }
-
 
 val publicationName = "krews"
 publishing {

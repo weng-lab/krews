@@ -53,6 +53,11 @@ class WorkflowRunner(
     }
 
     fun run() {
+        transaction(db) {
+            WorkflowRuns.deleteAll()
+            TaskRuns.deleteAll()
+        }
+
         // Create the workflow run in the database
         val workflowTime = if (runTimestampOverride != null) DateTime(runTimestampOverride) else DateTime.now()
         log.info { "Creating workflow run for workflow ${workflow.name} with timestamp ${workflowTime.millis}" }
@@ -85,9 +90,6 @@ class WorkflowRunner(
         transaction(db) {
             workflowRun.completedSuccessfully = workflowRunSuccessful
             workflowRun.completedTime = DateTime.now().millis
-
-            // Remove old workflowRuns / taskRuns from db
-            WorkflowRuns.deleteWhere { WorkflowRuns.id neq workflowRun.id }
         }
 
         transaction(db) {

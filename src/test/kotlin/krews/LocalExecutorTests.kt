@@ -6,7 +6,6 @@ import io.kotlintest.Spec
 import io.kotlintest.matchers.file.shouldExist
 import io.kotlintest.matchers.file.shouldNotExist
 import io.kotlintest.shouldBe
-import io.kotlintest.shouldNot
 import io.kotlintest.specs.StringSpec
 import io.mockk.spyk
 import krews.config.createParamsForConfig
