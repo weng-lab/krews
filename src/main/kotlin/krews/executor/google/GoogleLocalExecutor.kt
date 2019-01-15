@@ -186,7 +186,8 @@ internal fun createExecuteTaskAction(dockerImage: String, dockerDataDir: String,
     action.imageUri = dockerImage
     action.mounts = listOf(createMount(dockerDataDir))
     action.environment = env
-    if (command != null) action.commands = listOf("/bin/sh", "-c", command)
+    val tmpDir = "$dockerDataDir/tmp"
+    if (command != null) action.commands = listOf("/bin/sh", "-c", "[ ! -d $tmpDir ] && mkdir $tmpDir; TMPDIR=$tmpDir;\n $command")
     return action
 }
 
