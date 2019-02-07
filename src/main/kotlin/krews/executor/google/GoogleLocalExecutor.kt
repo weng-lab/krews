@@ -12,7 +12,7 @@ import krews.file.GSInputFile
 import krews.file.InputFile
 import krews.file.OutputFile
 import mu.KotlinLogging
-import java.io.IOException
+import retry
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.concurrent.ConcurrentHashMap
@@ -75,14 +75,16 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
         return googleStorageClient.objects().get(bucket, gcsObjectPath(gcsBase, path)).execute().updated.value
     }
 
-    override fun executeTask(workflowRunDir: String,
-                             taskRunId: Int,
-                             taskConfig: TaskConfig,
-                             taskRunContext: TaskRunContext<*, *>,
-                             outputFilesIn: Set<OutputFile>,
-                             outputFilesOut: Set<OutputFile>,
-                             cachedInputFiles: Set<InputFile>,
-                             downloadInputFiles: Set<InputFile>) {
+    override fun executeTask(
+        workflowRunDir: String,
+        taskRunId: Int,
+        taskConfig: TaskConfig,
+        taskRunContext: TaskRunContext<*, *>,
+        outputFilesIn: Set<OutputFile>,
+        outputFilesOut: Set<OutputFile>,
+        cachedInputFiles: Set<InputFile>,
+        downloadInputFiles: Set<InputFile>
+    ) {
         val run = createRunPipelineRequest(googleConfig)
         val actions = run.pipeline.actions
 
@@ -106,7 +108,8 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
         actions.add(createPeriodicLogsAction(logPath, googleConfig.logUploadInterval))
 
         // Create actions to download InputFiles from remote sources
-        val downloadRemoteInputFileActions = downloadInputFiles.map { createDownloadRemoteFileAction(it, taskRunContext.dockerDataDir) }
+        val downloadRemoteInputFileActions =
+            downloadInputFiles.map { createDownloadRemoteFileAction(it, taskRunContext.dockerDataDir) }
         actions.addAll(downloadRemoteInputFileActions)
 
         // Create actions to download InputFiles from our GCS run directories
@@ -124,7 +127,14 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
         actions.addAll(downloadOutputFileActions)
 
         // Create the action that runs the task
-        actions.add(createExecuteTaskAction(taskRunContext.dockerImage, taskRunContext.dockerDataDir, taskRunContext.command, taskRunContext.env))
+        actions.add(
+            createExecuteTaskAction(
+                taskRunContext.dockerImage,
+                taskRunContext.dockerDataDir,
+                taskRunContext.command,
+                taskRunContext.env
+            )
+        )
 
         // Create the actions to upload each task output OutputFile
         val uploadActions = outputFilesOut.map {
@@ -145,7 +155,7 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
     }
 
     override fun shutdownRunningTasks() {
-        for(op in runningOperations) {
+        for (op in runningOperations) {
             log.info { "Canceling operation $op..." }
             googleGenomicsClient.projects().operations().cancel(op, null)
         }
@@ -168,7 +178,8 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
     }
 
     override fun listFiles(baseDir: String): Set<String> {
-        val bucketContents = googleStorageClient.objects().list(bucket).setPrefix(gcsObjectPath(gcsBase, baseDir)).execute()
+        val bucketContents =
+            googleStorageClient.objects().list(bucket).setPrefix(gcsObjectPath(gcsBase, baseDir)).execute()
         return bucketContents.items?.map { it.name }?.toSet() ?: setOf()
     }
 
@@ -181,13 +192,20 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
 /**
  * Create a pipeline action that will execute the task
  */
-internal fun createExecuteTaskAction(dockerImage: String, dockerDataDir: String, command: String?, env: Map<String, String>?): Action {
+internal fun createExecuteTaskAction(
+    dockerImage: String,
+    dockerDataDir: String,
+    command: String?,
+    env: Map<String, String>?
+): Action {
     val action = Action()
     action.imageUri = dockerImage
     action.mounts = listOf(createMount(dockerDataDir))
-    action.environment = env
     val tmpDir = "$dockerDataDir/tmp"
-    if (command != null) action.commands = listOf("/bin/sh", "-c", "[ ! -d $tmpDir ] && mkdir $tmpDir; TMPDIR=$tmpDir;\n $command")
+    val actionEnv = mutableMapOf("TMPDIR" to tmpDir)
+    if (env != null) actionEnv.putAll(env)
+    action.environment = actionEnv
+    if (command != null) action.commands = listOf("/bin/sh", "-c", "[ ! -d $tmpDir ] && mkdir $tmpDir;\n $command")
     return action
 }
 
@@ -206,27 +224,30 @@ internal fun createDownloadRemoteFileAction(inputFile: InputFile, dataDir: Strin
  * Submits a job to the pipelines api and polls periodically until the job is complete.
  * The current thread will be blocked until the job is complete.
  */
-internal fun submitJobAndWait(run: RunPipelineRequest, jobCompletionPollInterval: Int, context: String, runningOperations: MutableSet<String>) {
+internal fun submitJobAndWait(
+    run: RunPipelineRequest,
+    jobCompletionPollInterval: Int,
+    context: String,
+    runningOperations: MutableSet<String>
+) {
     log.info { "Submitting pipeline job for task run: $run" }
     googleGenomicsClient.projects().operations()
-    val initialOp: Operation = googleGenomicsClient.pipelines().run(run).execute()
+    val initialOp: Operation = retry("Pipeline job submit",
+        retryCondition = { e -> e is GoogleJsonResponseException && e.statusCode == 503 }) {
+        googleGenomicsClient.pipelines().run(run).execute()
+    }
     val opName = initialOp.name
     runningOperations.add(opName)
 
-    log.info { "Pipeline job submitted. Operation returned: \"$opName\". " +
-            "Will check for completion every $jobCompletionPollInterval seconds" }
-    var retry = false
-    var retryCount = 0
+    log.info {
+        "Pipeline job submitted. Operation returned: \"$opName\". " +
+                "Will check for completion every $jobCompletionPollInterval seconds"
+    }
     do {
         var done = false
-        if (retry) {
-            retry = false
-            retryCount++
-        } else {
-            Thread.sleep(jobCompletionPollInterval * 1000L)
-            retryCount = 0
-        }
-        try {
+        Thread.sleep(jobCompletionPollInterval * 1000L)
+        retry("Pipeline job check",
+            retryCondition = { e -> e is GoogleJsonResponseException && e.statusCode == 503 }) {
             val op: Operation = googleGenomicsClient.projects().operations().get(opName).execute()
             if (op.done) {
                 runningOperations.remove(opName)
@@ -238,18 +259,6 @@ internal fun submitJobAndWait(run: RunPipelineRequest, jobCompletionPollInterval
                 log.info { "Pipeline job for task run $context ($opName) still running..." }
             }
             done = op.done
-        }catch(e: IOException) {
-            // 503 is service unavailable. When we catch this error, retry up to 2 times before failing.
-            if (e is GoogleJsonResponseException && e.statusCode == 503) {
-                if (retryCount < 2) {
-                    log.info { "Pipeline request for $context ($opName) failed with 503. Retrying..." }
-                    retry = true
-                } else {
-                    throw Exception("Pipeline request for $context ($opName) failed with 503 too many times.", e)
-                }
-            } else {
-                throw Exception("Pipeline request for $context ($opName) failed.", e)
-            }
         }
     } while (!done)
 }

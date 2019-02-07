@@ -1,7 +1,12 @@
 package krews.file
 
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
+import java.nio.file.StandardCopyOption
 import kotlin.reflect.KProperty1
 import kotlin.reflect.full.memberProperties
+import kotlin.streams.toList
 
 /**
  * Finds all Krews OutputFile objects in the given object by recursively looking through the given object graph.
@@ -31,4 +36,28 @@ internal fun getInputFilesForObject(obj: Any?): Set<InputFile> {
         is Map<*,*> -> obj.values.flatMap { getInputFilesForObject(it) }.toSet()
         else -> obj::class.memberProperties.flatMap { getInputFilesForObject((it as KProperty1<Any, *>).get(obj)) }.toSet()
     }
+}
+
+/**
+ * Lists local file system files in the given directory
+ */
+fun listLocalFiles(dir: Path): Set<String> {
+    if (!Files.exists(dir)) return setOf()
+    return Files.walk(dir)
+        .filter { Files.isRegularFile(it) }
+        .map { it.toString() }
+        .toList().toSet()
+}
+
+/**
+ * Downloads the given input file to the local file system
+ */
+fun downloadInputFileLocalFS(inputFile: InputFile, inputsPath: Path) {
+    if (inputFile is LocalInputFile) {
+        val toPath = inputsPath.resolve(inputFile.path)
+        Files.createDirectories(toPath.parent)
+        Files.copy(Paths.get(inputFile.localPath), toPath, StandardCopyOption.REPLACE_EXISTING)
+        return
+    }
+    inputFile.downloadLocal(inputsPath)
 }

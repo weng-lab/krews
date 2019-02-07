@@ -5,6 +5,8 @@ data class TaskConfig (
     val params: Map<String, Any> = mapOf(),
     // Task level Google executor configuration
     val google: GoogleTaskConfig? = null,
+    // Task level Slurm executor configuration
+    val slurm: SlurmTaskConfig? = null,
     // The maximum allowed parallelism for this task
     val parallelism: Parallelism = UnlimitedParallelism
 )
@@ -18,6 +20,8 @@ data class WorkflowConfig (
     val local: LocalWorkflowConfig? = null,
     // Google executor configuration
     val google: GoogleWorkflowConfig? = null,
+    // Slurm executor configuration
+    val slurm: SlurmWorkflowConfig? = null,
     // Configuration for individual tasks
     val tasks: Map<String, TaskConfig>,
     // The maximum allowed parallelism for the system as a whole. Also see per-task parallelism

@@ -41,7 +41,7 @@ private class MachineSpecs(val cpus: Int, val mem: Capacity)
 
 private fun specs(cpus: Int, mem: Capacity) = MachineSpecs(cpus, mem)
 
-enum class GoogleMachineClass(internal val prefix: String, protected val availableSpecs: List<MachineSpecs>? = null) {
+enum class GoogleMachineClass(internal val prefix: String, private val availableSpecs: List<MachineSpecs>? = null) {
     STANDARD(
         "n1-standard",
         listOf(

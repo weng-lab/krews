@@ -13,9 +13,7 @@ import krews.config.TaskConfig
 import krews.config.WorkflowConfig
 import krews.core.TaskRunContext
 import krews.executor.*
-import krews.file.InputFile
-import krews.file.LocalInputFile
-import krews.file.OutputFile
+import krews.file.*
 import mu.KotlinLogging
 import java.nio.file.Files
 import java.nio.file.Path
@@ -41,6 +39,11 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
 
     override fun fileExists(path: String) = Files.exists(workflowBasePath.resolve(path))
     override fun fileLastModified(path: String) = Files.getLastModifiedTime(workflowBasePath.resolve(path)).toMillis()
+
+    override fun listFiles(baseDir: String): Set<String> = listLocalFiles(workflowBasePath.resolve(baseDir))
+    override fun deleteFile(file: String) = Files.delete(workflowBasePath.resolve(file))
+
+    override fun downloadInputFile(inputFile: InputFile) = downloadInputFileLocalFS(inputFile, inputsPath)
 
     override fun executeTask(
         workflowRunDir: String,
@@ -147,29 +150,6 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
             log.info { "Stopping container $containerId..." }
             dockerClient.stopContainerCmd(containerId).exec()
         }
-    }
-
-    override fun downloadInputFile(inputFile: InputFile) {
-        if (inputFile is LocalInputFile) {
-            val toPath = inputsPath.resolve(inputFile.path)
-            Files.createDirectories(toPath.parent)
-            Files.copy(Paths.get(inputFile.localPath), toPath, StandardCopyOption.REPLACE_EXISTING)
-            return
-        }
-        inputFile.downloadLocal(inputsPath)
-    }
-
-    override fun listFiles(baseDir: String): Set<String> {
-        val listDir = workflowBasePath.resolve(baseDir)
-        if (!Files.exists(listDir)) return setOf()
-        return Files.walk(listDir)
-            .filter { Files.isRegularFile(it) }
-            .map { it.toString() }
-            .toList().toSet()
-    }
-
-    override fun deleteFile(file: String) {
-        Files.delete(workflowBasePath.resolve(file))
     }
 
 }

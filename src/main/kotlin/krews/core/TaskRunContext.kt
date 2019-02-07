@@ -2,6 +2,7 @@ package krews.core
 
 import krews.config.convertConfigMap
 import krews.file.File
+import java.time.Duration
 
 class TaskRunContextBuilder<I : Any, O : Any> internal constructor(
     val input: I,
@@ -16,6 +17,7 @@ class TaskRunContextBuilder<I : Any, O : Any> internal constructor(
     var cpus: Int? = null
     var memory: Capacity? = null
     var diskSize: Capacity? = null
+    var time: Duration? = null
     @PublishedApi internal var taskParams: Any? = null
     @PublishedApi internal var taskParamsClass: Class<*>? = null
 
@@ -40,6 +42,7 @@ class TaskRunContextBuilder<I : Any, O : Any> internal constructor(
         cpus = cpus,
         memory = memory,
         diskSize = diskSize,
+        time = time,
         taskParams = taskParams,
         taskParamsClass = taskParamsClass
     )
@@ -56,6 +59,7 @@ data class TaskRunContext<I: Any, O: Any>(
     val cpus: Int?,
     val memory: Capacity?,
     val diskSize: Capacity?,
+    val time: Duration?,
     val taskParams: Any?,
     val taskParamsClass: Class<*>?
 )
