@@ -57,16 +57,18 @@ internal fun createRunPipelineRequest(googleConfig: GoogleWorkflowConfig): RunPi
     return run
 }
 
+private fun shellRetry(command: String) =
+    "for i in \$(seq 1 5); do [ \$i -gt 1 ] && sleep 5; $command && s=0 && break || s=\$?; done; (exit \$s)"
 
 /**
- * Create a pipeline action that will periodically copy logs to GCS
+ * Create a pipeline action that will periodically copy logs to GCS or fail silently
  *
  * @param frequency: Frequency that logs will be copied into GCS in seconds
  */
 internal fun createPeriodicLogsAction(logPath: String, frequency: Int): Action {
     val action = Action()
     action.imageUri = CLOUD_SDK_IMAGE
-    action.commands = listOf("sh", "-c", "while true; do sleep $frequency; gsutil -q cp /google/logs/output $logPath; done")
+    action.commands = listOf("sh", "-c", "while true; do sleep $frequency; gsutil -q cp /google/logs/output $logPath || true; done")
     action.flags = listOf("RUN_IN_BACKGROUND")
     return action
 }
@@ -77,7 +79,7 @@ internal fun createPeriodicLogsAction(logPath: String, frequency: Int): Action {
 internal fun createLogsAction(logPath: String): Action {
     val action = Action()
     action.imageUri = CLOUD_SDK_IMAGE
-    action.commands = listOf("sh", "-c", "gsutil -q cp /google/logs/output $logPath")
+    action.commands = listOf("sh", "-c", shellRetry("gsutil -q cp /google/logs/output $logPath"))
     action.flags = listOf("ALWAYS_RUN")
     return action
 }
@@ -88,7 +90,8 @@ internal fun createLogsAction(logPath: String): Action {
 internal fun createDownloadAction(objectToDownload: String, dataDir: String, file: String): Action {
     val action = Action()
     action.imageUri = CLOUD_SDK_IMAGE
-    action.commands = listOf("sh", "-c", "set -x; gsutil -q cp $objectToDownload $dataDir/$file; chmod 755 $dataDir/$file")
+    val copyCmd = shellRetry("gsutil -q cp $objectToDownload $dataDir/$file")
+    action.commands = listOf("sh", "-c", "set -x; $copyCmd; chmod 755 $dataDir/$file")
     action.mounts = listOf(createMount(dataDir))
     return action
 }
@@ -100,7 +103,8 @@ internal fun createDownloadAction(objectToDownload: String, dataDir: String, fil
 internal fun createDiagnosticUploadAction(diagnosticsGSPath: String, dataDir: String): Action {
     val action = Action()
     action.imageUri = CLOUD_SDK_IMAGE
-    action.commands = listOf("sh", "-c", "if [[ \"\$GOOGLE_PIPELINE_FAILED\" = \"1\" ]]; then gsutil -m cp -r $dataDir $diagnosticsGSPath; fi")
+    val copyCmd = shellRetry("gsutil -m cp -r $dataDir $diagnosticsGSPath")
+    action.commands = listOf("sh", "-c", "if [[ \"\$GOOGLE_PIPELINE_FAILED\" = \"1\" ]]; then $copyCmd; fi")
     action.mounts = listOf(createMount(dataDir))
     action.flags = listOf("ALWAYS_RUN")
     return action
@@ -112,7 +116,8 @@ internal fun createDiagnosticUploadAction(diagnosticsGSPath: String, dataDir: St
 internal fun createUploadAction(objectToUpload: String, dataDir: String, file: String): Action {
     val action = Action()
     action.imageUri = CLOUD_SDK_IMAGE
-    action.commands = listOf("sh", "-c", "set -x; gsutil -q cp $dataDir/$file $objectToUpload")
+    val copyCmd = shellRetry("gsutil -q cp $dataDir/$file $objectToUpload")
+    action.commands = listOf("sh", "-c", "set -x; $copyCmd")
     action.mounts = listOf(createMount(dataDir))
     return action
 }
