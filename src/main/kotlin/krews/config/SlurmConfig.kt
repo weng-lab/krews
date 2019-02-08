@@ -3,7 +3,11 @@ package krews.config
 import krews.core.Capacity
 
 data class SlurmWorkflowConfig(
-    val sshConfig: SshConfig? = null
+    // Interval in seconds between checks for pipeline job completion
+    val jobCompletionPollInterval: Int = 10,
+    // Optional ssh configuration. Will cause all slurm command to be passed through ssh.
+    // Only available for password-less login.
+    val ssh: SshConfig? = null
 )
 
 data class SshConfig(

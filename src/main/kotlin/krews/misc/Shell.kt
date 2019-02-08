@@ -8,27 +8,20 @@ private val log = KotlinLogging.logger {}
 /**
  * Runs arbitrary shell commands, optionally via ssh.
  */
-class CommandExecutor(sshConfig: SshConfig?) {
+class CommandExecutor(private val sshConfig: SshConfig?) {
 
-    private val sshProcess =
-        if (sshConfig != null)
-            Runtime.getRuntime().exec("ssh -tt ${sshConfig.user}@${sshConfig.host} -p ${sshConfig.port}")
-        else null
-
-    private val sshProcessWriter = sshProcess?.outputStream?.writer()?.buffered()
-
-    fun exec(command: String) {
+    fun exec(command: String): String {
         log.info { "Executing command:\n$command" }
-        val resultsStream = if (sshProcessWriter != null) {
-            sshProcessWriter.write("$command\n")
-            sshProcessWriter.write("exit\n")
-            sshProcessWriter.flush()
-            sshProcess!!.inputStream
-        } else {
-            val process = Runtime.getRuntime().exec(command)
-            process.inputStream
-        }
-        log.info { "Command results:\n${resultsStream.reader().readText()}" }
+
+        val runCmd = if (sshConfig != null) "ssh ${sshConfig.user}@${sshConfig.host} -p ${sshConfig.port} -X $command"
+            else command
+        val process = Runtime.getRuntime().exec(runCmd)
+        val result = process.inputStream.reader().readText()
+        log.info { "Command results:\n$result" }
+
+        val error = process.errorStream.reader().readText()
+        if (error.isNotBlank()) throw Exception("Encountered error during command execution: $error")
+        return result
     }
 
 }
