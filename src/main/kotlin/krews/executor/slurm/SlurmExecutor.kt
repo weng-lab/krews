@@ -172,7 +172,7 @@ private fun appendSbatchParam(sbatchScript: StringBuilder, paramName: String, va
 /**
  * Utility function to create a copy command that also creates any parent directories that don't already exist.
  */
-private fun copyCommand(from: String, to: String) = "mkdir -p $(dirname $to) && cp $from $to"
+private fun copyCommand(from: String, to: String) = "mkdir -p $(dirname $to) && cp $from $to\n"
 
 enum class SlurmJobState(val category: SlurmJobStateCategory) {
     BOOT_FAIL(SlurmJobStateCategory.FAILED),
