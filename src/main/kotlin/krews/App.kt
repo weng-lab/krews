@@ -12,6 +12,7 @@ import krews.core.*
 import krews.executor.google.GoogleExecutor
 import krews.executor.google.GoogleLocalExecutor
 import krews.executor.local.LocalExecutor
+import krews.executor.slurm.SlurmExecutor
 import mu.KotlinLogging
 import java.io.File
 import java.nio.file.Files
@@ -34,7 +35,8 @@ class KrewsApp(private val workflowBuilder: WorkflowBuilder) : CliktCommand() {
         .choice(
             "local" to Executors.LOCAL,
             "google" to Executors.GOOGLE,
-            "google-local" to Executors.GOOGLE_LOCAL
+            "google-local" to Executors.GOOGLE_LOCAL,
+            "slurm" to Executors.SLURM
         )
         .default(Executors.LOCAL)
     private val executable by option("-e", "--executable",
@@ -54,6 +56,7 @@ class KrewsApp(private val workflowBuilder: WorkflowBuilder) : CliktCommand() {
             val executor = when(on) {
                 Executors.LOCAL -> LocalExecutor(workflowConfig)
                 Executors.GOOGLE_LOCAL -> GoogleLocalExecutor(workflowConfig)
+                Executors.SLURM -> SlurmExecutor(workflowConfig)
                 else -> throw Exception("Unsupported executor")
             }
 
@@ -84,5 +87,5 @@ class KrewsApp(private val workflowBuilder: WorkflowBuilder) : CliktCommand() {
 }
 
 enum class Executors(val locallyDirected: Boolean) {
-    LOCAL(true), GOOGLE(false), GOOGLE_LOCAL(true)
+    LOCAL(true), GOOGLE(false), GOOGLE_LOCAL(true), SLURM(true)
 }
