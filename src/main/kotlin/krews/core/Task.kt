@@ -24,6 +24,7 @@ class Task<I : Any, O : Any> @PublishedApi internal constructor(
     val labels: List<String> = listOf(),
     internal val inputClass: Class<I>,
     internal val outputClass: Class<O>,
+    private val maintainOrder: Boolean,
     private val taskRunContextInit: TaskRunContextBuilder<I, O>.() -> Unit
 ) {
     val outputPub: Flux<O> = TopicProcessor.create<O>("$name-topic", 1024)
@@ -33,13 +34,16 @@ class Task<I : Any, O : Any> @PublishedApi internal constructor(
                          pool: ExecutorService) {
         val rawTaskParams = taskConfig?.params ?: mapOf()
         val inputFlux: Flux<out I> = if (inputPub is Flux) inputPub else Flux.from(inputPub)
-        val processed = inputFlux.flatMap({
-            Mono.fromFuture(CompletableFuture.supplyAsync(Supplier {
-                processInput(it, rawTaskParams, executeFn)
-            }, pool))
-        }, parToMaxConcurrency(taskConfig?.parallelism)).onErrorContinue { t: Throwable, _ ->
-            log.error(t) { }
-        }
+
+        fun processInputMono(input: I) = Mono.fromFuture(CompletableFuture.supplyAsync(Supplier {
+            processInput(input, rawTaskParams, executeFn)
+        }, pool))
+
+        val processed = if (maintainOrder) {
+            inputFlux.flatMapSequential({ processInputMono(it) }, parToMaxConcurrency(taskConfig?.parallelism))
+        } else {
+            inputFlux.flatMap({ processInputMono(it) }, parToMaxConcurrency(taskConfig?.parallelism))
+        }.onErrorContinue { t: Throwable, _ -> log.error(t) { } }
 
         processed.subscribe(outputPub as TopicProcessor)
     }
