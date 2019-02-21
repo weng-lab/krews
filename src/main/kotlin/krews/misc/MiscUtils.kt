@@ -8,11 +8,11 @@ private val log = KotlinLogging.logger {}
 fun <T> retry(name: String,
               numOfRetries: Int = 3,
               retryCondition: (e: Throwable) -> Boolean = { true },
-              block: () -> T): T {
+              block: (attemptNum: Int) -> T): T {
     var throwable: Throwable? = null
     (1..numOfRetries).forEach { attempt ->
         try {
-            return block()
+            return block(attempt)
         } catch (e: Throwable) {
             if (retryCondition(e)) {
                 throwable = e

@@ -9,7 +9,9 @@ import java.nio.file.*
 import java.util.*
 import java.util.UUID.randomUUID
 import krews.misc.CommandExecutor
+import retry
 import java.io.FileOutputStream
+import kotlin.math.pow
 
 private val log = KotlinLogging.logger {}
 
@@ -139,7 +141,7 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
             }
 
             val sbatchFile = mountTmpDir.resolve(SBATCH_SCRIPT_NAME).toString()
-            FileOutputStream(sbatchFile).use { sbatchScript.toString().toByteArray() }
+            FileOutputStream(sbatchFile).use { it.write(sbatchScript.toString().toByteArray()) }
             log.info { "Created sbatch script file $sbatchFile with content:\n$sbatchScript" }
             val sbatchCommand = "sbatch $sbatchFile"
             val sbatchResponse = commandExecutor.exec(sbatchCommand)
@@ -153,14 +155,22 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
                 var done = false
                 Thread.sleep(workflowConfig.slurm.jobCompletionPollInterval * 1000L)
 
-                val checkCommand = "sacct -j $jobId --format=state --noheader"
-                val jobStatusResponse = commandExecutor.exec(checkCommand)
-                if (jobStatusResponse.isBlank()) throw Exception("Empty response given for Slurm job status lookup.")
-                val jobStatus = SlurmJobState.valueOf(jobStatusResponse.split("\n")[0].trim())
-                when (jobStatus.category) {
-                    SlurmJobStateCategory.INCOMPLETE -> log.info { "Job $jobId still in progress with status $jobStatus" }
-                    SlurmJobStateCategory.FAILED -> throw Exception("Job $jobId failed with status $jobStatus")
-                    SlurmJobStateCategory.SUCCEEDED -> done = true
+                retry("Slurm status check for job $jobId", 4, { it is SlurmCheckEmptyResponseException }) { attempt ->
+                    // Exponential backoff
+                    if (attempt > 1) {
+                        val sleepTime = 2.0.pow(attempt).toLong()
+                        log.info { "Empty sacct response. Sleeping for $sleepTime seconds." }
+                        Thread.sleep(1000 * sleepTime)
+                    }
+                    val checkCommand = "sacct -j $jobId --format=state --noheader"
+                    val jobStatusResponse = commandExecutor.exec(checkCommand)
+                    if (jobStatusResponse.isBlank()) throw SlurmCheckEmptyResponseException()
+                    val jobStatus = SlurmJobState.valueOf(jobStatusResponse.split("\n")[0].trim())
+                    when (jobStatus.category) {
+                        SlurmJobStateCategory.INCOMPLETE -> log.info { "Job $jobId still in progress with status $jobStatus" }
+                        SlurmJobStateCategory.FAILED -> throw Exception("Job $jobId failed with status $jobStatus")
+                        SlurmJobStateCategory.SUCCEEDED -> done = true
+                    }
                 }
             } while(!done)
             log.info { "Job $jobId complete!" }
@@ -177,6 +187,8 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
     }
 
 }
+
+class SlurmCheckEmptyResponseException : Exception("Empty response given for Slurm job status lookup.")
 
 /**
  * Utility to append SBATCH line to sbatch script if the given value is not null
