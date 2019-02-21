@@ -9,6 +9,7 @@ import java.nio.file.*
 import java.util.*
 import java.util.UUID.randomUUID
 import krews.misc.CommandExecutor
+import java.io.FileOutputStream
 
 private val log = KotlinLogging.logger {}
 
@@ -116,8 +117,9 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
             // Copy the run command into a sh file
             if (taskRunContext.command != null) {
                 val runScriptContents = "set -e\n${taskRunContext.command}"
-                val taskRunFile = Files.write(mountTmpDir.resolve(RUN_SCRIPT_NAME), runScriptContents.toByteArray())
-                log.info { "Created singularity command script file $taskRunFile with content:\n${taskRunContext.command}" }
+                val taskRunFile = mountTmpDir.resolve(RUN_SCRIPT_NAME).toString()
+                log.info { "Creating singularity command script file $taskRunFile with content:\n$runScriptContents" }
+                FileOutputStream(taskRunFile).use { it.write(runScriptContents.toByteArray()) }
             }
 
             // Add running the task to script
@@ -136,7 +138,8 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
                 sbatchScript.append(copyCommand(mountDirFilePath.toString(), cachedFilePath.toString()))
             }
 
-            val sbatchFile = Files.write(mountTmpDir.resolve(SBATCH_SCRIPT_NAME), sbatchScript.toString().toByteArray())
+            val sbatchFile = mountTmpDir.resolve(SBATCH_SCRIPT_NAME).toString()
+            FileOutputStream(sbatchFile).use { sbatchScript.toString().toByteArray() }
             log.info { "Created sbatch script file $sbatchFile with content:\n$sbatchScript" }
             val sbatchCommand = "sbatch $sbatchFile"
             val sbatchResponse = commandExecutor.exec(sbatchCommand)

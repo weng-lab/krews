@@ -75,7 +75,7 @@ class WorkflowRunner(
             dbUploadDelay, dbUploadDelay, TimeUnit.SECONDS)
 
         // Create an executor service for periodically generating reports
-        val reportGenerationDelay = Math.max(workflowConfig.reportGenerationDelay, 30)
+        val reportGenerationDelay = Math.max(workflowConfig.reportGenerationDelay, 10)
         reportPool.scheduleWithFixedDelay({ generateReport() },
             reportGenerationDelay, reportGenerationDelay, TimeUnit.SECONDS)
 
