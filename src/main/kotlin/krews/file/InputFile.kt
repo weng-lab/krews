@@ -3,6 +3,7 @@ package krews.file
 import com.fasterxml.jackson.annotation.JsonView
 import krews.misc.ConfigView
 import mu.KotlinLogging
+import retry
 import java.nio.file.Path
 
 private val log = KotlinLogging.logger {}
@@ -20,22 +21,9 @@ abstract class InputFile(path: String,
                          @field:JsonView(ConfigView::class) val cache: Boolean = false) : File(path) {
 
     val lastModified: Long by lazy {
-        var lastModified: Long? = null
-        var attempts = 0
-        while (lastModified == null) {
-            attempts++
-            try {
-                lastModified = fetchLastModified()
-            } catch (e: Exception) {
-                val errorMsg = "Error fetching last modified date for InputFile with path $path - attempt $attempts"
-                if (attempts < 3) {
-                    log.error(e) { errorMsg }
-                } else {
-                    throw Exception(errorMsg, e)
-                }
-            }
+        retry("Fetch last modified date for InputFile with path $path", 3) {
+            fetchLastModified()
         }
-        lastModified!!
     }
 
     /**

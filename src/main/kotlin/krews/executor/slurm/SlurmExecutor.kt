@@ -99,11 +99,24 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
             for (remoteDownloadInputFile in remoteDownloadInputFiles) {
                 val downloadCommand = remoteDownloadInputFile.downloadFileCommand(taskRunContext.dockerDataDir)
                 sbatchScript.append("singularity exec docker://${remoteDownloadInputFile.downloadFileImage()} $downloadCommand\n")
+                sbatchScript.append("echo $?\n")
+            }
+
+            // Copy OutputFiles from task input into the docker container
+            if (!outputFilesIn.isEmpty()) {
+                log.info { "Copying output files $outputFilesIn from task input into mounted working dir for singularity: $mountDir" }
+                sbatchScript.append("\n# Copy output files from previous tasks into mounted singularity data directory.\n")
+            }
+            for (outputFile in outputFilesIn) {
+                val fromPath = outputsPath.resolve(outputFile.path)
+                val mountDirFilePath = mountDir.resolve(outputFile.path)
+                sbatchScript.append(copyCommand(fromPath.toString(), mountDirFilePath.toString()))
             }
 
             // Copy the run command into a sh file
             if (taskRunContext.command != null) {
-                val taskRunFile = Files.write(mountTmpDir.resolve(RUN_SCRIPT_NAME), taskRunContext.command.toByteArray())
+                val runScriptContents = "set -e\n${taskRunContext.command}"
+                val taskRunFile = Files.write(mountTmpDir.resolve(RUN_SCRIPT_NAME), runScriptContents.toByteArray())
                 log.info { "Created singularity command script file $taskRunFile with content:\n${taskRunContext.command}" }
             }
 
