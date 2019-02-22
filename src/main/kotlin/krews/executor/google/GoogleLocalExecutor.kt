@@ -75,6 +75,8 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
         return googleStorageClient.objects().get(bucket, gcsObjectPath(gcsBase, path)).execute().updated.value
     }
 
+    override fun uploadsDb() = true
+
     override fun executeTask(
         workflowRunDir: String,
         taskRunId: Int,

@@ -165,7 +165,9 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
                     val checkCommand = "sacct -j $jobId --format=state --noheader"
                     val jobStatusResponse = commandExecutor.exec(checkCommand)
                     if (jobStatusResponse.isBlank()) throw SlurmCheckEmptyResponseException()
-                    val jobStatus = SlurmJobState.valueOf(jobStatusResponse.split("\n")[0].trim())
+                    val rawJobStatus = jobStatusResponse.split("\n")[0]
+                        .trim().trimEnd('+')
+                    val jobStatus = SlurmJobState.valueOf(rawJobStatus)
                     when (jobStatus.category) {
                         SlurmJobStateCategory.INCOMPLETE -> log.info { "Job $jobId still in progress with status $jobStatus" }
                         SlurmJobStateCategory.FAILED -> throw Exception("Job $jobId failed with status $jobStatus")

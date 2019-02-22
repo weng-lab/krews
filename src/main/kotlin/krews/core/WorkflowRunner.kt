@@ -39,14 +39,18 @@ class WorkflowRunner(
     private val db: Database
     private lateinit var workflowRun: WorkflowRun
     private val reportPool: ScheduledExecutorService
-    private val dbUploadPool: ScheduledExecutorService
+    private val dbUploadPool: ScheduledExecutorService?
 
     init {
         executor.downloadFile(DB_FILENAME)
         db = migrateAndConnectDb(Paths.get(workflowConfig.localFilesBaseDir, DB_FILENAME))
 
-        val dbUploadThreadFactory = BasicThreadFactory.Builder().namingPattern("db-upload-%d").build()
-        dbUploadPool = Executors.newSingleThreadScheduledExecutor(dbUploadThreadFactory)
+        if (executor.uploadsDb()) {
+            val dbUploadThreadFactory = BasicThreadFactory.Builder().namingPattern("db-upload-%d").build()
+            dbUploadPool = Executors.newSingleThreadScheduledExecutor(dbUploadThreadFactory)
+        } else {
+            dbUploadPool = null
+        }
 
         val reportThreadFactory = BasicThreadFactory.Builder().namingPattern("report-gen-%d").build()
         reportPool = Executors.newSingleThreadScheduledExecutor(reportThreadFactory)
@@ -70,9 +74,11 @@ class WorkflowRunner(
         log.info { "Workflow run created successfully!" }
 
         // Create an executor service for periodically uploading the db file
-        val dbUploadDelay = Math.max(workflowConfig.dbUploadDelay, 30)
-        dbUploadPool.scheduleWithFixedDelay({ uploadDb() },
-            dbUploadDelay, dbUploadDelay, TimeUnit.SECONDS)
+        if (executor.uploadsDb()) {
+            val dbUploadDelay = Math.max(workflowConfig.dbUploadDelay, 30)
+            dbUploadPool!!.scheduleWithFixedDelay({ uploadDb() },
+                dbUploadDelay, dbUploadDelay, TimeUnit.SECONDS)
+        }
 
         // Create an executor service for periodically generating reports
         val reportGenerationDelay = Math.max(workflowConfig.reportGenerationDelay, 10)
@@ -175,12 +181,12 @@ class WorkflowRunner(
 
     fun onShutdown() {
         reportPool.shutdown()
-        dbUploadPool.shutdown()
+        dbUploadPool?.shutdown()
         // Stop the periodic db upload and report generation executor service and generate one final report.
         reportPool.awaitTermination(1000, TimeUnit.SECONDS)
-        dbUploadPool.awaitTermination(1000, TimeUnit.SECONDS)
+        dbUploadPool?.awaitTermination(1000, TimeUnit.SECONDS)
 
-        uploadDb()
+        if (executor.uploadsDb()) uploadDb()
         generateReport()
     }
 

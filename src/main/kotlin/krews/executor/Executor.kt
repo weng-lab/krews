@@ -82,6 +82,11 @@ interface LocallyDirectedExecutor {
      * Deletes the given file. Used for cleaning up unused files.
      */
     fun deleteFile(file: String)
+
+    /**
+     * Whether or not this executor needs to periodically copy and upload it's state database somewhere.
+     */
+    fun uploadsDb(): Boolean = false
 }
 
 /**
