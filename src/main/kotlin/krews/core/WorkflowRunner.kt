@@ -19,6 +19,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.nio.file.StandardOpenOption
+import java.nio.file.attribute.PosixFilePermissions
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
@@ -47,6 +48,9 @@ class WorkflowRunner(
         val dbFilePath = workflowTmpDir.resolve(DB_FILENAME)
         executor.downloadFile(DB_FILENAME, dbFilePath)
         db = migrateAndConnectDb(dbFilePath)
+        val dbPermissions = PosixFilePermissions.fromString("rwxrwxrwx")
+        Files.setPosixFilePermissions(dbFilePath, dbPermissions)
+        Files.setPosixFilePermissions(dbFilePath.parent, dbPermissions)
 
         val dbUploadThreadFactory = BasicThreadFactory.Builder().namingPattern("db-upload-%d").build()
         dbUploadPool = Executors.newSingleThreadScheduledExecutor(dbUploadThreadFactory)

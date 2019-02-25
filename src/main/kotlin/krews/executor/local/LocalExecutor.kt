@@ -13,10 +13,6 @@ import krews.config.TaskConfig
 import krews.config.WorkflowConfig
 import krews.core.TaskRunContext
 import krews.executor.*
-import krews.executor.google.copyObject
-import krews.executor.google.gcsObjectPath
-import krews.executor.google.googleStorageClient
-import krews.executor.google.uploadObject
 import krews.file.*
 import mu.KotlinLogging
 import java.nio.file.Files
@@ -40,7 +36,7 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
     override fun downloadFile(fromPath: String, toPath: Path) {
         val fromFile = workflowBasePath.resolve(fromPath)
         log.info { "Attempting to copy $fromFile to $toPath..." }
-        val fileExists = Files.exists(toPath)
+        val fileExists = Files.exists(fromFile)
         if (fileExists) {
             Files.createDirectories(toPath.parent)
             Files.copy(fromFile, toPath, StandardCopyOption.REPLACE_EXISTING)

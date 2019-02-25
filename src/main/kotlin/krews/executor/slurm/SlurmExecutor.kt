@@ -34,7 +34,7 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
     override fun downloadFile(fromPath: String, toPath: Path) {
         val fromFile = workflowBasePath.resolve(fromPath)
         log.info { "Attempting to copy $fromFile to $toPath..." }
-        val fileExists = Files.exists(toPath)
+        val fileExists = Files.exists(fromFile)
         if (fileExists) {
             Files.createDirectories(toPath.parent)
             FileUtils.copyFile(fromFile.toFile(), toPath.toFile())
