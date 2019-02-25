@@ -24,13 +24,13 @@ interface LocallyDirectedExecutor {
     /**
      * Download the file at the given path
      */
-    fun downloadFile(path: String)
+    fun downloadFile(fromPath: String, toPath: Path)
 
     /**
      * Upload the given file
      * @param backup: If a file exists at toPath already back it up after copying over it.
      */
-    fun uploadFile(fromPath: String, toPath: String = fromPath, backup: Boolean = false)
+    fun uploadFile(fromPath: Path, toPath: String, backup: Boolean = false)
 
     /**
      * @return True if the given file exists on the executor's file system, false otherwise.
@@ -82,11 +82,6 @@ interface LocallyDirectedExecutor {
      * Deletes the given file. Used for cleaning up unused files.
      */
     fun deleteFile(file: String)
-
-    /**
-     * Whether or not this executor needs to periodically copy and upload it's state database somewhere.
-     */
-    fun uploadsDb(): Boolean = false
 }
 
 /**

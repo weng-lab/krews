@@ -9,7 +9,9 @@ import java.nio.file.*
 import java.util.*
 import java.util.UUID.randomUUID
 import krews.misc.CommandExecutor
+import org.apache.commons.io.FileUtils
 import retry
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import kotlin.math.pow
 
@@ -29,8 +31,31 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
     private val inputsPath = workflowBasePath.resolve(INPUTS_DIR)
     private val outputsPath = workflowBasePath.resolve(OUTPUTS_DIR)
 
-    override fun downloadFile(path: String) {}
-    override fun uploadFile(fromPath: String, toPath: String, backup: Boolean) {}
+    override fun downloadFile(fromPath: String, toPath: Path) {
+        val fromFile = workflowBasePath.resolve(fromPath)
+        log.info { "Attempting to copy $fromFile to $toPath..." }
+        val fileExists = Files.exists(toPath)
+        if (fileExists) {
+            Files.createDirectories(toPath.parent)
+            FileUtils.copyFile(fromFile.toFile(), toPath.toFile())
+            log.info { "$fromFile successfully copied to $toPath!" }
+        } else {
+            log.info { "$fromFile not found. It will not be copied." }
+        }
+    }
+
+    override fun uploadFile(fromPath: Path, toPath: String, backup: Boolean) {
+        val toFile = workflowBasePath.resolve(toPath)
+        log.info { "Copying file $fromPath to $toFile" }
+        Files.createDirectories(toFile.parent)
+        FileUtils.copyFile(fromPath.toFile(), toFile.toFile())
+
+        if (backup) {
+            val backupFile = workflowBasePath.resolve("$toFile.backup")
+            log.info { "Backing up file $toFile to $backupFile" }
+            FileUtils.copyFile(toFile.toFile(), backupFile.toFile())
+        }
+    }
 
     override fun fileExists(path: String): Boolean = Files.exists(workflowBasePath.resolve(path))
     override fun fileLastModified(path: String): Long = Files.getLastModifiedTime(workflowBasePath.resolve(path)).toMillis()

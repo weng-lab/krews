@@ -34,23 +34,22 @@ class WorkflowRunner(
     private val workflow: Workflow,
     private val workflowConfig: WorkflowConfig,
     private val executor: LocallyDirectedExecutor,
-    private val runTimestampOverride: Long? = null
+    runTimestampOverride: Long? = null
 ) {
     private val db: Database
     private lateinit var workflowRun: WorkflowRun
     private val reportPool: ScheduledExecutorService
-    private val dbUploadPool: ScheduledExecutorService?
+    private val dbUploadPool: ScheduledExecutorService
+    private val workflowTime = if (runTimestampOverride != null) DateTime(runTimestampOverride) else DateTime.now()
+    private val workflowTmpDir = Paths.get(System.getProperty("java.io.tmpdir"), "workflow-${workflow.name}-$workflowTime")
 
     init {
-        executor.downloadFile(DB_FILENAME)
-        db = migrateAndConnectDb(Paths.get(workflowConfig.localFilesBaseDir, DB_FILENAME))
+        val dbFilePath = workflowTmpDir.resolve(DB_FILENAME)
+        executor.downloadFile(DB_FILENAME, dbFilePath)
+        db = migrateAndConnectDb(dbFilePath)
 
-        if (executor.uploadsDb()) {
-            val dbUploadThreadFactory = BasicThreadFactory.Builder().namingPattern("db-upload-%d").build()
-            dbUploadPool = Executors.newSingleThreadScheduledExecutor(dbUploadThreadFactory)
-        } else {
-            dbUploadPool = null
-        }
+        val dbUploadThreadFactory = BasicThreadFactory.Builder().namingPattern("db-upload-%d").build()
+        dbUploadPool = Executors.newSingleThreadScheduledExecutor(dbUploadThreadFactory)
 
         val reportThreadFactory = BasicThreadFactory.Builder().namingPattern("report-gen-%d").build()
         reportPool = Executors.newSingleThreadScheduledExecutor(reportThreadFactory)
@@ -63,7 +62,6 @@ class WorkflowRunner(
         }
 
         // Create the workflow run in the database
-        val workflowTime = if (runTimestampOverride != null) DateTime(runTimestampOverride) else DateTime.now()
         log.info { "Creating workflow run for workflow ${workflow.name} with timestamp ${workflowTime.millis}" }
         transaction(db) {
             workflowRun = WorkflowRun.new {
@@ -74,11 +72,9 @@ class WorkflowRunner(
         log.info { "Workflow run created successfully!" }
 
         // Create an executor service for periodically uploading the db file
-        if (executor.uploadsDb()) {
-            val dbUploadDelay = Math.max(workflowConfig.dbUploadDelay, 30)
-            dbUploadPool!!.scheduleWithFixedDelay({ uploadDb() },
+        val dbUploadDelay = Math.max(workflowConfig.dbUploadDelay, 30)
+        dbUploadPool.scheduleWithFixedDelay({ uploadDb() },
                 dbUploadDelay, dbUploadDelay, TimeUnit.SECONDS)
-        }
 
         // Create an executor service for periodically generating reports
         val reportGenerationDelay = Math.max(workflowConfig.reportGenerationDelay, 10)
@@ -181,13 +177,17 @@ class WorkflowRunner(
 
     fun onShutdown() {
         reportPool.shutdown()
-        dbUploadPool?.shutdown()
+        dbUploadPool.shutdown()
         // Stop the periodic db upload and report generation executor service and generate one final report.
         reportPool.awaitTermination(1000, TimeUnit.SECONDS)
-        dbUploadPool?.awaitTermination(1000, TimeUnit.SECONDS)
+        dbUploadPool.awaitTermination(1000, TimeUnit.SECONDS)
 
-        if (executor.uploadsDb()) uploadDb()
+        uploadDb()
         generateReport()
+
+        Files.walk(workflowTmpDir)
+            .sorted(Comparator.reverseOrder())
+            .forEach { Files.delete(it) }
     }
 
     /*
@@ -196,21 +196,22 @@ class WorkflowRunner(
      */
     private fun uploadDb() {
         // Create backup db file
-        val dbSnapshotPath = Paths.get(workflowConfig.localFilesBaseDir, DB_SNAPSHOT_FILENAME)
+        val dbSnapshotPath = workflowTmpDir.resolve(DB_SNAPSHOT_FILENAME)
         transaction(db) {
             TransactionManager.current().connection.createStatement().use { it.executeUpdate("backup to $dbSnapshotPath") }
         }
-        executor.uploadFile(DB_SNAPSHOT_FILENAME, DB_FILENAME, backup = true)
+        executor.uploadFile(dbSnapshotPath, DB_FILENAME, backup = true)
     }
 
     private fun generateReport() {
-        val reportFile = "$RUN_DIR/${workflowRun.startTime}/$REPORT_FILENAME"
-        val reportPath = Paths.get(workflowConfig.localFilesBaseDir, reportFile)
-        Files.createDirectories(reportPath.parent)
-        val writer = Files.newBufferedWriter(reportPath, StandardCharsets.UTF_8, StandardOpenOption.CREATE,
+        val workingReportPath = workflowTmpDir.resolve(REPORT_FILENAME)
+        val uploadReportFile = "$RUN_DIR/${workflowRun.startTime}/$REPORT_FILENAME"
+
+        Files.createDirectories(workingReportPath.parent)
+        val writer = Files.newBufferedWriter(workingReportPath, StandardCharsets.UTF_8, StandardOpenOption.CREATE,
             StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)
         createReport(db, workflowRun, writer)
         writer.flush()
-        executor.uploadFile(reportFile)
+        executor.uploadFile(workingReportPath, uploadReportFile)
     }
 }

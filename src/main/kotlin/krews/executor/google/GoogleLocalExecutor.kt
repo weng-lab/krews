@@ -14,6 +14,7 @@ import krews.file.OutputFile
 import mu.KotlinLogging
 import retry
 import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.concurrent.ConcurrentHashMap
 
@@ -32,28 +33,23 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
     private val gcsBase = googleConfig.storageBaseDir
     private val runningOperations: MutableSet<String> = ConcurrentHashMap.newKeySet<String>()
 
-    override fun downloadFile(path: String) {
-        val localFilePath = Paths.get(workflowConfig.localFilesBaseDir, path)
-        log.info { "Deleting local copy of $path if it exists" }
-        Files.deleteIfExists(localFilePath)
-        Files.createDirectories(localFilePath.parent)
-
-        log.info { "Attempting to download $path from bucket $bucket..." }
-        val storageObject = gcsObjectPath(gcsBase, path)
-        val fileExists = downloadObject(googleStorageClient, bucket, storageObject, localFilePath)
-        if (fileExists) {
-            log.info { "$storageObject not found in bucket $bucket. A new database file will be used." }
+    override fun downloadFile(fromPath: String, toPath: Path) {
+        log.info { "Attempting to download $fromPath from bucket $bucket to $toPath..." }
+        Files.createDirectories(toPath.parent)
+        val storageObject = gcsObjectPath(gcsBase, fromPath)
+        val fileExists = downloadObject(googleStorageClient, bucket, storageObject, toPath)
+        if (!fileExists) {
+            log.info { "$storageObject not found in bucket $bucket." }
         } else {
-            log.info { "$storageObject successfully downloaded to $localFilePath" }
+            log.info { "$storageObject successfully downloaded to $toPath" }
         }
     }
 
-    override fun uploadFile(fromPath: String, toPath: String, backup: Boolean) {
-        val localFilePath = Paths.get(workflowConfig.localFilesBaseDir, fromPath)
+    override fun uploadFile(fromPath: Path, toPath: String, backup: Boolean) {
         val storageObject = gcsObjectPath(gcsBase, toPath)
 
-        log.info { "Pushing file $localFilePath to object $storageObject in bucket $bucket" }
-        uploadObject(googleStorageClient, bucket, storageObject, localFilePath)
+        log.info { "Pushing file $fromPath to object $storageObject in bucket $bucket" }
+        uploadObject(googleStorageClient, bucket, storageObject, fromPath)
 
         if (backup) {
             val backupObject = "$storageObject.backup"
@@ -74,8 +70,6 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
     override fun fileLastModified(path: String): Long {
         return googleStorageClient.objects().get(bucket, gcsObjectPath(gcsBase, path)).execute().updated.value
     }
-
-    override fun uploadsDb() = true
 
     override fun executeTask(
         workflowRunDir: String,

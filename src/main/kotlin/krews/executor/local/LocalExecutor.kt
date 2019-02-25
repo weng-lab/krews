@@ -13,6 +13,10 @@ import krews.config.TaskConfig
 import krews.config.WorkflowConfig
 import krews.core.TaskRunContext
 import krews.executor.*
+import krews.executor.google.copyObject
+import krews.executor.google.gcsObjectPath
+import krews.executor.google.googleStorageClient
+import krews.executor.google.uploadObject
 import krews.file.*
 import mu.KotlinLogging
 import java.nio.file.Files
@@ -21,7 +25,6 @@ import java.nio.file.Paths
 import java.nio.file.StandardCopyOption
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.streams.toList
 
 private val log = KotlinLogging.logger {}
 
@@ -34,8 +37,30 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
 
     private val runningContainers: MutableSet<String> = ConcurrentHashMap.newKeySet<String>()
 
-    override fun downloadFile(path: String) {}
-    override fun uploadFile(fromPath: String, toPath: String, backup: Boolean) {}
+    override fun downloadFile(fromPath: String, toPath: Path) {
+        val fromFile = workflowBasePath.resolve(fromPath)
+        log.info { "Attempting to copy $fromFile to $toPath..." }
+        val fileExists = Files.exists(toPath)
+        if (fileExists) {
+            Files.createDirectories(toPath.parent)
+            Files.copy(fromFile, toPath, StandardCopyOption.REPLACE_EXISTING)
+            log.info { "$fromFile successfully copied to $toPath!" }
+        } else {
+            log.info { "$fromFile not found. It will not be copied." }
+        }
+    }
+    override fun uploadFile(fromPath: Path, toPath: String, backup: Boolean) {
+        val toFile = workflowBasePath.resolve(toPath)
+        log.info { "Copying file $fromPath to $toFile" }
+        Files.createDirectories(toFile.parent)
+        Files.copy(fromPath, toFile, StandardCopyOption.REPLACE_EXISTING)
+
+        if (backup) {
+            val backupFile = workflowBasePath.resolve("$toFile.backup")
+            log.info { "Backing up file $toFile to $backupFile" }
+            Files.copy(toFile, backupFile, StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
 
     override fun fileExists(path: String) = Files.exists(workflowBasePath.resolve(path))
     override fun fileLastModified(path: String) = Files.getLastModifiedTime(workflowBasePath.resolve(path)).toMillis()
