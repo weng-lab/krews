@@ -40,9 +40,11 @@ class Task<I : Any, O : Any> @PublishedApi internal constructor(
         }, pool))
 
         val processed = if (maintainOrder) {
-            inputFlux.flatMapSequential({ processInputMono(it) }, parToMaxConcurrency(taskConfig?.parallelism))
+            inputFlux.flatMapSequentialDelayError({ processInputMono(it) },
+                parToMaxConcurrency(taskConfig?.parallelism), Queues.XS_BUFFER_SIZE)
         } else {
-            inputFlux.flatMap({ processInputMono(it) }, parToMaxConcurrency(taskConfig?.parallelism))
+            inputFlux.flatMapDelayError({ processInputMono(it) },
+                parToMaxConcurrency(taskConfig?.parallelism), Queues.XS_BUFFER_SIZE)
         }.onErrorContinue { t: Throwable, _ -> log.error(t) { } }
 
         processed.subscribe(outputPub as TopicProcessor)

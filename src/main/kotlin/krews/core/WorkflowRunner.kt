@@ -150,8 +150,16 @@ class WorkflowRunner(
         // Get "leafOutputs", meaning this workflow's task.output fluxes that don't have other task.outputs as parents
         val allTaskOutputFluxes = workflow.tasks.values.map { it.outputPub }
 
+        val leafOutputs = allTaskOutputFluxes.toMutableSet()
+        for (output in allTaskOutputFluxes) {
+            val taskParents = Scannable.from(output).parents().collect(Collectors.toSet())
+                .filter { it is Flux<*> }
+                .map { it as Flux<*> }
+            leafOutputs.removeAll(taskParents)
+        }
+
         // Trigger workflow by subscribing to leaf task outputs...
-        val leavesFlux = Flux.merge(allTaskOutputFluxes)
+        val leavesFlux = Flux.merge(leafOutputs)
             .subscribeOn(Schedulers.elastic())
 
         // and block until it's done
