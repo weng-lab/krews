@@ -1,6 +1,7 @@
 package krews.executor.local
 
 import com.github.dockerjava.api.DockerClient
+import com.github.dockerjava.api.command.InspectContainerResponse
 import com.github.dockerjava.api.model.Bind
 import com.github.dockerjava.api.model.Frame
 import com.github.dockerjava.api.model.StreamType
@@ -12,6 +13,7 @@ import krews.config.DockerConfig
 import krews.config.TaskConfig
 import krews.config.WorkflowConfig
 import krews.core.TaskRunContext
+import krews.core.TaskRunner
 import krews.executor.*
 import krews.file.*
 import mu.KotlinLogging
@@ -20,7 +22,10 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.nio.file.StandardCopyOption
 import java.util.*
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Future
+import java.util.concurrent.TimeUnit
 
 private val log = KotlinLogging.logger {}
 
@@ -32,6 +37,8 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
     private val outputsPath = workflowBasePath.resolve(OUTPUTS_DIR)
 
     private val runningContainers: MutableSet<String> = ConcurrentHashMap.newKeySet<String>()
+
+    private var allShutdown = false
 
     override fun downloadFile(fromPath: String, toPath: Path) {
         val fromFile = workflowBasePath.resolve(fromPath)
@@ -66,6 +73,122 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
 
     override fun downloadInputFile(inputFile: InputFile) = downloadInputFileLocalFS(inputFile, inputsPath)
 
+    private inner class DockerJob(
+        val containerId: String,
+        val dockerClient: DockerClient,
+        val logBasePath: Path,
+        val runBasePath: Path,
+        val mountDir: Path,
+        val taskRunId: Int,
+        val outputFilesOut: Set<OutputFile>) : Future<Unit> {
+        private var lastState: InspectContainerResponse.ContainerState? = null
+        private var capturedThrowable: Throwable? = null
+        private var cancelled = false
+
+        private fun checkStatus() {
+            if (lastState?.running == false) {
+                return
+            }
+            try {
+                try {
+                    val inspect = dockerClient.inspectContainerCmd(containerId).exec()
+                    lastState = inspect.state
+                } finally {
+                    if (lastState?.running == false) {
+                        onFinished(lastState?.exitCode == 0)
+                    }
+                }
+            } catch (e: Throwable) {
+                capturedThrowable = e
+            }
+        }
+
+        private fun onFinished(success: Boolean) {
+            try {
+                runningContainers.remove(containerId)
+                copyLogsFromContainer(dockerClient, containerId, logBasePath)
+
+                // Delete containers
+                log.info { "Cleaning up containers..." }
+                dockerClient.removeContainerCmd(containerId).exec()
+
+                if (success) {
+                    // Copy output files out of docker container into run outputs dir
+                    if (outputFilesOut.isNotEmpty()) {
+                        log.info { "Copying output files $outputFilesOut for task output out of mounted data dir $mountDir" }
+                    } else {
+                        log.info { "No output files to copy for this task run." }
+                    }
+                    outputFilesOut.map { it.path }.forEach {
+                        val to = outputsPath.resolve(it)
+                        Files.createDirectories(to.parent)
+                        Files.copy(mountDir.resolve(it), to, StandardCopyOption.REPLACE_EXISTING)
+                    }
+                } else {
+                    // Copy all files in mounted docker data directory to task diagnostics directory
+                    val taskDiagnosticsDir = runBasePath.resolve(DIAGNOSTICS_DIR).resolve(taskRunId.toString())
+                    copyDiagnosticFiles(mountDir, taskDiagnosticsDir)
+                }
+            } finally {
+                // Clean up temporary mount dir
+                Files.walk(mountDir)
+                    .sorted(Comparator.reverseOrder())
+                    .forEach { Files.delete(it) }
+            }
+        }
+
+        override fun isDone(): Boolean {
+            checkStatus()
+            return lastState?.running == false
+        }
+
+        override fun get() {
+            // An arbitrarily high value that won't overflow the long
+            return get(30, TimeUnit.DAYS)
+        }
+
+        override fun get(timeout: Long, unit: TimeUnit?) {
+            if (capturedThrowable != null) {
+                throw capturedThrowable!!
+            }
+            if (lastState?.running != false) {
+                dockerClient.waitContainerCmd(containerId).exec(WaitContainerResultCallback())
+                    .awaitStatusCode(timeout, unit)
+            }
+            val statusCode = lastState!!.exitCode!!
+            checkStatus()
+            if (statusCode > 0) {
+                val taskDiagnosticsDir = runBasePath.resolve(DIAGNOSTICS_DIR).resolve(taskRunId.toString())
+                throw Exception(
+                    """
+                |Container exited with code $statusCode.
+                |Please see logs at $logBasePath for more information.
+                |Working files (in data directory) have been copied into $taskDiagnosticsDir
+                """.trimMargin()
+                )
+            }
+        }
+
+
+        override fun cancel(mayInterruptIfRunning: Boolean): Boolean {
+            if (!mayInterruptIfRunning && !isDone) {
+                return false
+            }
+            try {
+                log.info { "Stopping container $containerId..." }
+                dockerClient.stopContainerCmd(containerId).exec()
+            } finally {
+                checkStatus()
+            }
+            cancelled = true
+            return true
+        }
+
+        override fun isCancelled(): Boolean {
+            return allShutdown || cancelled
+        }
+    }
+
     override fun executeTask(
         workflowRunDir: String,
         taskRunId: Int,
@@ -75,7 +198,10 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
         outputFilesOut: Set<OutputFile>,
         cachedInputFiles: Set<InputFile>,
         downloadInputFiles: Set<InputFile>
-    ) {
+    ): Future<Unit> {
+        if (allShutdown) {
+            throw Exception("shutdownRunningTasks has already been called")
+        }
 
         // Create a temp directory to use as a mount for input data
         val mountDir = workflowBasePath.resolve("task-$taskRunId-mount")
@@ -121,52 +247,18 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
 
             val logBasePath = runBasePath.resolve(LOGS_DIR).resolve(taskRunId.toString())
 
-            try {
-                log.info { "Waiting for container $containerId to finish..." }
-                val statusCode =
-                    dockerClient.waitContainerCmd(containerId).exec(WaitContainerResultCallback()).awaitStatusCode()
-                runningContainers.remove(containerId)
-                if (statusCode > 0) {
-                    // Copy all files in mounted docker data directory to task diagnostics directory
-                    val taskDiagnosticsDir = runBasePath.resolve(DIAGNOSTICS_DIR).resolve(taskRunId.toString())
-                    copyDiagnosticFiles(mountDir, taskDiagnosticsDir)
-                    throw Exception(
-                        """
-                        |Container exited with code $statusCode.
-                        |Please see logs at $logBasePath for more information.
-                        |Working files (in data directory) have been copied into $taskDiagnosticsDir
-                        """.trimMargin()
-                    )
-                }
-                log.info { "Container $containerId finished successfully!" }
-            } finally {
-                copyLogsFromContainer(dockerClient, containerId, logBasePath)
-
-                // Delete containers
-                log.info { "Cleaning up containers..." }
-                dockerClient.removeContainerCmd(containerId).exec()
-            }
-
-            // Copy output files out of docker container into run outputs dir
-            if (outputFilesOut.isNotEmpty()) {
-                log.info { "Copying output files $outputFilesOut for task output out of mounted data dir $mountDir" }
-            } else {
-                log.info { "No output files to copy for this task run." }
-            }
-            outputFilesOut.map { it.path }.forEach {
-                val to = outputsPath.resolve(it)
-                Files.createDirectories(to.parent)
-                Files.copy(mountDir.resolve(it), to, StandardCopyOption.REPLACE_EXISTING)
-            }
-        } finally {
+            return DockerJob(containerId, dockerClient, logBasePath, runBasePath, mountDir, taskRunId, outputFilesOut)
+        } catch(e: Throwable) {
             // Clean up temporary mount dir
             Files.walk(mountDir)
                 .sorted(Comparator.reverseOrder())
                 .forEach { Files.delete(it) }
+            return CompletableFuture.failedFuture(e)
         }
     }
 
     override fun shutdownRunningTasks() {
+        allShutdown = true
         for(containerId in runningContainers) {
             log.info { "Stopping container $containerId..." }
             dockerClient.stopContainerCmd(containerId).exec()

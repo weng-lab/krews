@@ -1,7 +1,5 @@
 package krews.core
 
-import krews.config.LimitedParallelism
-import krews.config.UnlimitedParallelism
 import krews.config.WorkflowConfig
 import krews.db.*
 import krews.executor.*
@@ -131,20 +129,13 @@ class WorkflowRunner(
     }
 
     private fun runWorkflow(): Boolean {
-        // Create an executor service for executing tasks.
-        // The system's combined task parallelism will be determined by this executor's thread limit
-        val workerThreadFactory = BasicThreadFactory.Builder().namingPattern("worker-%d").build()
-        val workflowParallelism = workflowConfig.parallelism
-        val workerPool = when (workflowParallelism) {
-            is UnlimitedParallelism -> Executors.newCachedThreadPool(workerThreadFactory)
-            is LimitedParallelism -> Executors.newFixedThreadPool(workflowParallelism.limit, workerThreadFactory)
-        }
-
+        val taskRunner = TaskRunner(workflowRun, workflowConfig, executor, db)
         try {
-            val taskRunner = TaskRunner(workflowRun, workflowConfig, executor, db)
+            taskRunner.startMonitorTasks()
+
             // Set execute function for each task.
             for (task in workflow.tasks.values) {
-                connectTask(task, taskRunner, workerPool)
+                task.connect(workflowConfig.tasks[task.name], taskRunner)
             }
 
             // Get "leafOutputs", meaning this workflow's task.output fluxes that don't have other task.outputs as parents
@@ -170,17 +161,8 @@ class WorkflowRunner(
             }
             return failedTasks == 0
         } finally {
-            workerPool.shutdown()
+            taskRunner.stopMonitorTasks()
         }
-    }
-
-    private fun <I : Any, O : Any> connectTask(task: Task<I, O>, taskRunner: TaskRunner, workerPool: ExecutorService) {
-        val taskConfig = workflowConfig.tasks[task.name]
-        val executeFn: (TaskRunContext<I, O>) -> O = { taskRunContext ->
-            taskRunner.run(task, taskRunContext)
-        }
-
-        task.connect(taskConfig, executeFn, workerPool)
     }
 
     fun onShutdown() {

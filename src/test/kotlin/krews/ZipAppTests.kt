@@ -29,10 +29,13 @@ import reactor.core.scheduler.Schedulers
 import reactor.util.function.Tuple2
 import java.nio.file.Files
 import java.nio.file.Paths
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.CyclicBarrier
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.function.Supplier
 import java.util.stream.Collectors
 
 private val log = KotlinLogging.logger {}
@@ -85,6 +88,8 @@ class ZipAppTests : StringSpec(){
         }
     }
 
+    private val testExecutor = Executors.newCachedThreadPool()
+
     init {
         "If one task run fails all others that aren't downstream should complete" {
             val (executor , runner) = runWorkflow(baseConfig)
@@ -95,53 +100,66 @@ class ZipAppTests : StringSpec(){
             every {
                 executor.executeTask(any(), any(), any(), match { it.dockerImage == "task1a" }, any(), any(), any(), any())
             } answers {
-                val task1s = (this.args[3] as TaskRunContext<Int, Int>).input
-                if (task1s <= 6) {
-                    task1aBeforeErrorLatch.countDown()
-                }
-                if (task1s == 6) {
-                    // Ensure 2 task runs complete before throwing an error.
-                    task1aBeforeErrorLatch.await()
-                    throw Exception("Test Error - task1a")
-                } else {
-                    alltask1Barrier.await()
-                    Thread.sleep(1000)
-                    task1CompleteCount.incrementAndGet()
-                    alltask1aLatch.countDown()
-                }
+                CompletableFuture.supplyAsync(Supplier {
+                    val task1s = (this.args[3] as TaskRunContext<Int, Int>).input
+                    if (task1s <= 6) {
+                        task1aBeforeErrorLatch.countDown()
+                    }
+                    if (task1s == 6) {
+                        // Ensure 2 task runs complete before throwing an error.
+                        task1aBeforeErrorLatch.await()
+                        throw Exception("Test Error - task1a")
+                    } else {
+                        alltask1Barrier.await()
+                        Thread.sleep(1000)
+                        task1CompleteCount.incrementAndGet()
+                        alltask1aLatch.countDown()
+                    }
+                }, testExecutor)
             }
 
             val task1bBeforeErrorLatch = CountDownLatch(3)
             every {
                 executor.executeTask(any(), any(), any(), match { it.dockerImage == "task1b" }, any(), any(), any(), any())
             } answers {
-                val task1s = (this.args[3] as TaskRunContext<Int, Int>).input
-                if (task1s <= 3) {
-                    task1bBeforeErrorLatch.countDown()
-                }
-                if (task1s == 3) {
-                    // Ensure 2 task runs complete before throwing an error.
-                    task1bBeforeErrorLatch.await()
-                    throw Exception("Test Error - task1b")
-                } else {
-                    alltask1Barrier.await()
-                    alltask1aLatch.await()
-                    // Must be long enough that everything can shutdown
-                    Thread.sleep(2000)
-                    task1CompleteCount.incrementAndGet()
-                }
+                CompletableFuture.supplyAsync(Supplier {
+                    val task1s = (this.args[3] as TaskRunContext<Int, Int>).input
+                    if (task1s <= 3) {
+                        task1bBeforeErrorLatch.countDown()
+                    }
+                    if (task1s == 3) {
+                        // Ensure 2 task runs complete before throwing an error.
+                        task1bBeforeErrorLatch.await()
+                        throw Exception("Test Error - task1b")
+                    } else {
+                        alltask1Barrier.await()
+                        alltask1aLatch.await()
+                        // Must be long enough that everything can shutdown
+                        Thread.sleep(2000)
+                        val ignored = task1CompleteCount.incrementAndGet()
+                    }
+                }, testExecutor)
+
             }
 
             val task2Count = AtomicInteger()
             every {
                 executor.executeTask(any(), any(), any(), match { it.dockerImage == "task2" }, any(), any(), any(), any())
             } answers {
-                println("Task2 args ${this.args}")
-                val count = task2Count.incrementAndGet()
-                if (count == 2) {
-                    //throw Exception("Test Error - task2")
-                }
-                Thread.sleep(1000)
+                CompletableFuture.supplyAsync(Supplier {
+                    println("Task2 args ${this.args}")
+                    val count = task2Count.incrementAndGet()
+                    if (count == 2) {
+                        //throw Exception("Test Error - task2")
+                    }
+                    Thread.sleep(1000)
+                }, testExecutor)
+            }
+
+            every {
+                executor.executeTask(any(), any(), any(), match { it.dockerImage == "task3" }, any(), any(), any(), any())
+            } answers {
+                CompletableFuture.completedFuture(null)
             }
 
             runner.run()
