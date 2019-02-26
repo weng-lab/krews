@@ -24,6 +24,7 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.stream.Collectors
 
 
@@ -43,6 +44,7 @@ class WorkflowRunner(
     private val dbUploadPool: ScheduledExecutorService
     private val workflowTime = if (runTimestampOverride != null) DateTime(runTimestampOverride) else DateTime.now()
     private val workflowTmpDir = Paths.get(System.getProperty("java.io.tmpdir"), "workflow-${workflow.name}-$workflowTime")
+    private val hasShutdown = AtomicBoolean(false)
 
     init {
         val dbFilePath = workflowTmpDir.resolve(DB_FILENAME)
@@ -90,7 +92,7 @@ class WorkflowRunner(
             workflowRunSuccessful = runWorkflow()
         } catch (e: Exception) {
             workflowRunSuccessful = false
-            log.error(e) { }
+            log.error(e) { "Workflow unsuccessful." }
         }
 
         transaction(db) {
@@ -147,16 +149,9 @@ class WorkflowRunner(
 
         // Get "leafOutputs", meaning this workflow's task.output fluxes that don't have other task.outputs as parents
         val allTaskOutputFluxes = workflow.tasks.values.map { it.outputPub }
-        val leafOutputs = allTaskOutputFluxes.toMutableSet()
-        for (output in allTaskOutputFluxes) {
-            val taskParents = Scannable.from(output).parents().collect(Collectors.toSet())
-                .filter { it is Flux<*> }
-                .map { it as Flux<*> }
-            leafOutputs.removeAll(taskParents)
-        }
 
         // Trigger workflow by subscribing to leaf task outputs...
-        val leavesFlux = Flux.merge(leafOutputs)
+        val leavesFlux = Flux.merge(allTaskOutputFluxes)
             .subscribeOn(Schedulers.elastic())
 
         // and block until it's done
@@ -180,6 +175,8 @@ class WorkflowRunner(
     }
 
     fun onShutdown() {
+        if (!hasShutdown.compareAndSet(false, true)) return
+        log.info { "Shutting down..." }
         reportPool.shutdown()
         dbUploadPool.shutdown()
         // Stop the periodic db upload and report generation executor service and generate one final report.
@@ -192,6 +189,7 @@ class WorkflowRunner(
         Files.walk(workflowTmpDir)
             .sorted(Comparator.reverseOrder())
             .forEach { Files.delete(it) }
+        log.info { "Shutdown complete!" }
     }
 
     /*
@@ -199,15 +197,21 @@ class WorkflowRunner(
      * This is needed because it's not safe to copy a file that's currently open for writes.
      */
     private fun uploadDb() {
+        log.info { "Uploading database..." }
         // Create backup db file
         val dbSnapshotPath = workflowTmpDir.resolve(DB_SNAPSHOT_FILENAME)
+        log.info { "Backing up database..." }
         transaction(db) {
             TransactionManager.current().connection.createStatement().use { it.executeUpdate("backup to $dbSnapshotPath") }
         }
+
+        log.info { "Uploading backup database file..." }
         executor.uploadFile(dbSnapshotPath, DB_FILENAME, backup = true)
+        log.info { "Database upload complete!" }
     }
 
     private fun generateReport() {
+        log.info { "Generating report..." }
         val workingReportPath = workflowTmpDir.resolve(REPORT_FILENAME)
         val uploadReportFile = "$RUN_DIR/${workflowRun.startTime}/$REPORT_FILENAME"
 
@@ -216,6 +220,9 @@ class WorkflowRunner(
             StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)
         createReport(db, workflowRun, writer)
         writer.flush()
+        log.info { "Report generation complete (see: $workingReportPath)! Uploading..." }
+
         executor.uploadFile(workingReportPath, uploadReportFile)
+        log.info { "Report upload complete!" }
     }
 }

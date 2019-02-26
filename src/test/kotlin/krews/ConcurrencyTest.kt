@@ -72,9 +72,9 @@ class ConcurrencyTest : StringSpec(){
 
     override fun afterTest(description: Description, result: TestResult) {
         // Clean up temporary dirs
-        Files.walk(testDir)
+        /*Files.walk(testDir)
             .sorted(Comparator.reverseOrder())
-            .forEach { Files.delete(it) }
+            .forEach { Files.delete(it) }*/
     }
 
     init {

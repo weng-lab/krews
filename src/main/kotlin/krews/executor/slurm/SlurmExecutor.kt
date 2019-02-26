@@ -170,9 +170,6 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
             sbatchScript.append(copyCommand(mountDirFilePath, cachedFilePath.toString()))
         }
 
-        //val sbatchFile = mountTmpDir.resolve(SBATCH_SCRIPT_NAME).toString()
-        //FileOutputStream(sbatchFile).use { it.write(sbatchScript.toString().toByteArray()) }
-        //log.info { "Created sbatch script file $sbatchFile with content:\n$sbatchScript" }
         val sbatchScriptAsBase64 = Base64.getEncoder().encodeToString(sbatchScript.toString().toByteArray())
         val sbatchCommand = "echo $sbatchScriptAsBase64 | base64 --decode | sbatch"
         val sbatchResponse = commandExecutor.exec(sbatchCommand)
