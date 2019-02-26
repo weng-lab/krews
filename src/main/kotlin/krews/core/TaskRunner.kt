@@ -303,7 +303,7 @@ class TaskRunner(private val workflowRun: WorkflowRun,
         val inputJson = taskFuture.inputJson!!
         val paramsJson = taskFuture.paramsJson
         try {
-            // Capture any exceptions
+            // Capture any exceptions, do cleanup
             taskFuture.executedFuture!!.get()
             val taskRunId: Int = transaction(db) { taskRun.id.value }
             val loggingPrefix = "Task Run ${task.name} - $taskRunId:"

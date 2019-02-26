@@ -82,48 +82,42 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
             if (lastStatus == SlurmJobStateCategory.SUCCEEDED || lastStatus == SlurmJobStateCategory.FAILED) {
                 return
             }
+            if (checkAttempt > 4) {
+                // Force a failed state
+                lastStatus = SlurmJobStateCategory.FAILED
+                throw SlurmCheckEmptyResponseException()
+            }
+            if (checkAttempt > 1) {
+                val sleepTime = 2.0.pow(checkAttempt).toLong()
+                if (System.currentTimeMillis() - lastCheckTime < sleepTime) {
+                    return
+                }
+            }
             try {
-                if (checkAttempt > 4) {
-                    // Force a failed state
-                    lastStatus = SlurmJobStateCategory.FAILED
-                    throw SlurmCheckEmptyResponseException()
+                lastCheckTime = System.currentTimeMillis()
+                val checkCommand = "sacct -j $jobId --format=state --noheader"
+                val jobStatusResponse = commandExecutor.exec(checkCommand)
+                if (jobStatusResponse.isBlank()) throw SlurmCheckEmptyResponseException()
+                val rawJobStatus = jobStatusResponse.split("\n")[0]
+                    .trim().trimEnd('+')
+                val jobStatus = SlurmJobState.valueOf(rawJobStatus)
+                when (jobStatus.category) {
+                    SlurmJobStateCategory.INCOMPLETE -> log.info { "Job $jobId still in progress with status $jobStatus" }
+                    SlurmJobStateCategory.FAILED -> log.info { "Job $jobId failed with status $jobStatus" }
+                    SlurmJobStateCategory.SUCCEEDED -> Unit
                 }
-                if (checkAttempt > 1) {
-                    val sleepTime = 2.0.pow(checkAttempt).toLong()
-                    if (System.currentTimeMillis() - lastCheckTime < sleepTime) {
-                        return
-                    }
+                lastStatus = jobStatus.category
+                checkAttempt = 0
+                if (lastStatus == SlurmJobStateCategory.SUCCEEDED) {
+                    log.info { "Job $jobId complete!" }
                 }
-                try {
-                    lastCheckTime = System.currentTimeMillis()
-                    val checkCommand = "sacct -j $jobId --format=state --noheader"
-                    val jobStatusResponse = commandExecutor.exec(checkCommand)
-                    if (jobStatusResponse.isBlank()) throw SlurmCheckEmptyResponseException()
-                    val rawJobStatus = jobStatusResponse.split("\n")[0]
-                        .trim().trimEnd('+')
-                    val jobStatus = SlurmJobState.valueOf(rawJobStatus)
-                    when (jobStatus.category) {
-                        SlurmJobStateCategory.INCOMPLETE -> log.info { "Job $jobId still in progress with status $jobStatus" }
-                        SlurmJobStateCategory.FAILED -> log.info { "Job $jobId failed with status $jobStatus" }
-                        SlurmJobStateCategory.SUCCEEDED -> Unit
-                    }
-                    lastStatus = jobStatus.category
-                    checkAttempt = 0
-                    if (lastStatus == SlurmJobStateCategory.SUCCEEDED) {
-                        log.info { "Job $jobId complete!" }
-                    }
-                } catch (e: SlurmCheckEmptyResponseException) {
-                    checkAttempt += 1
-                    val sleepTime = 2.0.pow(checkAttempt).toLong()
-                    log.info { "Empty sacct response. Sleeping for $sleepTime seconds before next attempt." }
-                } catch (e: Throwable) {
-                    lastStatus = SlurmJobStateCategory.FAILED
-                    capturedThrowable = e
-                }
-            } finally {
-                if (lastStatus == SlurmJobStateCategory.SUCCEEDED || lastStatus == SlurmJobStateCategory.FAILED) {
-                    onFinished(lastStatus == SlurmJobStateCategory.SUCCEEDED)
-                }
+            } catch (e: SlurmCheckEmptyResponseException) {
+                checkAttempt += 1
+                val sleepTime = 2.0.pow(checkAttempt).toLong()
+                log.info { "Empty sacct response. Sleeping for $sleepTime seconds before next attempt." }
+            } catch (e: Throwable) {
+                lastStatus = SlurmJobStateCategory.FAILED
+                capturedThrowable = e
             }
         }
 
@@ -145,18 +139,22 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
         }
 
         override fun get(timeout: Long, unit: TimeUnit?) {
-            val startTime: Long = 0
-            do {
-                if (capturedThrowable != null) {
-                    throw capturedThrowable!!
-                }
-                val waitTime = TimeUnit.MILLISECONDS.convert(timeout, (unit ?: TimeUnit.MILLISECONDS))
-                if (startTime + waitTime > System.currentTimeMillis()) {
-                    throw TimeoutException()
-                }
+            try {
+                val startTime: Long = 0
+                do {
+                    if (capturedThrowable != null) {
+                        throw capturedThrowable!!
+                    }
+                    val waitTime = TimeUnit.MILLISECONDS.convert(timeout, (unit ?: TimeUnit.MILLISECONDS))
+                    if (startTime + waitTime > System.currentTimeMillis()) {
+                        throw TimeoutException()
+                    }
 
-                Thread.sleep(workflowConfig.slurm.jobCompletionPollInterval * 1000L)
-            } while(!isDone)
+                    Thread.sleep(workflowConfig.slurm.jobCompletionPollInterval * 1000L)
+                } while (!isDone)
+            } finally {
+                onFinished(lastStatus == SlurmJobStateCategory.SUCCEEDED)
+            }
         }
 
 

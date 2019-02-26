@@ -84,26 +84,25 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
         private var lastState: InspectContainerResponse.ContainerState? = null
         private var capturedThrowable: Throwable? = null
         private var cancelled = false
+        private var cleaned = false
 
         private fun checkStatus() {
             if (lastState?.running == false) {
                 return
             }
             try {
-                try {
-                    val inspect = dockerClient.inspectContainerCmd(containerId).exec()
-                    lastState = inspect.state
-                } finally {
-                    if (lastState?.running == false) {
-                        onFinished(lastState?.exitCode == 0)
-                    }
-                }
+                val inspect = dockerClient.inspectContainerCmd(containerId).exec()
+                lastState = inspect.state
             } catch (e: Throwable) {
                 capturedThrowable = e
             }
         }
 
         private fun onFinished(success: Boolean) {
+            if (cleaned) {
+                return
+            }
+            cleaned = true
             try {
                 runningContainers.remove(containerId)
                 copyLogsFromContainer(dockerClient, containerId, logBasePath)
@@ -148,24 +147,31 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
         }
 
         override fun get(timeout: Long, unit: TimeUnit?) {
-            if (capturedThrowable != null) {
-                throw capturedThrowable!!
-            }
-            if (lastState?.running != false) {
-                dockerClient.waitContainerCmd(containerId).exec(WaitContainerResultCallback())
-                    .awaitStatusCode(timeout, unit)
-            }
-            val statusCode = lastState!!.exitCode!!
-            checkStatus()
-            if (statusCode > 0) {
-                val taskDiagnosticsDir = runBasePath.resolve(DIAGNOSTICS_DIR).resolve(taskRunId.toString())
-                throw Exception(
-                    """
+            try {
+                if (capturedThrowable != null) {
+                    throw capturedThrowable!!
+                }
+                if (lastState?.running != false) {
+                    dockerClient.waitContainerCmd(containerId).exec(WaitContainerResultCallback())
+                        .awaitStatusCode(timeout, unit)
+                }
+                val statusCode = lastState!!.exitCode!!
+                checkStatus()
+                if (lastState?.running == true) {
+                    throw Exception("Expected container to not be running.")
+                }
+                if (statusCode > 0) {
+                    val taskDiagnosticsDir = runBasePath.resolve(DIAGNOSTICS_DIR).resolve(taskRunId.toString())
+                    throw Exception(
+                        """
                 |Container exited with code $statusCode.
                 |Please see logs at $logBasePath for more information.
                 |Working files (in data directory) have been copied into $taskDiagnosticsDir
                 """.trimMargin()
-                )
+                    )
+                }
+            } finally {
+                onFinished(lastState?.exitCode == 0)
             }
         }
 
