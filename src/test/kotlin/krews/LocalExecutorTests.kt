@@ -72,7 +72,7 @@ class LocalExecutorTests : StringSpec() {
     }
 
     init {
-        "f:Can run a simple workflow locally" {
+        "Can run a simple workflow locally" {
             // Create 3 files in a temp directory to use as inputs.
             for (i in 1..3) {
                 val file = Files.createFile(sampleFilesDir.resolve("test-$i.txt"))

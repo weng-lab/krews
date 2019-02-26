@@ -58,7 +58,8 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
     }
 
     override fun fileExists(path: String): Boolean = Files.exists(workflowBasePath.resolve(path))
-    override fun fileLastModified(path: String): Long = Files.getLastModifiedTime(workflowBasePath.resolve(path)).toMillis()
+    override fun fileLastModified(path: String): Long =
+        Files.getLastModifiedTime(workflowBasePath.resolve(path)).toMillis()
 
     override fun listFiles(baseDir: String): Set<String> = listLocalFiles(workflowBasePath.resolve(baseDir))
     override fun deleteFile(file: String) = Files.delete(workflowBasePath.resolve(file))
@@ -80,133 +81,132 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
         logsPath.toFile().mkdirs()
 
         // Create a temp directory to use as a mount for input data
-        val mountDir = workflowBasePath.resolve("task-$taskRunId-mount")
-        val mountTmpDir = mountDir.resolve("tmp")
+        val mountDir = "/tmp/task-$taskRunId-mount"
+        val mountTmpDir = "$mountDir/tmp"
 
-        log.info { "Creating working directory $mountDir for task run $taskRunId" }
-        mountDir.toFile().mkdirs()
-        mountTmpDir.toFile().mkdirs()
+        //log.info { "Creating working directory $mountDir for task run $taskRunId" }
+        //mountDir.toFile().mkdirs()
+        //mountTmpDir.toFile().mkdirs()
 
-        try {
-            val sbatchScript = StringBuilder("#!/bin/bash\n#\n")
+        val sbatchScript = StringBuilder("#!/bin/bash\n#\n")
 
-            appendSbatchParam(sbatchScript, "job-name", slurmWorkflowJobName)
-            appendSbatchParam(sbatchScript, "output", logsPath.resolve("out.txt"))
-            appendSbatchParam(sbatchScript, "error", logsPath.resolve("err.txt"))
-            appendSbatchParam(sbatchScript, "mem", taskConfig.slurm?.mem ?: taskRunContext.memory)
-            appendSbatchParam(sbatchScript, "cpus-per-task", taskConfig.slurm?.cpus ?: taskRunContext.cpus)
-            appendSbatchParam(sbatchScript, "time", taskConfig.slurm?.time ?: taskRunContext.time)
-            appendSbatchParam(sbatchScript, "partition", taskConfig.slurm?.partition)
+        appendSbatchParam(sbatchScript, "job-name", slurmWorkflowJobName)
+        appendSbatchParam(sbatchScript, "output", logsPath.resolve("out.txt"))
+        appendSbatchParam(sbatchScript, "error", logsPath.resolve("err.txt"))
+        appendSbatchParam(sbatchScript, "mem", taskConfig.slurm?.mem ?: taskRunContext.memory)
+        appendSbatchParam(sbatchScript, "cpus-per-task", taskConfig.slurm?.cpus ?: taskRunContext.cpus)
+        appendSbatchParam(sbatchScript, "time", taskConfig.slurm?.time ?: taskRunContext.time)
+        appendSbatchParam(sbatchScript, "partition", taskConfig.slurm?.partition)
 
-            val tmpDir = Paths.get(taskRunContext.dockerDataDir, "tmp")
+        val tmpDir = Paths.get(taskRunContext.dockerDataDir, "tmp")
 
-            sbatchScript.append("\nexport SINGULARITY_BINDPATH=$mountDir:${taskRunContext.dockerDataDir}\n")
-            sbatchScript.append("export SINGULARITYENV_TMP_DIR=$tmpDir\n")
+        sbatchScript.append("\n")
+        sbatchScript.append("set -x\n")
+        sbatchScript.append("trap 'rm -rf $mountDir' EXIT\n")
+        sbatchScript.append("export MOUNT_DIR=$mountDir\n")
+        sbatchScript.append("export SINGULARITY_BINDPATH=\$MOUNT_DIR:${taskRunContext.dockerDataDir}\n")
+        sbatchScript.append("export SINGULARITYENV_TMP_DIR=$tmpDir\n")
 
-            // Add downloading cached input files into mounted dir to script
-            if (cachedInputFiles.isNotEmpty()) {
-                sbatchScript.append("\n# Copy local files needed for job into mounted singularity data directory.\n")
-            }
-            for (cachedInputFile in cachedInputFiles) {
-                val cachedFilePath = Paths.get(workflowBasePath.toString(), INPUTS_DIR, cachedInputFile.path)
-                val mountDirFilePath = mountDir.resolve(cachedInputFile.path)
-                sbatchScript.append(copyCommand(cachedFilePath.toString(), mountDirFilePath.toString()))
-            }
-
-            // Add copying local non-cached input files into mounted dir to script.
-            val localCopyInputFiles = downloadInputFiles.filterIsInstance<LocalInputFile>()
-            for (localCopyInputFile in localCopyInputFiles) {
-                val mountDirFilePath = mountDir.resolve(localCopyInputFile.path)
-                sbatchScript.append(copyCommand(localCopyInputFile.localPath, mountDirFilePath.toString()))
-            }
-
-            val remoteDownloadInputFiles = downloadInputFiles.filter { it !is LocalInputFile }
-            if (remoteDownloadInputFiles.isNotEmpty()) {
-                sbatchScript.append("\n# Download files to mounted directory using singularity.\n")
-            }
-            for (remoteDownloadInputFile in remoteDownloadInputFiles) {
-                val downloadCommand = remoteDownloadInputFile.downloadFileCommand(taskRunContext.dockerDataDir)
-                sbatchScript.append("singularity exec docker://${remoteDownloadInputFile.downloadFileImage()} $downloadCommand\n")
-                sbatchScript.append("echo $?\n")
-            }
-
-            // Copy OutputFiles from task input into the docker container
-            if (!outputFilesIn.isEmpty()) {
-                log.info { "Copying output files $outputFilesIn from task input into mounted working dir for singularity: $mountDir" }
-                sbatchScript.append("\n# Copy output files from previous tasks into mounted singularity data directory.\n")
-            }
-            for (outputFile in outputFilesIn) {
-                val fromPath = outputsPath.resolve(outputFile.path)
-                val mountDirFilePath = mountDir.resolve(outputFile.path)
-                sbatchScript.append(copyCommand(fromPath.toString(), mountDirFilePath.toString()))
-            }
-
-            // Copy the run command into a sh file
-            if (taskRunContext.command != null) {
-                val runScriptContents = "set -e\n${taskRunContext.command}"
-                val taskRunFile = mountTmpDir.resolve(RUN_SCRIPT_NAME).toString()
-                log.info { "Creating singularity command script file $taskRunFile with content:\n$runScriptContents" }
-                FileOutputStream(taskRunFile).use { it.write(runScriptContents.toByteArray()) }
-            }
-
-            // Add running the task to script
-            sbatchScript.append("\n# Run task command.\n")
-            sbatchScript.append("singularity exec docker://${taskRunContext.dockerImage}")
-            if (taskRunContext.command != null) sbatchScript.append(" /bin/sh ${tmpDir.resolve(RUN_SCRIPT_NAME)}")
-            sbatchScript.append("\n")
-
-            // Add copying output files into output dir to script
-            if (outputFilesOut.isNotEmpty()) {
-                sbatchScript.append("\n# Copy output files out of mounted directory.\n")
-            }
-            for (outputFile in outputFilesOut) {
-                val cachedFilePath = outputsPath.resolve(outputFile.path)
-                val mountDirFilePath = mountDir.resolve(outputFile.path)
-                sbatchScript.append(copyCommand(mountDirFilePath.toString(), cachedFilePath.toString()))
-            }
-
-            val sbatchFile = mountTmpDir.resolve(SBATCH_SCRIPT_NAME).toString()
-            FileOutputStream(sbatchFile).use { it.write(sbatchScript.toString().toByteArray()) }
-            log.info { "Created sbatch script file $sbatchFile with content:\n$sbatchScript" }
-            val sbatchCommand = "sbatch $sbatchFile"
-            val sbatchResponse = commandExecutor.exec(sbatchCommand)
-            val jobId = "\\d+\$".toRegex().find(sbatchResponse)?.value ?:
-                throw Exception("JobID not found in response for sbatch command")
-
-            log.info { "Job ID $jobId found for sbatch command" }
-
-            // Wait until status
-            do {
-                var done = false
-                Thread.sleep(workflowConfig.slurm.jobCompletionPollInterval * 1000L)
-
-                retry("Slurm status check for job $jobId", 4, { it is SlurmCheckEmptyResponseException }) { attempt ->
-                    // Exponential backoff
-                    if (attempt > 1) {
-                        val sleepTime = 2.0.pow(attempt).toLong()
-                        log.info { "Empty sacct response. Sleeping for $sleepTime seconds." }
-                        Thread.sleep(1000 * sleepTime)
-                    }
-                    val checkCommand = "sacct -j $jobId --format=state --noheader"
-                    val jobStatusResponse = commandExecutor.exec(checkCommand)
-                    if (jobStatusResponse.isBlank()) throw SlurmCheckEmptyResponseException()
-                    val rawJobStatus = jobStatusResponse.split("\n")[0]
-                        .trim().trimEnd('+')
-                    val jobStatus = SlurmJobState.valueOf(rawJobStatus)
-                    when (jobStatus.category) {
-                        SlurmJobStateCategory.INCOMPLETE -> log.info { "Job $jobId still in progress with status $jobStatus" }
-                        SlurmJobStateCategory.FAILED -> throw Exception("Job $jobId failed with status $jobStatus")
-                        SlurmJobStateCategory.SUCCEEDED -> done = true
-                    }
-                }
-            } while(!done)
-            log.info { "Job $jobId complete!" }
-        } finally {
-            // Clean up temporary mount dir
-            Files.walk(mountDir)
-                .sorted(Comparator.reverseOrder())
-                .forEach { Files.delete(it) }
+        // Add downloading cached input files into mounted dir to script
+        if (cachedInputFiles.isNotEmpty()) {
+            sbatchScript.append("\n# Copy local files needed for job into mounted singularity data directory.\n")
         }
+        for (cachedInputFile in cachedInputFiles) {
+            val cachedFilePath = Paths.get(workflowBasePath.toString(), INPUTS_DIR, cachedInputFile.path)
+            val mountDirFilePath = "$mountDir/${cachedInputFile.path}"
+            sbatchScript.append(copyCommand(cachedFilePath.toString(), mountDirFilePath))
+        }
+
+        // Add copying local non-cached input files into mounted dir to script.
+        val localCopyInputFiles = downloadInputFiles.filterIsInstance<LocalInputFile>()
+        for (localCopyInputFile in localCopyInputFiles) {
+            val mountDirFilePath = "$mountDir/${localCopyInputFile.path}"
+            sbatchScript.append(copyCommand(localCopyInputFile.localPath, mountDirFilePath))
+        }
+
+        val remoteDownloadInputFiles = downloadInputFiles.filter { it !is LocalInputFile }
+        if (remoteDownloadInputFiles.isNotEmpty()) {
+            sbatchScript.append("\n# Download files to mounted directory using singularity.\n")
+        }
+        for (remoteDownloadInputFile in remoteDownloadInputFiles) {
+            val downloadCommand = remoteDownloadInputFile.downloadFileCommand(taskRunContext.dockerDataDir)
+            sbatchScript.append("singularity exec docker://${remoteDownloadInputFile.downloadFileImage()} $downloadCommand\n")
+            sbatchScript.append("echo $?\n")
+        }
+
+        // Copy OutputFiles from task input into the docker container
+        if (!outputFilesIn.isEmpty()) {
+            log.info { "Copying output files $outputFilesIn from task input into mounted working dir for singularity: $mountDir" }
+            sbatchScript.append("\n# Copy output files from previous tasks into mounted singularity data directory.\n")
+        }
+        for (outputFile in outputFilesIn) {
+            val fromPath = outputsPath.resolve(outputFile.path)
+            val mountDirFilePath = "$mountDir/${outputFile.path}"
+            sbatchScript.append(copyCommand(fromPath.toString(), mountDirFilePath))
+        }
+        sbatchScript.append("\n")
+
+        // Copy the run command into a sh file
+        if (taskRunContext.command != null) {
+            sbatchScript.append("mkdir -p $mountTmpDir\n")
+            val runScriptContents = "set -e\n${taskRunContext.command}"
+            val runScriptAsBase64 = Base64.getEncoder().encodeToString(runScriptContents.toByteArray())
+            sbatchScript.append("echo $runScriptAsBase64 | base64 --decode > $mountTmpDir/$RUN_SCRIPT_NAME\n")
+        }
+
+        // Add running the task to script
+        sbatchScript.append("\n# Run task command.\n")
+        sbatchScript.append("singularity exec docker://${taskRunContext.dockerImage}")
+        if (taskRunContext.command != null) sbatchScript.append(" /bin/sh $tmpDir/$RUN_SCRIPT_NAME")
+        sbatchScript.append("\n")
+
+        // Add copying output files into output dir to script
+        if (outputFilesOut.isNotEmpty()) {
+            sbatchScript.append("\n# Copy output files out of mounted directory.\n")
+        }
+        for (outputFile in outputFilesOut) {
+            val cachedFilePath = outputsPath.resolve(outputFile.path)
+            val mountDirFilePath = "$mountDir/${outputFile.path}"
+            sbatchScript.append(copyCommand(mountDirFilePath, cachedFilePath.toString()))
+        }
+
+        //val sbatchFile = mountTmpDir.resolve(SBATCH_SCRIPT_NAME).toString()
+        //FileOutputStream(sbatchFile).use { it.write(sbatchScript.toString().toByteArray()) }
+        //log.info { "Created sbatch script file $sbatchFile with content:\n$sbatchScript" }
+        val sbatchScriptAsBase64 = Base64.getEncoder().encodeToString(sbatchScript.toString().toByteArray())
+        val sbatchCommand = "echo $sbatchScriptAsBase64 | base64 --decode | sbatch"
+        val sbatchResponse = commandExecutor.exec(sbatchCommand)
+        val jobId = "\\d+\$".toRegex().find(sbatchResponse)?.value
+            ?: throw Exception("JobID not found in response for sbatch command")
+
+        log.info { "Job ID $jobId found for sbatch command" }
+
+        // Wait until status
+        do {
+            var done = false
+            Thread.sleep(workflowConfig.slurm.jobCompletionPollInterval * 1000L)
+
+            retry("Slurm status check for job $jobId", 4, { it is SlurmCheckEmptyResponseException }) { attempt ->
+                // Exponential backoff
+                if (attempt > 1) {
+                    val sleepTime = 2.0.pow(attempt).toLong()
+                    log.info { "Empty sacct response. Sleeping for $sleepTime seconds." }
+                    Thread.sleep(1000 * sleepTime)
+                }
+                val checkCommand = "sacct -j $jobId --format=state --noheader"
+                val jobStatusResponse = commandExecutor.exec(checkCommand)
+                if (jobStatusResponse.isBlank()) throw SlurmCheckEmptyResponseException()
+                val rawJobStatus = jobStatusResponse.split("\n")[0]
+                    .trim().trimEnd('+')
+                val jobStatus = SlurmJobState.valueOf(rawJobStatus)
+                when (jobStatus.category) {
+                    SlurmJobStateCategory.INCOMPLETE -> log.info { "Job $jobId still in progress with status $jobStatus" }
+                    SlurmJobStateCategory.FAILED -> throw Exception("Job $jobId failed with status $jobStatus")
+                    SlurmJobStateCategory.SUCCEEDED -> done = true
+                }
+            }
+        } while (!done)
+        log.info { "Job $jobId complete!" }
     }
 
     override fun shutdownRunningTasks() {
