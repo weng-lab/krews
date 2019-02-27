@@ -53,7 +53,7 @@ class ConcurrencyTest : StringSpec(){
     private lateinit var outputsCaptured: Mono<List<Int>>
     private val testWorkflow = workflow("test") {
         val i = (1..15).toFlux()
-        val task1 = task<Int, Int>("task1", 1) {
+        val task1 = task<Int, Int>("task1", i) {
             dockerImage = "task1"
             output = input
             command = ""
