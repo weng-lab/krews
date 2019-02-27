@@ -43,7 +43,7 @@ fun localFilesWorkflow() = workflow("local-files-workflow") {
             """
             echo running gzip on ${input.path}
             mkdir -p /data/gzip
-            gzip /data/${input.path} > /data/gzip/${input.filename()}.gz
+            gzip -c /data/${input.path} > /data/gzip/${input.filename()}.gz
             """
     }
 }

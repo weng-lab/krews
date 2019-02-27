@@ -23,6 +23,7 @@ import reactor.core.publisher.toMono
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.CyclicBarrier
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -52,7 +53,7 @@ class ConcurrencyTest : StringSpec(){
     private lateinit var outputsCaptured: Mono<List<Int>>
     private val testWorkflow = workflow("test") {
         val i = (1..15).toFlux()
-        val task1 = task<Int, Int>("task1", i) {
+        val task1 = task<Int, Int>("task1", 1) {
             dockerImage = "task1"
             output = input
             command = ""
@@ -148,6 +149,7 @@ class ConcurrencyTest : StringSpec(){
             val (executor , runner) = runWorkflow(baseConfig)
             val task1Count = AtomicInteger()
             val task1BeforeErrorLatch = CountDownLatch(5)
+            val alltasksBarrier = CyclicBarrier(14)
             every {
                 executor.executeTask(any(), any(), any(), match { it.dockerImage == "task1" }, any(), any(), any(), any())
             } answers {
@@ -160,6 +162,8 @@ class ConcurrencyTest : StringSpec(){
                     task1BeforeErrorLatch.await()
                     throw Exception("Test Error")
                 }
+                alltasksBarrier.await()
+                Thread.sleep(1000)
             }
 
             val task2Count = AtomicInteger()
@@ -177,20 +181,14 @@ class ConcurrencyTest : StringSpec(){
                 executor.executeTask(any(), any(), any(), match { it.dockerImage == "task3" }, any(), any(), any(), any())
             } answers {
                 // Make sure onShutdown doesn't happen before the workflow is complete
-                verify(exactly = 0) { runner.onShutdown() }
                 task3Count.incrementAndGet()
             }
 
             runner.run()
-            verify(exactly = 1) { runner.onShutdown() }
             task1Count.get() shouldBe 15
             task2Count.get() shouldBe 14
             task3Count.get() shouldBe 13
-
         }
-
-
-
     }
 
     private data class ExecutorAndRunner(val executor: LocallyDirectedExecutor, val runner: WorkflowRunner)
@@ -200,7 +198,7 @@ class ConcurrencyTest : StringSpec(){
         val workflow = testWorkflow.build(createParamsForConfig(parsedConfig))
         val workflowConfig = createWorkflowConfig(parsedConfig, workflow)
         val executor = mockk<LocallyDirectedExecutor>(relaxed = true)
-        val runner = spyk(WorkflowRunner(workflow, workflowConfig, executor))
+        val runner = WorkflowRunner(workflow, workflowConfig, executor)
         return ExecutorAndRunner(executor, runner)
     }
 

@@ -190,6 +190,7 @@ fun createContainer(dockerClient: DockerClient, taskRunContext: TaskRunContext<*
 private fun copyDiagnosticFiles(mountDir: Path, taskDiagnosticsDir: Path) {
     Files.createDirectories(taskDiagnosticsDir)
     Files.walk(mountDir)
+        .filter { source -> !Files.exists(taskDiagnosticsDir.resolve(source.relativize(mountDir))) }
         .forEach { source ->
             Files.copy(
                 source,

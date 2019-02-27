@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "io.krews"
-version = "0.5.12"
+version = "0.5.13"
 
 repositories {
     maven { setUrl("http://dl.bintray.com/kotlin/kotlin-eap") }
@@ -37,7 +37,7 @@ dependencies {
     compile("com.github.ajalt","clikt", "1.5.0")
     compile( "org.jetbrains.kotlinx", "kotlinx-html-jvm", "0.6.11")
     testCompile("io.kotlintest", "kotlintest-runner-junit5", "3.1.10")
-    testImplementation("io.mockk", "mockk", "1.8.13")
+    testImplementation("io.mockk", "mockk", "1.9.1")
 }
 
 val test by tasks.getting(Test::class) {

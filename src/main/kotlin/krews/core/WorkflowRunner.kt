@@ -12,8 +12,8 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.joda.time.DateTime
-import reactor.core.Scannable
 import reactor.core.publisher.Flux
+import reactor.core.publisher.Mono
 import reactor.core.scheduler.Schedulers
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
@@ -25,7 +25,6 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.stream.Collectors
 
 
 private val log = KotlinLogging.logger {}
@@ -141,36 +140,32 @@ class WorkflowRunner(
             is LimitedParallelism -> Executors.newFixedThreadPool(workflowParallelism.limit, workerThreadFactory)
         }
 
-        val taskRunner = TaskRunner(workflowRun, workflowConfig, executor, db)
-        // Set execute function for each task.
-        for (task in workflow.tasks.values) {
-            connectTask(task, taskRunner, workerPool)
+        try {
+            val taskRunner = TaskRunner(workflowRun, workflowConfig, executor, db)
+            // Set execute function for each task.
+            for (task in workflow.tasks.values) {
+                connectTask(task, taskRunner, workerPool)
+            }
+
+            // Get "leafOutputs", meaning this workflow's task.output fluxes that don't have other task.outputs as parents
+            val allTaskOutputFluxes = workflow.tasks.values.map { it.outputPub }
+
+            // Trigger workflow by subscribing to leaf task outputs...
+            val leavesFlux = Flux.merge(allTaskOutputFluxes.map { it.onErrorResume { Mono.empty() } })
+                .subscribeOn(Schedulers.elastic())
+
+            // and block until it's done
+            leavesFlux.blockLast()
+
+            val failedTasks = transaction(db) {
+                TaskRuns.select {
+                    TaskRuns.workflowRunId eq workflowRun.id and TaskRuns.completedSuccessfully.eq(false)
+                }.count()
+            }
+            return failedTasks == 0
+        } finally {
+            workerPool.shutdown()
         }
-
-        // Get "leafOutputs", meaning this workflow's task.output fluxes that don't have other task.outputs as parents
-        val allTaskOutputFluxes = workflow.tasks.values.map { it.outputPub }
-
-        val leafOutputs = allTaskOutputFluxes.toMutableSet()
-        for (output in allTaskOutputFluxes) {
-            val taskParents = Scannable.from(output).parents().collect(Collectors.toSet())
-                .filter { it is Flux<*> }
-                .map { it as Flux<*> }
-            leafOutputs.removeAll(taskParents)
-        }
-
-        // Trigger workflow by subscribing to leaf task outputs...
-        val leavesFlux = Flux.merge(leafOutputs)
-            .subscribeOn(Schedulers.elastic())
-
-        // and block until it's done
-        leavesFlux.blockLast()
-
-        val failedTasks = transaction(db) {
-            TaskRuns.select {
-                TaskRuns.workflowRunId eq workflowRun.id and TaskRuns.completedSuccessfully.eq(false)
-            }.count()
-        }
-        return failedTasks == 0
     }
 
     private fun <I : Any, O : Any> connectTask(task: Task<I, O>, taskRunner: TaskRunner, workerPool: ExecutorService) {

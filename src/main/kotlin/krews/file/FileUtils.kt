@@ -4,6 +4,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.nio.file.StandardCopyOption
+import java.util.*
 import kotlin.reflect.KProperty1
 import kotlin.reflect.full.memberProperties
 import kotlin.streams.toList
@@ -19,7 +20,13 @@ internal fun getOutputFilesForObject(obj: Any?): Set<OutputFile> {
         is Array<*> -> obj.flatMap { getOutputFilesForObject(it) }.toSet()
         is Collection<*> -> obj.flatMap { getOutputFilesForObject(it) }.toSet()
         is Map<*,*> -> obj.values.flatMap { getOutputFilesForObject(it) }.toSet()
-        else -> obj::class.memberProperties.flatMap { getOutputFilesForObject((it as KProperty1<Any, *>).get(obj)) }.toSet()
+        else ->
+            try {
+                obj::class.memberProperties.flatMap { getOutputFilesForObject((it as KProperty1<Any, *>).get(obj)) }
+                    .toSet()
+            } catch (e: Throwable) {
+                Collections.emptySet<OutputFile>()
+            }
     }
 }
 
@@ -34,7 +41,13 @@ internal fun getInputFilesForObject(obj: Any?): Set<InputFile> {
         is Array<*> -> obj.flatMap { getInputFilesForObject(it) }.toSet()
         is Collection<*> -> obj.flatMap { getInputFilesForObject(it) }.toSet()
         is Map<*,*> -> obj.values.flatMap { getInputFilesForObject(it) }.toSet()
-        else -> obj::class.memberProperties.flatMap { getInputFilesForObject((it as KProperty1<Any, *>).get(obj)) }.toSet()
+        else ->
+            try {
+                obj::class.memberProperties.flatMap { getInputFilesForObject((it as KProperty1<Any, *>).get(obj)) }
+                    .toSet()
+            } catch (e: Throwable) {
+                Collections.emptySet<InputFile>()
+            }
     }
 }
 
