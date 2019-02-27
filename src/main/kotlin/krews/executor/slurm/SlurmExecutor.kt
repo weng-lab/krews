@@ -18,7 +18,6 @@ import kotlin.math.pow
 private val log = KotlinLogging.logger {}
 
 const val RUN_SCRIPT_NAME = "run_script.sh"
-const val SBATCH_SCRIPT_NAME = "sbatch_script.sh"
 
 class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
 
@@ -84,10 +83,6 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
         val mountDir = "/tmp/task-$taskRunId-mount"
         val mountTmpDir = "$mountDir/tmp"
 
-        //log.info { "Creating working directory $mountDir for task run $taskRunId" }
-        //mountDir.toFile().mkdirs()
-        //mountTmpDir.toFile().mkdirs()
-
         val sbatchScript = StringBuilder("#!/bin/bash\n#\n")
 
         appendSbatchParam(sbatchScript, "job-name", slurmWorkflowJobName)
@@ -97,6 +92,9 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
         appendSbatchParam(sbatchScript, "cpus-per-task", taskConfig.slurm?.cpus ?: taskRunContext.cpus)
         appendSbatchParam(sbatchScript, "time", taskConfig.slurm?.time ?: taskRunContext.time)
         appendSbatchParam(sbatchScript, "partition", taskConfig.slurm?.partition)
+        for ((argName, argVal) in taskConfig.slurm?.sbatchArgs ?: mapOf()) {
+            appendSbatchParam(sbatchScript, argName, argVal)
+        }
 
         val tmpDir = Paths.get(taskRunContext.dockerDataDir, "tmp")
 
@@ -130,7 +128,7 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
         }
         for (remoteDownloadInputFile in remoteDownloadInputFiles) {
             val downloadCommand = remoteDownloadInputFile.downloadFileCommand(taskRunContext.dockerDataDir)
-            sbatchScript.append("singularity exec docker://${remoteDownloadInputFile.downloadFileImage()} $downloadCommand\n")
+            sbatchScript.append("singularity exec --containall docker://${remoteDownloadInputFile.downloadFileImage()} $downloadCommand\n")
             sbatchScript.append("echo $?\n")
         }
 

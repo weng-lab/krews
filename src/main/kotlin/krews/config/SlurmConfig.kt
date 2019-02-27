@@ -24,5 +24,7 @@ data class SlurmTaskConfig(
     // Time limit on the run time for the job in minutes.
     val time: Int? = null,
     // SBatch partition to use.
-    val partition: String? = null
+    val partition: String? = null,
+    // Additional sbatch arguments
+    val sbatchArgs: Map<String, String>? = null
 )

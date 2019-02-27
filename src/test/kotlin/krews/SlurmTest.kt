@@ -55,15 +55,23 @@ class SlurmExecutorTests : StringSpec() {
         params {
             sample-files-dir = $sampleFilesDir
         }
-        task.base64.params = {
-            some-val = $taskParam
+        task.base64 {
+            params = {
+                some-val = $taskParam
+            }
+            slurm.sbatch-args {
+                comment = "\"This is just a test.\""
+            }
         }
+
         """.trimIndent()
 
     override fun beforeSpec(description: Description, spec: Spec) {
-        Files.walk(testDir)
-            .sorted(Comparator.reverseOrder())
-            .forEach { Files.delete(it) }
+        if (Files.isDirectory(testDir)) {
+            Files.walk(testDir)
+                .sorted(Comparator.reverseOrder())
+                .forEach { Files.delete(it) }
+        }
         Files.createDirectories(sampleFilesDir)
     }
 
