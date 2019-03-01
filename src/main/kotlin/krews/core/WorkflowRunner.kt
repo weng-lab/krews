@@ -151,7 +151,13 @@ class WorkflowRunner(
             val allTaskOutputFluxes = workflow.tasks.values.map { it.outputPub }
 
             // Trigger workflow by subscribing to leaf task outputs...
-            val leavesFlux = Flux.merge(allTaskOutputFluxes.map { it.onErrorResume { Mono.empty() } })
+            val leavesFlux = Flux
+                .merge(allTaskOutputFluxes.map {
+                    it.onErrorResume { e ->
+                        log.error(e) { "Error returned from flux." }
+                        Mono.empty()
+                    }
+                })
                 .subscribeOn(Schedulers.elastic())
 
             // and block until it's done

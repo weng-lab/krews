@@ -168,6 +168,9 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
             sbatchScript.append(copyCommand(mountDirFilePath, cachedFilePath.toString()))
         }
 
+        sbatchScript.append("\n# Clean up temporary mounted directory.\n")
+        sbatchScript.append("rm -rf $mountDir\n")
+
         val sbatchScriptAsBase64 = Base64.getEncoder().encodeToString(sbatchScript.toString().toByteArray())
         val sbatchCommand = "echo $sbatchScriptAsBase64 | base64 --decode | sbatch"
         val sbatchResponse = commandExecutor.exec(sbatchCommand)
