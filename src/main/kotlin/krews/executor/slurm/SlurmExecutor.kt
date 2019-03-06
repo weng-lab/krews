@@ -11,8 +11,6 @@ import java.util.UUID.randomUUID
 import krews.misc.CommandExecutor
 import org.apache.commons.io.FileUtils
 import retry
-import java.io.FileInputStream
-import java.io.FileOutputStream
 import kotlin.math.pow
 
 private val log = KotlinLogging.logger {}
@@ -169,7 +167,7 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
         // Add running the task to script
         sbatchScript.append("\n")
         sbatchScript.append("# Run task command.\n")
-        sbatchScript.append("singularity exec docker://${taskRunContext.dockerImage}")
+        sbatchScript.append("singularity exec --containall docker://${taskRunContext.dockerImage}")
         if (taskRunContext.command != null) sbatchScript.append(" /bin/sh $tmpDir/$RUN_SCRIPT_NAME")
         sbatchScript.append("\n")
 
@@ -185,7 +183,8 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
         }
 
         val sbatchScriptAsBase64 = Base64.getEncoder().encodeToString(sbatchScript.toString().toByteArray())
-        val sbatchCommand = "echo $sbatchScriptAsBase64 | base64 --decode | sbatch"
+        val sbatchCommand = "sleep ${kotlin.random.Random.nextDouble(0.0, 5.0)}; " +
+                "echo $sbatchScriptAsBase64 | base64 --decode | sbatch"
         val sbatchResponse = commandExecutor.exec(sbatchCommand)
         val jobId = "\\d+\$".toRegex().find(sbatchResponse)?.value
             ?: throw Exception("JobID not found in response for sbatch command")
