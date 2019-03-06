@@ -42,16 +42,13 @@ class TaskRunner(private val workflowRun: WorkflowRun,
     }
     private val atMaxConcurrency: Semaphore = Semaphore(maxConcurrency)
     private val queuedTasks = LinkedBlockingQueue<TaskRunFuture<*, *>>()
-    private val runningTasks = ConcurrentLinkedQueue<TaskRunFuture<*, *>>()
+    private val runningTasks = LinkedBlockingQueue<TaskRunFuture<*, *>>()
     // These threads monitor the state of queuedTasks and runningTasks
     private lateinit var queueMonitorThread: Thread
     private lateinit var runMonitorThread: Thread
     // We don't limit the parallelism here. Instead we limit the number of running tasks.
     // Here we just do setup/cleanup, which we want as fast as possible
     private val actionExecutor = Executors.newCachedThreadPool()
-
-
-    private val total = AtomicInteger()
 
     private fun doMonitorQueue() {
         while (true) {
@@ -75,22 +72,22 @@ class TaskRunner(private val workflowRun: WorkflowRun,
     private fun doMonitorRunning() {
         while (true) {
             try {
-                val iter = runningTasks.iterator()
-                if (stopped && !iter.hasNext()) {
-                    break
-                }
-                while (iter.hasNext()) {
-                    val task = iter.next()
-                    val isDone = task.executedFuture?.isDone
-                    if (isDone == true) {
-                        iter.remove()
-                        atMaxConcurrency.release()
-                        actionExecutor.submit {
-                            cleanup(task)
-                        }
+                val task = runningTasks.poll(1000, TimeUnit.MILLISECONDS)
+                if (task == null) {
+                    if (stopped) {
+                        break
                     }
+                    continue
                 }
-                Thread.sleep(100)
+                val isDone = task.executedFuture?.isDone
+                if (isDone == true) {
+                    atMaxConcurrency.release()
+                    actionExecutor.submit {
+                        cleanup(task)
+                    }
+                } else {
+                    runningTasks.offer(task)
+                }
             } catch(e: InterruptedException) {}
         }
     }

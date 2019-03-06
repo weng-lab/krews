@@ -92,8 +92,7 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
                 return lastOperation
             }
             var theop: Operation? = null
-            retry("Pipeline job check",
-                retryCondition = { e -> e is GoogleJsonResponseException && e.statusCode == 503 }) {
+            try {
                 val op: Operation = googleGenomicsClient.projects().operations().get(opName).execute()
                 if (op.done) {
                     runningOperations.remove(opName)
@@ -106,18 +105,20 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
                 }
                 theop = op
                 lastOperation = op
+            } catch(e: GoogleJsonResponseException) {
+                if (e.statusCode === 503) {
+                    return lastOperation
+                }
+                capturedThrowable = e
+            } catch (e: Throwable) {
+                capturedThrowable = e
             }
             return theop
         }
 
         override fun isDone(): Boolean {
-            try {
-                val op: Operation? = checkStatus()
-                return op != null && op.done
-            } catch (e: Throwable) {
-                capturedThrowable = e
-            }
-            return false
+            val op: Operation? = checkStatus()
+            return capturedThrowable != null || (op != null && op.done)
         }
 
         override fun get() {
@@ -143,7 +144,7 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
             if (!mayInterruptIfRunning && opName in runningOperations) {
                 return false
             }
-            if (runningOperations.remove(opName)) {
+            if (!runningOperations.remove(opName)) {
                 return false
             }
             googleGenomicsClient.projects().operations().cancel(opName, null)

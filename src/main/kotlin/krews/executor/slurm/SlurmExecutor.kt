@@ -85,7 +85,8 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
             if (checkAttempt > 4) {
                 // Force a failed state
                 lastStatus = SlurmJobStateCategory.FAILED
-                throw SlurmCheckEmptyResponseException()
+                capturedThrowable = SlurmCheckEmptyResponseException()
+                return
             }
             if (checkAttempt > 1) {
                 val sleepTime = 2.0.pow(checkAttempt).toLong()
@@ -124,13 +125,8 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
         private fun onFinished(success: Boolean) {}
 
         override fun isDone(): Boolean {
-            try {
-                checkStatus()
-                return lastStatus == SlurmJobStateCategory.SUCCEEDED || lastStatus == SlurmJobStateCategory.FAILED
-            } catch (e: Throwable) {
-                capturedThrowable = e
-            }
-            return false
+            checkStatus()
+            return capturedThrowable != null || (lastStatus == SlurmJobStateCategory.SUCCEEDED || lastStatus == SlurmJobStateCategory.FAILED)
         }
 
         override fun get() {

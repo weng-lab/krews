@@ -138,7 +138,7 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
 
         override fun isDone(): Boolean {
             checkStatus()
-            return lastState?.running == false
+            return capturedThrowable != null || lastState?.running == false
         }
 
         override fun get() {
