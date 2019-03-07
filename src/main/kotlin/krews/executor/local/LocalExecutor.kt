@@ -191,6 +191,7 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
             dockerClient.stopContainerCmd(containerId).exec()
         }
     }
+
 }
 
 fun createContainer(dockerClient: DockerClient, taskRunContext: TaskRunContext<*, *>, mountDir: Path): String {

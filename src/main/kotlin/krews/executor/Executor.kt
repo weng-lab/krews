@@ -1,12 +1,10 @@
 package krews.executor
 
 import krews.config.TaskConfig
-import krews.core.Task
 import krews.core.TaskRunContext
 import krews.file.InputFile
 import krews.file.OutputFile
 import java.nio.file.Path
-import java.util.concurrent.Future
 
 const val RUN_DIR = "run"
 const val OUTPUTS_DIR = "outputs"
@@ -49,7 +47,7 @@ interface LocallyDirectedExecutor {
      * Execute task for the environment. Will consist of running a docker container to complete the task, and another
      * for downloading the given input files from remote sources, and possibly more for environment specific requirements.
      *
-     * This function returns a future that completes when the task completes
+     * This function should returns when the task is complete.
      *
      * @param outputFilesIn: Output files coming from a task's current "Input Element." These will already exist in the
      * current environment's storage.

@@ -25,7 +25,7 @@ import kotlinx.coroutines.*
 
 private val log = KotlinLogging.logger {}
 
-    class TaskRunner(private val workflowRun: WorkflowRun,
+class TaskRunner(private val workflowRun: WorkflowRun,
                  private val workflowConfig: WorkflowConfig,
                  private val executor: LocallyDirectedExecutor,
                  private val db: Database) {
@@ -248,6 +248,7 @@ private val log = KotlinLogging.logger {}
                     taskRun.cacheUsed = true
                     cachedOutput!!.latestUseWorkflowRunId = workflowRunId
                 }
+
             } else {
                 log.info { "$loggingPrefix Valid cached outputs not found. Executing..." }
                 val outputFilesIn = getOutputFilesForObject(taskRunContext.input)
@@ -265,7 +266,6 @@ private val log = KotlinLogging.logger {}
                 )
             }
 
-            val loggingPrefix = "Task Run ${task.name} - $taskRunId:"
             // Add last modified timestamps to output files in task output
             for (outputFile in outputFilesOut) {
                 outputFile.lastModified = executor.fileLastModified("$OUTPUTS_DIR/${outputFile.path}")
@@ -303,4 +303,5 @@ private val log = KotlinLogging.logger {}
             throw e
         }
     }
+
 }

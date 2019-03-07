@@ -5,8 +5,10 @@ import io.kotlintest.Description
 import io.kotlintest.TestResult
 import io.kotlintest.shouldBe
 import io.kotlintest.specs.StringSpec
-import io.mockk.*
-import kotlinx.coroutines.Job
+import io.mockk.Runs
+import io.mockk.coEvery
+import io.mockk.just
+import io.mockk.mockk
 import kotlinx.coroutines.delay
 import krews.config.createParamsForConfig
 import krews.config.createWorkflowConfig
@@ -14,19 +16,15 @@ import krews.core.WorkflowRunner
 import krews.core.workflow
 import krews.executor.LocallyDirectedExecutor
 import mu.KotlinLogging
-import org.jetbrains.exposed.sql.Count
 import reactor.core.publisher.Mono
 import reactor.core.publisher.toFlux
 import reactor.core.publisher.toMono
 import java.nio.file.Files
 import java.nio.file.Paths
-import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.CyclicBarrier
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.function.Supplier
 
 private val log = KotlinLogging.logger {}
 
@@ -107,7 +105,7 @@ class ConcurrencyTest : StringSpec(){
             outputsCaptured.block()?.toSet()?.size shouldBe 5
         }
 
-        "f:Per task parallelism should be enforced" {
+        "Per task parallelism should be enforced" {
             val (executor , runner) = runWorkflow(taskParConfig)
             val task1Count = AtomicInteger()
             val task1Latch = CountDownLatch(10)
