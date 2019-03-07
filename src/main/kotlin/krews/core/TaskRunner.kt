@@ -46,6 +46,8 @@ class TaskRunner(private val workflowRun: WorkflowRun,
     // These threads monitor the state of queuedTasks and runningTasks
     private lateinit var queueMonitorThread: Thread
     private lateinit var runMonitorThread: Thread
+    private val coroutineExecutor = Executors.newFixedThreadPool(workflowConfig.executorConcurrency)
+    private val coroutineDispatcher = coroutineExecutor.asCoroutineDispatcher()
 
     private fun doMonitorQueue() {
         while (true) {
@@ -57,7 +59,7 @@ class TaskRunner(private val workflowRun: WorkflowRun,
                     continue
                 }
                 val nextTask = queuedTasks.take()
-                runningTasks.add(GlobalScope.async {
+                val def = GlobalScope.async (coroutineDispatcher) {
                     try {
                         run(nextTask)
                         nextTask.complete()
@@ -65,7 +67,8 @@ class TaskRunner(private val workflowRun: WorkflowRun,
                         nextTask.completeExceptionally(e)
                     }
                     Unit
-                })
+                }
+                runningTasks.add(def)
             } catch (e: InterruptedException) {}
         }
     }
@@ -105,6 +108,9 @@ class TaskRunner(private val workflowRun: WorkflowRun,
         queueMonitorThread.join()
         runMonitorThread.join()
         log.info { "Shutdown monitor threads"}
+
+        coroutineExecutor.shutdown()
+        coroutineExecutor.awaitTermination(1000, TimeUnit.MILLISECONDS)
     }
 
     fun <I : Any, O : Any, T: Task<I, O>> submit(task: T, taskRunContext: TaskRunContext<I, O>): CompletableFuture<O> {

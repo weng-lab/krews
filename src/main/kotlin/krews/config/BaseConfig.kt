@@ -26,6 +26,8 @@ data class WorkflowConfig (
     val tasks: Map<String, TaskConfig>,
     // The maximum allowed parallelism for the system as a whole. Also see per-task parallelism
     val parallelism: Parallelism = UnlimitedParallelism,
+    // The concurrency for task setup, status checking, and cleanup
+    val executorConcurrency: Int = 16,
     // Delete outputs and copied inputs that were not created during the current run if it succeeds
     val cleanOldFiles: Boolean = false,
     // Delay between uploading the latest database to project working storage
