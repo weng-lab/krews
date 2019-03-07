@@ -36,6 +36,7 @@ dependencies {
     compile("com.google.apis", "google-api-services-storage", "v1-rev20180905-1.26.0")
     compile("com.github.ajalt","clikt", "1.5.0")
     compile( "org.jetbrains.kotlinx", "kotlinx-html-jvm", "0.6.11")
+    compile( "org.jetbrains.kotlinx", "kotlinx-coroutines-core", "1.1.1")
     testCompile("io.kotlintest", "kotlintest-runner-junit5", "3.1.10")
     testImplementation("io.mockk", "mockk", "1.9.1")
 }

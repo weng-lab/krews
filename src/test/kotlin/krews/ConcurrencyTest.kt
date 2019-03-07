@@ -5,16 +5,16 @@ import io.kotlintest.Description
 import io.kotlintest.TestResult
 import io.kotlintest.shouldBe
 import io.kotlintest.specs.StringSpec
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.spyk
-import io.mockk.verify
+import io.mockk.*
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import krews.config.createParamsForConfig
 import krews.config.createWorkflowConfig
 import krews.core.WorkflowRunner
 import krews.core.workflow
 import krews.executor.LocallyDirectedExecutor
 import mu.KotlinLogging
+import org.jetbrains.exposed.sql.Count
 import reactor.core.publisher.Mono
 import reactor.core.publisher.toFlux
 import reactor.core.publisher.toMono
@@ -88,68 +88,76 @@ class ConcurrencyTest : StringSpec(){
         "Will fail with asynchronous exceptions" {
             val (executor , runner) = runWorkflow(workflowParConfig)
             val task1Count = AtomicInteger()
-            every {
+            coEvery {
                 executor.executeTask(any(), any(), any(), match { it.dockerImage == "task1" }, any(), any(), any(), any())
-            } answers {
+            } coAnswers {
                 val task1s = task1Count.incrementAndGet()
-                CompletableFuture.supplyAsync {
-                    if (task1s > 5) {
-                        Thread.sleep(500)
-                        throw Exception("Test exception")
-                    } else {
-                        null
-                    }
+                if (task1s > 5) {
+                    delay(500)
+                    throw Exception("Test exception")
+                } else {
+                    null
                 }
             }
 
-            every { executor.executeTask(any(), any(), any(), match { it.dockerImage == "task2" || it.dockerImage == "task3" }, any(), any(), any(), any())
-            } answers { CompletableFuture.completedFuture(null) }
+            coEvery { executor.executeTask(any(), any(), any(), match { it.dockerImage == "task2" || it.dockerImage == "task3" }, any(), any(), any(), any())
+            } just Runs
 
             runner.run()
             outputsCaptured.block()?.toSet()?.size shouldBe 5
         }
 
-        "Per task parallelism should be enforced" {
+        "f:Per task parallelism should be enforced" {
             val (executor , runner) = runWorkflow(taskParConfig)
             val task1Count = AtomicInteger()
-            val task1Latch = CountDownLatch(11)
-            every {
+            val task1Latch = CountDownLatch(10)
+            val task1LatchPostCheck = CountDownLatch(10)
+            coEvery {
                 executor.executeTask(any(), any(), any(), match { it.dockerImage == "task1" }, any(), any(), any(), any())
-            } answers {
+            } coAnswers {
                 val task1s = task1Count.incrementAndGet()
                 task1Latch.countDown()
-                CompletableFuture.supplyAsync( Supplier {
-                    val timedOut = !task1Latch.await(1000, TimeUnit.MILLISECONDS)
-                    if (task1s <= 10) {
-                        timedOut shouldBe true
-                    } else {
-                        timedOut shouldBe false
+                if (task1s <= 10) {
+                    while (!task1Latch.await(100, TimeUnit.MILLISECONDS)) {
+                        delay(100)
                     }
-                }, testExecutor)
+                    delay(500)
+                    task1Count.get() shouldBe 10
+                    task1LatchPostCheck.countDown()
+                    while (!task1LatchPostCheck.await(100, TimeUnit.MILLISECONDS)) {
+                        delay(100)
+                    }
+                }
             }
 
-            every { executor.executeTask(any(), any(), any(), match { it.dockerImage == "task2" || it.dockerImage == "task3" }, any(), any(), any(), any())
-            } answers { CompletableFuture.completedFuture(null) }
+            coEvery { executor.executeTask(any(), any(), any(), match { it.dockerImage == "task2" || it.dockerImage == "task3" }, any(), any(), any(), any())
+            } just Runs
 
             runner.run()
             outputsCaptured.block()?.toSet() shouldBe (1..15).toSet()
         }
 
-        "f:Per workflow parallelism should be enforced" {
+        "Per workflow parallelism should be enforced" {
             val (executor , runner) = runWorkflow(workflowParConfig)
-            val first10Latch = CyclicBarrier(10)
+            val task1Latch = CountDownLatch(10)
+            val task1LatchPostCheck = CountDownLatch(10)
             val taskCount = AtomicInteger()
-            every {
+            coEvery {
                 executor.executeTask(any(), any(), any(), any(), any(), any(), any(), any())
-            } answers {
+            } coAnswers {
                 val task1s = taskCount.incrementAndGet()
-                CompletableFuture.supplyAsync(Supplier {
-                    if (task1s <= 10) {
-                        first10Latch.await()
-                        Thread.sleep(1000)
-                        taskCount.get() shouldBe 10
+                task1Latch.countDown()
+                if (task1s <= 10) {
+                    while (!task1Latch.await(100, TimeUnit.MILLISECONDS)) {
+                        delay(100)
                     }
-                }, testExecutor)
+                    delay(500)
+                    taskCount.get() shouldBe 10
+                    task1LatchPostCheck.countDown()
+                    while (!task1LatchPostCheck.await(100, TimeUnit.MILLISECONDS)) {
+                        delay(100)
+                    }
+                }
             }
             runner.run()
             outputsCaptured.block()?.toSet() shouldBe (1..15).toSet()
@@ -160,30 +168,25 @@ class ConcurrencyTest : StringSpec(){
             val task1Count = AtomicInteger()
             val task2Latch = CountDownLatch(1)
 
-            every {
+            coEvery {
                 executor.executeTask(any(), any(), any(), match { it.dockerImage == "task1" }, any(), any(), any(), any())
-            } answers {
+            } coAnswers {
                 val task1s = task1Count.incrementAndGet()
                 if (task1s > 1) {
-                    CompletableFuture.supplyAsync(Supplier {
-                        val timedOut = !task2Latch.await(500, TimeUnit.MILLISECONDS)
-                        timedOut shouldBe false
-                        null
-
-                    }, testExecutor)
+                    //val timedOut = !task2Latch.await(500, TimeUnit.MILLISECONDS)
+                    //timedOut shouldBe false
                 }
-                CompletableFuture.completedFuture(null)
+                //CompletableFuture.completedFuture(null)
             }
 
-            every {
+            coEvery {
                 executor.executeTask(any(), any(), any(), match { it.dockerImage == "task2" }, any(), any(), any(), any())
-            } answers {
+            } coAnswers {
                 task2Latch.countDown()
-                CompletableFuture.completedFuture(null)
             }
 
-            every { executor.executeTask(any(), any(), any(), match { it.dockerImage == "task3" }, any(), any(), any(), any())
-            } answers { CompletableFuture.completedFuture(null) }
+            coEvery { executor.executeTask(any(), any(), any(), match { it.dockerImage == "task3" }, any(), any(), any(), any())
+            } just Runs
 
             runner.run()
             outputsCaptured.block()?.toSet() shouldBe (1..15).toSet()
@@ -193,49 +196,46 @@ class ConcurrencyTest : StringSpec(){
             val (executor , runner) = runWorkflow(baseConfig)
             val task1Count = AtomicInteger()
             val task1BeforeErrorLatch = CountDownLatch(5)
-            val alltasksBarrier = CyclicBarrier(14)
-            every {
+            val alltasksLatch = CountDownLatch(14)
+            coEvery {
                 executor.executeTask(any(), any(), any(), match { it.dockerImage == "task1" }, any(), any(), any(), any())
-            } answers {
+            } coAnswers {
                 val task1s = task1Count.incrementAndGet()
                 if (task1s < 6) {
                     task1BeforeErrorLatch.countDown()
                 }
                 if (task1s == 6) {
-                    CompletableFuture.supplyAsync(Supplier {
-                        // Ensure 5 task runs complete before throwing an error.
-                        task1BeforeErrorLatch.await()
-                        // Supress type inference warning (Expect Unit, got Nothing)
-                        if (true) {
-                            throw Exception("Test Error")
-                        }
-                    }, testExecutor)
+                    // Ensure 5 task runs complete before throwing an error.
+                    while (!task1BeforeErrorLatch.await(100, TimeUnit.MILLISECONDS)) {
+                        delay(100)
+                    }
+                    task1BeforeErrorLatch.await()
+                    throw Exception("Test Error")
                 } else {
-                    CompletableFuture.supplyAsync(Supplier {
-                        alltasksBarrier.await()
-                        Thread.sleep(1000)
-                    }, testExecutor)
+                    alltasksLatch.countDown()
+                    while(!alltasksLatch.await(100, TimeUnit.MILLISECONDS)) {
+                        delay(100)
+                    }
+                    delay(1000)
                 }
             }
 
             val task2Count = AtomicInteger()
-            every {
+            coEvery {
                 executor.executeTask(any(), any(), any(), match { it.dockerImage == "task2" }, any(), any(), any(), any())
-            } answers {
+            } coAnswers {
                 val count = task2Count.incrementAndGet()
                 if (count == 10) {
                     throw Exception("Test Error 2")
                 }
-                CompletableFuture.completedFuture(null)
             }
 
             val task3Count = AtomicInteger()
-            every {
+            coEvery {
                 executor.executeTask(any(), any(), any(), match { it.dockerImage == "task3" }, any(), any(), any(), any())
-            } answers {
+            } coAnswers {
                 // Make sure onShutdown doesn't happen before the workflow is complete
                 task3Count.incrementAndGet()
-                CompletableFuture.completedFuture(null)
             }
 
             runner.run()

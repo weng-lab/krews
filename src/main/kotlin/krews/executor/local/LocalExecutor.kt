@@ -1,7 +1,6 @@
 package krews.executor.local
 
 import com.github.dockerjava.api.DockerClient
-import com.github.dockerjava.api.command.InspectContainerResponse
 import com.github.dockerjava.api.model.Bind
 import com.github.dockerjava.api.model.Frame
 import com.github.dockerjava.api.model.StreamType
@@ -9,23 +8,23 @@ import com.github.dockerjava.api.model.Volume
 import com.github.dockerjava.core.command.LogContainerResultCallback
 import com.github.dockerjava.core.command.PullImageResultCallback
 import com.github.dockerjava.core.command.WaitContainerResultCallback
+import kotlinx.coroutines.delay
 import krews.config.DockerConfig
 import krews.config.TaskConfig
 import krews.config.WorkflowConfig
 import krews.core.TaskRunContext
-import krews.core.TaskRunner
 import krews.executor.*
-import krews.file.*
+import krews.file.InputFile
+import krews.file.OutputFile
+import krews.file.downloadInputFileLocalFS
+import krews.file.listLocalFiles
 import mu.KotlinLogging
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.nio.file.StandardCopyOption
 import java.util.*
-import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.Future
-import java.util.concurrent.TimeUnit
 
 private val log = KotlinLogging.logger {}
 
@@ -73,129 +72,7 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
 
     override fun downloadInputFile(inputFile: InputFile) = downloadInputFileLocalFS(inputFile, inputsPath)
 
-    private inner class DockerJob(
-        val containerId: String,
-        val dockerClient: DockerClient,
-        val logBasePath: Path,
-        val runBasePath: Path,
-        val mountDir: Path,
-        val taskRunId: Int,
-        val outputFilesOut: Set<OutputFile>) : Future<Unit> {
-        private var lastState: InspectContainerResponse.ContainerState? = null
-        private var capturedThrowable: Throwable? = null
-        private var cancelled = false
-        private var cleaned = false
-
-        private fun checkStatus() {
-            if (lastState?.running == false) {
-                return
-            }
-            try {
-                val inspect = dockerClient.inspectContainerCmd(containerId).exec()
-                lastState = inspect.state
-            } catch (e: Throwable) {
-                capturedThrowable = e
-            }
-        }
-
-        private fun onFinished(success: Boolean) {
-            if (cleaned) {
-                return
-            }
-            cleaned = true
-            try {
-                runningContainers.remove(containerId)
-                copyLogsFromContainer(dockerClient, containerId, logBasePath)
-
-                // Delete containers
-                log.info { "Cleaning up containers..." }
-                dockerClient.removeContainerCmd(containerId).exec()
-
-                if (success) {
-                    // Copy output files out of docker container into run outputs dir
-                    if (outputFilesOut.isNotEmpty()) {
-                        log.info { "Copying output files $outputFilesOut for task output out of mounted data dir $mountDir" }
-                    } else {
-                        log.info { "No output files to copy for this task run." }
-                    }
-                    outputFilesOut.map { it.path }.forEach {
-                        val to = outputsPath.resolve(it)
-                        Files.createDirectories(to.parent)
-                        Files.copy(mountDir.resolve(it), to, StandardCopyOption.REPLACE_EXISTING)
-                    }
-                } else {
-                    // Copy all files in mounted docker data directory to task diagnostics directory
-                    val taskDiagnosticsDir = runBasePath.resolve(DIAGNOSTICS_DIR).resolve(taskRunId.toString())
-                    copyDiagnosticFiles(mountDir, taskDiagnosticsDir)
-                }
-            } finally {
-                // Clean up temporary mount dir
-                Files.walk(mountDir)
-                    .sorted(Comparator.reverseOrder())
-                    .forEach { Files.delete(it) }
-            }
-        }
-
-        override fun isDone(): Boolean {
-            checkStatus()
-            return capturedThrowable != null || lastState?.running == false
-        }
-
-        override fun get() {
-            // An arbitrarily high value that won't overflow the long
-            return get(30, TimeUnit.DAYS)
-        }
-
-        override fun get(timeout: Long, unit: TimeUnit?) {
-            try {
-                if (capturedThrowable != null) {
-                    throw capturedThrowable!!
-                }
-                if (lastState?.running != false) {
-                    dockerClient.waitContainerCmd(containerId).exec(WaitContainerResultCallback())
-                        .awaitStatusCode(timeout, unit)
-                }
-                val statusCode = lastState!!.exitCode!!
-                checkStatus()
-                if (lastState?.running == true) {
-                    throw Exception("Expected container to not be running.")
-                }
-                if (statusCode > 0) {
-                    val taskDiagnosticsDir = runBasePath.resolve(DIAGNOSTICS_DIR).resolve(taskRunId.toString())
-                    throw Exception(
-                        """
-                |Container exited with code $statusCode.
-                |Please see logs at $logBasePath for more information.
-                |Working files (in data directory) have been copied into $taskDiagnosticsDir
-                """.trimMargin()
-                    )
-                }
-            } finally {
-                onFinished(lastState?.exitCode == 0)
-            }
-        }
-
-
-        override fun cancel(mayInterruptIfRunning: Boolean): Boolean {
-            if (!mayInterruptIfRunning && !isDone) {
-                return false
-            }
-            try {
-                log.info { "Stopping container $containerId..." }
-                dockerClient.stopContainerCmd(containerId).exec()
-            } finally {
-                checkStatus()
-            }
-            cancelled = true
-            return true
-        }
-
-        override fun isCancelled(): Boolean {
-            return allShutdown || cancelled
-        }
-    }
-
-    override fun executeTask(
+    override suspend fun executeTask(
         workflowRunDir: String,
         taskRunId: Int,
         taskConfig: TaskConfig,
@@ -204,7 +81,7 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
         outputFilesOut: Set<OutputFile>,
         cachedInputFiles: Set<InputFile>,
         downloadInputFiles: Set<InputFile>
-    ): Future<Unit> {
+    ) {
         if (allShutdown) {
             throw Exception("shutdownRunningTasks has already been called")
         }
@@ -253,13 +130,57 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
 
             val logBasePath = runBasePath.resolve(LOGS_DIR).resolve(taskRunId.toString())
 
-            return DockerJob(containerId, dockerClient, logBasePath, runBasePath, mountDir, taskRunId, outputFilesOut)
-        } catch(e: Throwable) {
+            try {
+                while (true) {
+                    val inspect = dockerClient.inspectContainerCmd(containerId).exec()
+                    if (inspect.state.running == true) {
+                        delay(1000)
+                        continue
+                    }
+
+                    log.info { "Waiting for container $containerId to finish..." }
+                    val statusCode =
+                        dockerClient.waitContainerCmd(containerId).exec(WaitContainerResultCallback()).awaitStatusCode()
+                    runningContainers.remove(containerId)
+                    if (statusCode > 0) {
+                        // Copy all files in mounted docker data directory to task diagnostics directory
+                        val taskDiagnosticsDir = runBasePath.resolve(DIAGNOSTICS_DIR).resolve(taskRunId.toString())
+                        copyDiagnosticFiles(mountDir, taskDiagnosticsDir)
+                        throw Exception(
+                            """
+                        |Container exited with code $statusCode.
+                        |Please see logs at $logBasePath for more information.
+                        |Working files (in data directory) have been copied into $taskDiagnosticsDir
+                        """.trimMargin()
+                        )
+                    }
+                    break
+                }
+                log.info { "Container $containerId finished successfully!" }
+            } finally {
+                copyLogsFromContainer(dockerClient, containerId, logBasePath)
+
+                // Delete containers
+                log.info { "Cleaning up containers..." }
+                dockerClient.removeContainerCmd(containerId).exec()
+            }
+
+            // Copy output files out of docker container into run outputs dir
+            if (outputFilesOut.isNotEmpty()) {
+                log.info { "Copying output files $outputFilesOut for task output out of mounted data dir $mountDir" }
+            } else {
+                log.info { "No output files to copy for this task run." }
+            }
+            outputFilesOut.map { it.path }.forEach {
+                val to = outputsPath.resolve(it)
+                Files.createDirectories(to.parent)
+                Files.copy(mountDir.resolve(it), to, StandardCopyOption.REPLACE_EXISTING)
+            }
+        } finally {
             // Clean up temporary mount dir
             Files.walk(mountDir)
                 .sorted(Comparator.reverseOrder())
                 .forEach { Files.delete(it) }
-            return CompletableFuture.failedFuture(e)
         }
     }
 
@@ -270,7 +191,6 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
             dockerClient.stopContainerCmd(containerId).exec()
         }
     }
-
 }
 
 fun createContainer(dockerClient: DockerClient, taskRunContext: TaskRunContext<*, *>, mountDir: Path): String {

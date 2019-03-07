@@ -1,5 +1,6 @@
 package krews
 
+import io.mockk.coVerify
 import io.mockk.verify
 import krews.executor.LocallyDirectedExecutor
 import mu.KotlinLogging
@@ -25,7 +26,7 @@ fun verifyInputFileCached(executorSpy: LocallyDirectedExecutor, path: String, ti
  */
 fun verifyExecuteWithOutput(executorSpy: LocallyDirectedExecutor, path: String, times: Int = 1) {
     log.debug { "Verifying task execute for output file with path $path exactly $times times" }
-    verify(exactly = times) {
+    coVerify(exactly = times) {
         executorSpy.executeTask(any(), any(), any(), any(), any(),
             match { if (it.isEmpty()) false else it.iterator().next().path == path },
             any(), any())

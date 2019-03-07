@@ -84,13 +84,7 @@ class WorkflowRunner(
         reportPool.scheduleWithFixedDelay({ generateReport() },
             reportGenerationDelay, reportGenerationDelay, TimeUnit.SECONDS)
 
-        var workflowRunSuccessful: Boolean
-        try {
-            workflowRunSuccessful = runWorkflow()
-        } catch (e: Exception) {
-            workflowRunSuccessful = false
-            log.error(e) { "Workflow unsuccessful." }
-        }
+        val workflowRunSuccessful = runWorkflow()
 
         transaction(db) {
             workflowRun.completedSuccessfully = workflowRunSuccessful
@@ -160,12 +154,16 @@ class WorkflowRunner(
                 }.count()
             }
             return failedTasks == 0
+        } catch(e: Exception) {
+            log.error(e) { "Workflow unsuccessful." }
+            return false
         } finally {
             taskRunner.stopMonitorTasks()
         }
     }
 
     fun onShutdown() {
+        // TODO this should propagate through TaskRunner and Executor too
         if (!hasShutdown.compareAndSet(false, true)) return
         log.info { "Shutting down..." }
         reportPool.shutdown()

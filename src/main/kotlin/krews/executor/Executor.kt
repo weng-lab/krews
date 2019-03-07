@@ -58,14 +58,14 @@ interface LocallyDirectedExecutor {
      * @param cachedInputFiles: Input files that exist in the current environment's storage.
      * @param downloadInputFiles: Input files that need to be downloaded from original sources.
      */
-    fun executeTask(workflowRunDir: String,
+    suspend fun executeTask(workflowRunDir: String,
                     taskRunId: Int,
                     taskConfig: TaskConfig,
                     taskRunContext: TaskRunContext<*, *>,
                     outputFilesIn: Set<OutputFile>,
                     outputFilesOut: Set<OutputFile>,
                     cachedInputFiles: Set<InputFile>,
-                    downloadInputFiles: Set<InputFile>): Future<Unit>
+                    downloadInputFiles: Set<InputFile>)
 
     /**
      * Shuts down all tasks currently executing.

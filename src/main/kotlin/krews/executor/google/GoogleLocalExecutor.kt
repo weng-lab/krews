@@ -2,17 +2,13 @@ package krews.executor.google
 
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.api.services.genomics.v2alpha1.model.*
-import krews.core.CapacityType
+import kotlinx.coroutines.delay
 import krews.config.TaskConfig
 import krews.config.WorkflowConfig
 import krews.config.googleMachineType
-import krews.core.Task
+import krews.core.CapacityType
 import krews.core.TaskRunContext
-import krews.core.TaskRunner
 import krews.executor.*
-import krews.executor.slurm.SlurmCheckEmptyResponseException
-import krews.executor.slurm.SlurmJobState
-import krews.executor.slurm.SlurmJobStateCategory
 import krews.file.GSInputFile
 import krews.file.InputFile
 import krews.file.OutputFile
@@ -22,10 +18,6 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.Future
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeoutException
-import kotlin.math.pow
 
 
 private val log = KotlinLogging.logger {}
@@ -82,82 +74,7 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
         return googleStorageClient.objects().get(bucket, gcsObjectPath(gcsBase, path)).execute().updated.value
     }
 
-    private inner class GoogleJob(val opName: String, val context: String) : Future<Unit> {
-        private var capturedThrowable: Throwable? = null
-        private var lastOperation: Operation? = null
-        private var cancelled = false
-
-        private fun checkStatus(): Operation? {
-            if (lastOperation?.done == true) {
-                return lastOperation
-            }
-            var theop: Operation? = null
-            try {
-                val op: Operation = googleGenomicsClient.projects().operations().get(opName).execute()
-                if (op.done) {
-                    runningOperations.remove(opName)
-                    if (op.error != null) {
-                        throw Exception("Error occurred during $context ($opName) execution. Operation Response: ${op.toPrettyString()}")
-                    }
-                    log.info { "Pipeline job for $context ($opName) completed successfully. Results: ${op.toPrettyString()}" }
-                } else {
-                    log.info { "Pipeline job for task run $context ($opName) still running..." }
-                }
-                theop = op
-                lastOperation = op
-            } catch(e: GoogleJsonResponseException) {
-                if (e.statusCode === 503) {
-                    return lastOperation
-                }
-                capturedThrowable = e
-            } catch (e: Throwable) {
-                capturedThrowable = e
-            }
-            return theop
-        }
-
-        override fun isDone(): Boolean {
-            val op: Operation? = checkStatus()
-            return capturedThrowable != null || (op != null && op.done)
-        }
-
-        override fun get() {
-            // An arbitrarily high value that won't overflow the long
-            return get(30, TimeUnit.DAYS)
-        }
-
-        override fun get(timeout: Long, unit: TimeUnit?) {
-            val startTime: Long = System.currentTimeMillis()
-            do {
-                if (capturedThrowable != null) {
-                    throw capturedThrowable!!
-                }
-                val waitTime = TimeUnit.MILLISECONDS.convert(timeout, (unit ?: TimeUnit.MILLISECONDS))
-                if (startTime + waitTime > System.currentTimeMillis()) {
-                    throw TimeoutException()
-                }
-            } while (!isDone)
-        }
-
-
-        override fun cancel(mayInterruptIfRunning: Boolean): Boolean {
-            if (!mayInterruptIfRunning && opName in runningOperations) {
-                return false
-            }
-            if (!runningOperations.remove(opName)) {
-                return false
-            }
-            googleGenomicsClient.projects().operations().cancel(opName, null)
-            cancelled = true
-            return true
-        }
-
-        override fun isCancelled(): Boolean {
-            return allShutdown || cancelled
-        }
-    }
-
-    override fun executeTask(
+    override suspend fun executeTask(
         workflowRunDir: String,
         taskRunId: Int,
         taskConfig: TaskConfig,
@@ -166,7 +83,7 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
         outputFilesOut: Set<OutputFile>,
         cachedInputFiles: Set<InputFile>,
         downloadInputFiles: Set<InputFile>
-    ): Future<Unit> {
+    ) {
         if (allShutdown) {
             throw Exception("shutdownRunningTasks has already been called")
         }
@@ -236,6 +153,8 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
         // Create action to copy logs to GCS after everything else is complete
         actions.add(createLogsAction(logPath))
 
+
+        val context = "task run $taskRunId"
         log.info { "Submitting pipeline job for task run: $run" }
         googleGenomicsClient.projects().operations()
         val initialOp: Operation = retry("Pipeline job submit",
@@ -249,8 +168,27 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
             "Pipeline job submitted. Operation returned: \"$opName\". " +
                     "Will check for completion every ${googleConfig.jobCompletionPollInterval} seconds"
         }
-
-        return GoogleJob(opName, "task run $taskRunId")
+        do {
+            var done = false
+            delay(googleConfig.jobCompletionPollInterval * 1000L)
+            try {
+                val op: Operation = googleGenomicsClient.projects().operations().get(opName).execute()
+                if (op.done) {
+                    runningOperations.remove(opName)
+                    if (op.error != null) {
+                        throw Exception("Error occurred during $context ($opName) execution. Operation Response: ${op.toPrettyString()}")
+                    }
+                    log.info { "Pipeline job for $context ($opName) completed successfully. Results: ${op.toPrettyString()}" }
+                } else {
+                    log.info { "Pipeline job for task run $context ($opName) still running..." }
+                }
+                done = op.done
+            } catch(e: GoogleJsonResponseException) {
+                if (e.statusCode != 503) {
+                    throw e
+                }
+            }
+        } while (!done)
     }
 
     override fun shutdownRunningTasks() {
