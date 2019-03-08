@@ -25,6 +25,10 @@ import kotlinx.coroutines.*
 
 private val log = KotlinLogging.logger {}
 
+class TaskRunFuture<I : Any, O : Any>(val task: Task<I, O>, val taskRunContext: TaskRunContext<I, O>): CompletableFuture<O>() {
+    fun complete() = complete(taskRunContext.output)
+}
+
 class TaskRunner(private val workflowRun: WorkflowRun,
                  private val workflowConfig: WorkflowConfig,
                  private val executor: LocallyDirectedExecutor,
