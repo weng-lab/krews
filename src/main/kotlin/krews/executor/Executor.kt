@@ -47,7 +47,7 @@ interface LocallyDirectedExecutor {
      * Execute task for the environment. Will consist of running a docker container to complete the task, and another
      * for downloading the given input files from remote sources, and possibly more for environment specific requirements.
      *
-     * This function should block until the task is complete.
+     * This function should returns when the task is complete.
      *
      * @param outputFilesIn: Output files coming from a task's current "Input Element." These will already exist in the
      * current environment's storage.
@@ -56,7 +56,7 @@ interface LocallyDirectedExecutor {
      * @param cachedInputFiles: Input files that exist in the current environment's storage.
      * @param downloadInputFiles: Input files that need to be downloaded from original sources.
      */
-    fun executeTask(workflowRunDir: String,
+    suspend fun executeTask(workflowRunDir: String,
                     taskRunId: Int,
                     taskConfig: TaskConfig,
                     taskRunContext: TaskRunContext<*, *>,

@@ -10,6 +10,7 @@ import krews.db.TaskRuns
 import krews.executor.DIAGNOSTICS_DIR
 import krews.executor.LOGS_DIR
 import krews.executor.OUTPUTS_DIR
+import org.joda.time.DateTime
 
 internal fun createReport(db: Database, workflowRun: WorkflowRun, out: Appendable) =
     transaction(db) {
@@ -28,6 +29,7 @@ private fun createReport(workflowRun: WorkflowRun, taskRuns: Iterable<TaskRun>, 
 
             div("container-fluid") {
                 h1 { +"Workflow ${workflowRun.workflowName} - Run ${workflowRun.startTime}" }
+                h2 { +"Generated ${DateTime.now()}"}
 
                 val workflowStatus = when {
                     workflowRun.completedTime == null -> Status.IN_PROGRESS

@@ -2,10 +2,11 @@ package krews.executor.google
 
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.api.services.genomics.v2alpha1.model.*
-import krews.core.CapacityType
+import kotlinx.coroutines.delay
 import krews.config.TaskConfig
 import krews.config.WorkflowConfig
 import krews.config.googleMachineType
+import krews.core.CapacityType
 import krews.core.TaskRunContext
 import krews.executor.*
 import krews.file.GSInputFile
@@ -32,6 +33,8 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
     private val bucket = googleConfig.storageBucket
     private val gcsBase = googleConfig.storageBaseDir
     private val runningOperations: MutableSet<String> = ConcurrentHashMap.newKeySet<String>()
+
+    private var allShutdown = false
 
     override fun downloadFile(fromPath: String, toPath: Path) {
         log.info { "Attempting to download $fromPath from bucket $bucket to $toPath..." }
@@ -71,7 +74,7 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
         return googleStorageClient.objects().get(bucket, gcsObjectPath(gcsBase, path)).execute().updated.value
     }
 
-    override fun executeTask(
+    override suspend fun executeTask(
         workflowRunDir: String,
         taskRunId: Int,
         taskConfig: TaskConfig,
@@ -81,6 +84,9 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
         cachedInputFiles: Set<InputFile>,
         downloadInputFiles: Set<InputFile>
     ) {
+        if (allShutdown) {
+            throw Exception("shutdownRunningTasks has already been called")
+        }
         val run = createRunPipelineRequest(googleConfig)
         val actions = run.pipeline.actions
 
@@ -147,10 +153,46 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
         // Create action to copy logs to GCS after everything else is complete
         actions.add(createLogsAction(logPath))
 
-        submitJobAndWait(run, googleConfig.jobCompletionPollInterval, "task run $taskRunId", runningOperations)
+
+        val context = "task run $taskRunId"
+        log.info { "Submitting pipeline job for task run: $run" }
+        googleGenomicsClient.projects().operations()
+        val initialOp: Operation = retry("Pipeline job submit",
+            retryCondition = { e -> e is GoogleJsonResponseException && e.statusCode == 503 }) {
+            googleGenomicsClient.pipelines().run(run).execute()
+        }
+        val opName = initialOp.name
+        runningOperations.add(opName)
+
+        log.info {
+            "Pipeline job submitted. Operation returned: \"$opName\". " +
+                    "Will check for completion every ${googleConfig.jobCompletionPollInterval} seconds"
+        }
+        do {
+            var done = false
+            delay(googleConfig.jobCompletionPollInterval * 1000L)
+            try {
+                val op: Operation = googleGenomicsClient.projects().operations().get(opName).execute()
+                if (op.done) {
+                    runningOperations.remove(opName)
+                    if (op.error != null) {
+                        throw Exception("Error occurred during $context ($opName) execution. Operation Response: ${op.toPrettyString()}")
+                    }
+                    log.info { "Pipeline job for $context ($opName) completed successfully. Results: ${op.toPrettyString()}" }
+                } else {
+                    log.info { "Pipeline job for task run $context ($opName) still running..." }
+                }
+                done = op.done
+            } catch(e: GoogleJsonResponseException) {
+                if (e.statusCode != 503) {
+                    throw e
+                }
+            }
+        } while (!done)
     }
 
     override fun shutdownRunningTasks() {
+        allShutdown = true
         for (op in runningOperations) {
             log.info { "Canceling operation $op..." }
             googleGenomicsClient.projects().operations().cancel(op, null)
@@ -214,47 +256,4 @@ internal fun createDownloadRemoteFileAction(inputFile: InputFile, dataDir: Strin
     action.mounts = listOf(createMount(dataDir))
     action.commands = listOf("/bin/sh", "-c", inputFile.downloadFileCommand(dataDir))
     return action
-}
-
-/**
- * Submits a job to the pipelines api and polls periodically until the job is complete.
- * The current thread will be blocked until the job is complete.
- */
-internal fun submitJobAndWait(
-    run: RunPipelineRequest,
-    jobCompletionPollInterval: Int,
-    context: String,
-    runningOperations: MutableSet<String>
-) {
-    log.info { "Submitting pipeline job for task run: $run" }
-    googleGenomicsClient.projects().operations()
-    val initialOp: Operation = retry("Pipeline job submit",
-        retryCondition = { e -> e is GoogleJsonResponseException && e.statusCode == 503 }) {
-        googleGenomicsClient.pipelines().run(run).execute()
-    }
-    val opName = initialOp.name
-    runningOperations.add(opName)
-
-    log.info {
-        "Pipeline job submitted. Operation returned: \"$opName\". " +
-                "Will check for completion every $jobCompletionPollInterval seconds"
-    }
-    do {
-        var done = false
-        Thread.sleep(jobCompletionPollInterval * 1000L)
-        retry("Pipeline job check",
-            retryCondition = { e -> e is GoogleJsonResponseException && e.statusCode == 503 }) {
-            val op: Operation = googleGenomicsClient.projects().operations().get(opName).execute()
-            if (op.done) {
-                runningOperations.remove(opName)
-                if (op.error != null) {
-                    throw Exception("Error occurred during $context ($opName) execution. Operation Response: ${op.toPrettyString()}")
-                }
-                log.info { "Pipeline job for $context ($opName) completed successfully. Results: ${op.toPrettyString()}" }
-            } else {
-                log.info { "Pipeline job for task run $context ($opName) still running..." }
-            }
-            done = op.done
-        }
-    } while (!done)
 }

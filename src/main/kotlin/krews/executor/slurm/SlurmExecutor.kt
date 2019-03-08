@@ -1,16 +1,23 @@
 package krews.executor.slurm
 
-import krews.config.*
+import kotlinx.coroutines.delay
+import krews.config.TaskConfig
+import krews.config.WorkflowConfig
 import krews.core.TaskRunContext
-import krews.executor.*
+import krews.executor.INPUTS_DIR
+import krews.executor.LOGS_DIR
+import krews.executor.LocallyDirectedExecutor
+import krews.executor.OUTPUTS_DIR
 import krews.file.*
+import krews.misc.CommandExecutor
 import mu.KotlinLogging
-import java.nio.file.*
+import org.apache.commons.io.FileUtils
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
 import java.util.*
 import java.util.UUID.randomUUID
-import krews.misc.CommandExecutor
-import org.apache.commons.io.FileUtils
-import retry
+import retrySuspend
 import kotlin.math.pow
 
 private val log = KotlinLogging.logger {}
@@ -27,6 +34,8 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
     private val workflowBasePath = Paths.get(workflowConfig.localFilesBaseDir).toAbsolutePath()!!
     private val inputsPath = workflowBasePath.resolve(INPUTS_DIR)
     private val outputsPath = workflowBasePath.resolve(OUTPUTS_DIR)
+
+    private var allShutdown = false
 
     override fun downloadFile(fromPath: String, toPath: Path) {
         val fromFile = workflowBasePath.resolve(fromPath)
@@ -63,7 +72,7 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
 
     override fun downloadInputFile(inputFile: InputFile) = downloadInputFileLocalFS(inputFile, inputsPath)
 
-    override fun executeTask(
+    override suspend fun executeTask(
         workflowRunDir: String,
         taskRunId: Int,
         taskConfig: TaskConfig,
@@ -73,6 +82,9 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
         cachedInputFiles: Set<InputFile>,
         downloadInputFiles: Set<InputFile>
     ) {
+        if (allShutdown) {
+            throw Exception("shutdownRunningTasks has already been called")
+        }
         val runBasePath = workflowBasePath.resolve(workflowRunDir)
         val logsPath = runBasePath.resolve(LOGS_DIR).resolve(taskRunId.toString())
         logsPath.toFile().mkdirs()
@@ -194,14 +206,14 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
         // Wait until status
         do {
             var done = false
-            Thread.sleep(workflowConfig.slurm.jobCompletionPollInterval * 1000L)
+            delay(workflowConfig.slurm.jobCompletionPollInterval * 1000L)
 
-            retry("Slurm status check for job $jobId", 4, { it is SlurmCheckEmptyResponseException }) { attempt ->
+            retrySuspend("Slurm status check for job $jobId", 4, { it is SlurmCheckEmptyResponseException }) { attempt ->
                 // Exponential backoff
                 if (attempt > 1) {
                     val sleepTime = 2.0.pow(attempt).toLong()
                     log.info { "Empty sacct response. Sleeping for $sleepTime seconds." }
-                    Thread.sleep(1000 * sleepTime)
+                    delay(1000 * sleepTime)
                 }
                 val checkCommand = "sacct -j $jobId --format=state --noheader"
                 val jobStatusResponse = commandExecutor.exec(checkCommand)
@@ -220,6 +232,7 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
     }
 
     override fun shutdownRunningTasks() {
+        allShutdown = true
         commandExecutor.exec("scancel --jobname=$slurmWorkflowJobName")
     }
 

@@ -1,5 +1,7 @@
 package krews.core
 
+import krews.config.LimitedParallelism
+import krews.config.UnlimitedParallelism
 import krews.config.WorkflowConfig
 import krews.db.*
 import krews.executor.INPUTS_DIR
@@ -17,12 +19,15 @@ import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.joda.time.DateTime
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.Executors
-import java.util.concurrent.Future
+import java.util.concurrent.*
+import kotlinx.coroutines.*
 
 
 private val log = KotlinLogging.logger {}
+
+class TaskRunFuture<I : Any, O : Any>(val task: Task<I, O>, val taskRunContext: TaskRunContext<I, O>): CompletableFuture<O>() {
+    fun complete() = complete(taskRunContext.output)
+}
 
 class TaskRunner(private val workflowRun: WorkflowRun,
                  private val workflowConfig: WorkflowConfig,
@@ -34,8 +39,97 @@ class TaskRunner(private val workflowRun: WorkflowRun,
     private val workflowRunId = transaction(db) { workflowRun.id.value }
     private val workflowStartTime = transaction(db) { workflowRun.startTime }
 
-    fun <I : Any, O : Any> run(task: Task<I, O>,
-                               taskRunContext: TaskRunContext<I, O>): O {
+    private var stopped = false
+    private val maxConcurrency = when (workflowConfig.parallelism) {
+        is UnlimitedParallelism -> 262144
+        is LimitedParallelism -> workflowConfig.parallelism.limit
+    }
+    private val atMaxConcurrency: Semaphore = Semaphore(maxConcurrency)
+    private val queuedTasks = LinkedBlockingQueue<TaskRunFuture<*, *>>()
+    private val runningTasks = LinkedBlockingQueue<Deferred<Unit>>()
+    // These threads monitor the state of queuedTasks and runningTasks
+    private lateinit var queueMonitorThread: Thread
+    private lateinit var runMonitorThread: Thread
+    private val coroutineExecutor = Executors.newFixedThreadPool(workflowConfig.executorConcurrency)
+    private val coroutineDispatcher = coroutineExecutor.asCoroutineDispatcher()
+
+    private fun doMonitorQueue() {
+        while (true) {
+            try {
+                if (stopped) {
+                    break
+                }
+                if (!atMaxConcurrency.tryAcquire(1, 1000, TimeUnit.MILLISECONDS)) {
+                    continue
+                }
+                val nextTask = queuedTasks.take()
+                val def = GlobalScope.async (coroutineDispatcher) {
+                    try {
+                        run(nextTask)
+                        nextTask.complete()
+                    } catch (e: Throwable) {
+                        nextTask.completeExceptionally(e)
+                    }
+                    Unit
+                }
+                runningTasks.add(def)
+            } catch (e: InterruptedException) {}
+        }
+    }
+
+    private fun doMonitorRunning() {
+        while (true) {
+            try {
+                val task = runningTasks.poll(1000, TimeUnit.MILLISECONDS)
+                if (task == null) {
+                    if (stopped) {
+                        break
+                    }
+                    continue
+                }
+                val isDone = task.isCompleted
+                if (isDone) {
+                    atMaxConcurrency.release()
+                } else {
+                    runningTasks.offer(task)
+                }
+            } catch(e: InterruptedException) {}
+        }
+    }
+
+    fun startMonitorTasks() {
+        queueMonitorThread = Thread { doMonitorQueue() }
+        runMonitorThread = Thread { doMonitorRunning() }
+        queueMonitorThread.start()
+        runMonitorThread.start()
+        log.info { "Started monitoring threads for TaskRunner" }
+    }
+
+    fun stopMonitorTasks() {
+        stopped = true
+        queueMonitorThread.interrupt()
+        runMonitorThread.interrupt()
+        queueMonitorThread.join()
+        runMonitorThread.join()
+        log.info { "Shutdown monitor threads"}
+
+        coroutineExecutor.shutdown()
+        coroutineExecutor.awaitTermination(1000, TimeUnit.MILLISECONDS)
+    }
+
+    fun <I : Any, O : Any, T: Task<I, O>> submit(task: T, taskRunContext: TaskRunContext<I, O>): CompletableFuture<O> {
+        if (stopped) {
+            throw Exception("Can't submit a task to a stopped TaskRunner")
+        }
+        val future = TaskRunFuture(task, taskRunContext)
+        queuedTasks.add(future)
+        return future
+    }
+
+
+    private suspend fun <I : Any, O : Any> run(taskFuture: TaskRunFuture<I, O>) {
+        val task = taskFuture.task
+        val taskRunContext = taskFuture.taskRunContext
         val taskConfig = workflowConfig.tasks[task.name]!!
 
         val inputJson = mapper
@@ -205,7 +299,7 @@ class TaskRunner(private val workflowRun: WorkflowRun,
             val outputJson = mapper
                 .writerWithView(CacheView::class.java)
                 .forType(task.outputClass)
-                .writeValueAsString(output)
+                .writeValueAsString(taskRunContext.output)
 
             log.info { "$loggingPrefix Task completed successfully! Saving status..." }
             transaction(db) {
@@ -218,7 +312,6 @@ class TaskRunner(private val workflowRun: WorkflowRun,
             transaction(db) { taskRun.completedTime = DateTime.now().millis }
             throw e
         }
-        return output
     }
 
 }

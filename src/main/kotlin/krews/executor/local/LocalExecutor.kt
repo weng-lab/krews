@@ -8,12 +8,16 @@ import com.github.dockerjava.api.model.Volume
 import com.github.dockerjava.core.command.LogContainerResultCallback
 import com.github.dockerjava.core.command.PullImageResultCallback
 import com.github.dockerjava.core.command.WaitContainerResultCallback
+import kotlinx.coroutines.delay
 import krews.config.DockerConfig
 import krews.config.TaskConfig
 import krews.config.WorkflowConfig
 import krews.core.TaskRunContext
 import krews.executor.*
-import krews.file.*
+import krews.file.InputFile
+import krews.file.OutputFile
+import krews.file.downloadInputFileLocalFS
+import krews.file.listLocalFiles
 import mu.KotlinLogging
 import java.nio.file.Files
 import java.nio.file.Path
@@ -32,6 +36,8 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
     private val outputsPath = workflowBasePath.resolve(OUTPUTS_DIR)
 
     private val runningContainers: MutableSet<String> = ConcurrentHashMap.newKeySet<String>()
+
+    private var allShutdown = false
 
     override fun downloadFile(fromPath: String, toPath: Path) {
         val fromFile = workflowBasePath.resolve(fromPath)
@@ -66,7 +72,7 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
 
     override fun downloadInputFile(inputFile: InputFile) = downloadInputFileLocalFS(inputFile, inputsPath)
 
-    override fun executeTask(
+    override suspend fun executeTask(
         workflowRunDir: String,
         taskRunId: Int,
         taskConfig: TaskConfig,
@@ -76,6 +82,9 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
         cachedInputFiles: Set<InputFile>,
         downloadInputFiles: Set<InputFile>
     ) {
+        if (allShutdown) {
+            throw Exception("shutdownRunningTasks has already been called")
+        }
 
         // Create a temp directory to use as a mount for input data
         val mountDir = workflowBasePath.resolve("task-$taskRunId-mount")
@@ -122,21 +131,30 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
             val logBasePath = runBasePath.resolve(LOGS_DIR).resolve(taskRunId.toString())
 
             try {
-                log.info { "Waiting for container $containerId to finish..." }
-                val statusCode =
-                    dockerClient.waitContainerCmd(containerId).exec(WaitContainerResultCallback()).awaitStatusCode()
-                runningContainers.remove(containerId)
-                if (statusCode > 0) {
-                    // Copy all files in mounted docker data directory to task diagnostics directory
-                    val taskDiagnosticsDir = runBasePath.resolve(DIAGNOSTICS_DIR).resolve(taskRunId.toString())
-                    copyDiagnosticFiles(mountDir, taskDiagnosticsDir)
-                    throw Exception(
-                        """
+                while (true) {
+                    val inspect = dockerClient.inspectContainerCmd(containerId).exec()
+                    if (inspect.state.running == true) {
+                        delay(1000)
+                        continue
+                    }
+
+                    log.info { "Waiting for container $containerId to finish..." }
+                    val statusCode =
+                        dockerClient.waitContainerCmd(containerId).exec(WaitContainerResultCallback()).awaitStatusCode()
+                    runningContainers.remove(containerId)
+                    if (statusCode > 0) {
+                        // Copy all files in mounted docker data directory to task diagnostics directory
+                        val taskDiagnosticsDir = runBasePath.resolve(DIAGNOSTICS_DIR).resolve(taskRunId.toString())
+                        copyDiagnosticFiles(mountDir, taskDiagnosticsDir)
+                        throw Exception(
+                            """
                         |Container exited with code $statusCode.
                         |Please see logs at $logBasePath for more information.
                         |Working files (in data directory) have been copied into $taskDiagnosticsDir
                         """.trimMargin()
-                    )
+                        )
+                    }
+                    break
                 }
                 log.info { "Container $containerId finished successfully!" }
             } finally {
@@ -167,6 +185,7 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
     }
 
     override fun shutdownRunningTasks() {
+        allShutdown = true
         for(containerId in runningContainers) {
             log.info { "Stopping container $containerId..." }
             dockerClient.stopContainerCmd(containerId).exec()
