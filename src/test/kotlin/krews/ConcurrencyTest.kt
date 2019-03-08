@@ -79,8 +79,6 @@ class ConcurrencyTest : StringSpec(){
         }
     }
 
-    private val testExecutor = Executors.newCachedThreadPool()
-
     init {
 
         "Will fail with asynchronous exceptions" {
@@ -93,8 +91,6 @@ class ConcurrencyTest : StringSpec(){
                 if (task1s > 5) {
                     delay(500)
                     throw Exception("Test exception")
-                } else {
-                    null
                 }
             }
 
