@@ -14,6 +14,10 @@ import krews.core.WorkflowRunner
 import krews.executor.LOGS_DIR
 import krews.executor.REPORT_FILENAME
 import krews.executor.local.LocalExecutor
+import krews.util.Integration
+import krews.util.localFilesWorkflow
+import krews.util.verifyExecuteWithOutput
+import krews.util.verifyInputFileCached
 import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.streams.toList

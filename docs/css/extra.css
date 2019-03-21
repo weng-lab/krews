@@ -1,0 +1,12 @@
+.md-header-nav__topic {
+    color: transparent;
+}
+
+.md-logo > img {
+    width: 90px;
+}
+
+.img-container {
+    margin-bottom:42px;
+    max-width:700px;
+}

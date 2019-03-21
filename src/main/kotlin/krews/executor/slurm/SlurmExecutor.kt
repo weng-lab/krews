@@ -30,8 +30,8 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
     // We will use this to delete jobs without needing to track individual job ids.
     private val slurmWorkflowJobName = randomUUID().toString()
 
-    private val commandExecutor = CommandExecutor(workflowConfig.slurm.ssh)
-    private val workflowBasePath = Paths.get(workflowConfig.localFilesBaseDir).toAbsolutePath()!!
+    private val commandExecutor = CommandExecutor(workflowConfig.slurm?.ssh)
+    private val workflowBasePath = Paths.get(workflowConfig.slurm!!.workingDir).toAbsolutePath()!!
     private val inputsPath = workflowBasePath.resolve(INPUTS_DIR)
     private val outputsPath = workflowBasePath.resolve(OUTPUTS_DIR)
 
@@ -206,7 +206,7 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
         // Wait until status
         do {
             var done = false
-            delay(workflowConfig.slurm.jobCompletionPollInterval * 1000L)
+            delay(workflowConfig.slurm!!.jobCompletionPollInterval * 1000L)
 
             retrySuspend("Slurm status check for job $jobId", 4, { it is SlurmCheckEmptyResponseException }) { attempt ->
                 // Exponential backoff

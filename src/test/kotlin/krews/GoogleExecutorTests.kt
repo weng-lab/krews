@@ -12,8 +12,11 @@ import krews.config.createWorkflowConfig
 import krews.core.WorkflowRunner
 import krews.executor.REPORT_FILENAME
 import krews.executor.google.GoogleLocalExecutor
-import krews.executor.google.gcsObjectPath
 import krews.executor.google.googleStorageClient
+import krews.util.E2E
+import krews.util.gsFilesWorkflow
+import krews.util.verifyExecuteWithOutput
+import krews.util.verifyInputFileCached
 import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.nio.file.Files

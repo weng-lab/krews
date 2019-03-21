@@ -1,0 +1,59 @@
+site_name: Krews
+repo_name: krews
+repo_url: https://github.com/weng-lab/krews
+site_description: "Kotlin Reactive Workflows"
+site_author: Jason Brooks
+remote_branch: master
+
+copyright: 'Copyright &copy; 2018 Weng Lab'
+
+theme:
+  name: 'material'
+  logo: img/krews_logo_white.png
+  favicon: img/favicon.ico
+  palette:
+    primary: 'blue grey'
+    accent: 'amber'
+
+extra_css:
+  - 'css/extra.css'
+
+markdown_extensions:
+  - admonition
+  - meta
+  - smarty
+  - codehilite:
+      guess_lang: false
+  - footnotes
+  - toc:
+      permalink: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.inlinehilite
+  - pymdownx.magiclink
+  - pymdownx.smartsymbols
+  - pymdownx.superfences
+
+nav:
+  - 'Quick Start':
+      - 'Creating a Project': quickstart.md
+      - 'Installing Krews Dependency': quickstart/#installing-krews-dependency
+      - 'Building': quickstart/#building
+  - 'Docker':
+      - 'How Krews uses Docker': docker.md
+      - 'What about Singularity': docker/#what-about-singularity
+  - 'Reactor':
+      - 'Publishers, Fluxes, and Monos': reactor.md
+      - 'Flux and Mono Creation': reactor/#flux-and-mono-creation
+      - 'Operations': reactor/#operations
+  - 'Workflows':
+      - 'Workflow Basics': workflows.md
+      - 'Tasks': workflows/#tasks
+      - 'Files': workflows/#files
+      - 'Params': workflows/#params
+      - 'Code Organization': workflows/#code-organization
+  - 'Configurations':
+      - 'Configuration Basics': configs.md
+      - 'Workflow Configurations': configs/#workflow-configurations
+      - 'Task Configurations': configs/#task-configurations

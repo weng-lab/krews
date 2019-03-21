@@ -4,6 +4,8 @@ import io.kotlintest.Description
 import io.kotlintest.Spec
 import io.kotlintest.matchers.file.shouldExist
 import io.kotlintest.specs.StringSpec
+import krews.util.Integration
+import krews.util.localFilesWorkflow
 import java.nio.file.Files
 import java.nio.file.Paths
 

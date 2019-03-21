@@ -15,6 +15,7 @@ import krews.config.createWorkflowConfig
 import krews.core.WorkflowRunner
 import krews.core.workflow
 import krews.executor.LocallyDirectedExecutor
+import krews.util.Unit
 import mu.KotlinLogging
 import reactor.core.publisher.Mono
 import reactor.core.publisher.toFlux
@@ -22,7 +23,6 @@ import reactor.core.publisher.toMono
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 

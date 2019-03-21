@@ -1,4 +1,4 @@
-package krews
+package krews.util
 
 import io.mockk.coVerify
 import io.mockk.verify

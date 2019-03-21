@@ -1,4 +1,4 @@
-package krews
+package krews.util
 
 import io.kotlintest.Tag
 

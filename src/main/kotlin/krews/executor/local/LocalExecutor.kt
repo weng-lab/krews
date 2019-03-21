@@ -30,8 +30,8 @@ private val log = KotlinLogging.logger {}
 
 class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
 
-    private val dockerClient = buildDockerClient(workflowConfig.local?.docker ?: DockerConfig())
-    private val workflowBasePath = Paths.get(workflowConfig.localFilesBaseDir).toAbsolutePath()!!
+    private val dockerClient = buildDockerClient(workflowConfig.local!!.docker ?: DockerConfig())
+    private val workflowBasePath = Paths.get(workflowConfig.local!!.workingDir).toAbsolutePath()!!
     private val inputsPath = workflowBasePath.resolve(INPUTS_DIR)
     private val outputsPath = workflowBasePath.resolve(OUTPUTS_DIR)
 

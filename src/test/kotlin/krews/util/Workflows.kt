@@ -1,4 +1,4 @@
-package krews
+package krews.util
 
 import krews.core.workflow
 import krews.file.*
@@ -20,7 +20,15 @@ data class Bast64TaskParams(val someVal: String, val someFiles: List<File>?)
 fun localFilesWorkflow() = workflow("local-files-workflow") {
     val params = params<LocalWorkflowParams>()
     val sampleFiles = Files.newDirectoryStream(Paths.get(params.sampleFilesDir)).sortedBy { f -> f.fileName }
-        .map { TestComplexInputType(LocalInputFile(it.toAbsolutePath().toString(), it.fileName.toString(), true)) }
+        .map {
+            TestComplexInputType(
+                LocalInputFile(
+                    it.toAbsolutePath().toString(),
+                    it.fileName.toString(),
+                    true
+                )
+            )
+        }
         .toFlux()
 
     val base64 = task<TestBaseInputType, File>("base64", sampleFiles) {

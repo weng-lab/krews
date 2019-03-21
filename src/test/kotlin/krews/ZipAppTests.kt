@@ -16,6 +16,7 @@ import krews.core.TaskRunContext
 import krews.core.WorkflowRunner
 import krews.core.workflow
 import krews.executor.LocallyDirectedExecutor
+import krews.util.Unit
 import mu.KotlinLogging
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono

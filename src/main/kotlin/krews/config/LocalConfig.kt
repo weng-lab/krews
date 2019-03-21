@@ -1,6 +1,7 @@
 package krews.config
 
 data class LocalWorkflowConfig (
+    val workingDir: String = "workflow-out",
     val docker: DockerConfig? = DockerConfig()
 )
 

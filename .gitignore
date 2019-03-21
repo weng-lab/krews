@@ -10,6 +10,9 @@ Thumbs.db
 # command line build dir
 /build
 
+# docs build dir
+/site
+
 # Intellij project files
 /.idea
 *.iml
