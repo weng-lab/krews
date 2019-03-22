@@ -36,6 +36,11 @@ markdown_extensions:
   - pymdownx.superfences
 
 nav:
+  - 'Why Krews?':
+      - 'Tooling': why_krews/#tooling
+      - 'Clean, Concise, and Powerful': why_krews/#clean-concise-powerful
+      - 'Docker Native': why_krews/#docker-native
+      - 'Cloud Native': why_krews/#cloud-native
   - 'Quick Start':
       - 'Creating a Project': quickstart.md
       - 'Installing Krews Dependency': quickstart/#installing-krews-dependency
@@ -51,9 +56,10 @@ nav:
       - 'Workflow Basics': workflows.md
       - 'Tasks': workflows/#tasks
       - 'Files': workflows/#files
-      - 'Params': workflows/#params
+      - 'Parameters': workflows/#params
       - 'Code Organization': workflows/#code-organization
   - 'Configurations':
-      - 'Configuration Basics': configs.md
-      - 'Workflow Configurations': configs/#workflow-configurations
-      - 'Task Configurations': configs/#task-configurations
+      - 'Configuration Basics': config.md
+      - 'Workflow Configurations': config/#workflow-configurations
+      - 'Task Configurations': config/#task-configurations
+      - 'Parameters': config/#parameters
