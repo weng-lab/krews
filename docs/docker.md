@@ -9,7 +9,7 @@ in the future.
 ## How Krews uses Docker
 
 <div class="img-container">
-    <img alt="logo" src="../img/krews_docker.png" />
+    <img src="../img/krews_docker.png" />
 </div>
 
 Krews runs each task in it's workflows in Docker containers. Each execution environment has different ways of 

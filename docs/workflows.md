@@ -3,7 +3,7 @@
 A "Workflow" is a directed acyclic graph consisting of "Tasks" glued together with publishers.
 
 <div class="img-container">
-    <img alt="logo" src="../img/krews_workflow.png" />
+    <img src="../img/krews_workflow.png" />
 </div>
 
 The following simple example contains two tasks.
@@ -62,7 +62,7 @@ marble diagrams (See [Flux](https://projectreactor.io/docs/core/release/api/reac
 for examples). Tasks can be conceptualized in a similar way.
 
 <div class="img-container">
-    <img alt="logo" src="../img/krews_task.png" />
+    <img src="../img/krews_task.png" />
 </div>
 
 Tasks operate on every item from an input publisher, process them, and turn them into outputs for the output flux.
