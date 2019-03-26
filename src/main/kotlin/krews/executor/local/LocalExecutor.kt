@@ -75,7 +75,7 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
     override suspend fun executeTask(
         workflowRunDir: String,
         taskRunId: Int,
-        taskConfig: TaskConfig,
+        taskConfig: TaskConfig?,
         taskRunContext: TaskRunContext<*, *>,
         outputFilesIn: Set<OutputFile>,
         outputFilesOut: Set<OutputFile>,

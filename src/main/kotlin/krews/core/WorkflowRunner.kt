@@ -128,12 +128,12 @@ class WorkflowRunner(
             taskRunner.startMonitorTasks()
 
             // Set execute function for each task.
-            for (task in workflow.tasks.values) {
+            for (task in workflow.tasks) {
                 task.connect(workflowConfig.tasks[task.name], taskRunner)
             }
 
             // Get "leafOutputs", meaning this workflow's task.output fluxes that don't have other task.outputs as parents
-            val allTaskOutputFluxes = workflow.tasks.values.map { it.outputPub }
+            val allTaskOutputFluxes = workflow.tasks.map { it.outputPub }
 
             // Trigger workflow by subscribing to leaf task outputs...
             val leavesFlux = Flux

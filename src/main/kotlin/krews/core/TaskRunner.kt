@@ -130,7 +130,7 @@ class TaskRunner(private val workflowRun: WorkflowRun,
     private suspend fun <I : Any, O : Any> run(taskFuture: TaskRunFuture<I, O>) {
         val task = taskFuture.task
         val taskRunContext = taskFuture.taskRunContext
-        val taskConfig = workflowConfig.tasks[task.name]!!
+        val taskConfig = taskRunContext.taskConfig
 
         val inputJson = mapper
             .writerWithView(CacheView::class.java)

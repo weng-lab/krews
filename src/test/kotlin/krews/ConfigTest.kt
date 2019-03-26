@@ -43,13 +43,13 @@ private fun configSampleWorkflow() = workflow("config-sample") {
         command = ""
     }
 
-    task<String, String>("sample2", "".toMono(), "small") {
+    task<String, String>("sample2", "".toMono(), "small2", "small") {
         dockerImage = "test"
         output = ""
         command = ""
     }
 
-    task<String, String>("sample3", "".toMono(), "large") {
+    task<String, String>("sample3", "".toMono(), "large", "small2") {
         dockerImage = "test"
         output = ""
         command = ""
@@ -132,8 +132,17 @@ private val completeTestConfig =
             }
         }
 
+        task.small2 {
+            params {
+                my-shared-thing = overridelabel
+            }
+        }
+
         # Overrides for gzip krews.core.task
         task.small {
+            params {
+                my-shared-thing = small
+            }
             google {
                 machine-type = n1-standard-1
                 disk-size = 5GB
@@ -150,6 +159,12 @@ private val completeTestConfig =
             }
             google {
                 disk-size = 30GB
+            }
+        }
+
+        task.sample3 {
+            params {
+                my-shared-thing = override
             }
         }
         """.trimIndent()
@@ -208,7 +223,7 @@ class ConfigTests : StringSpec({
 
         workflowConfig.tasks["sample2"] shouldBe TaskConfig(
             params = mapOf(
-                "my-shared-thing" to "someval"
+                "my-shared-thing" to "overridelabel"
             ),
             google = GoogleTaskConfig(
                 machineType = "n1-standard-1",
@@ -218,7 +233,7 @@ class ConfigTests : StringSpec({
 
         workflowConfig.tasks["sample3"] shouldBe TaskConfig(
             params = mapOf(
-                "my-shared-thing" to "someval"
+                "my-shared-thing" to "override"
             ),
             google = GoogleTaskConfig(
                 machineType = "n1-standard-2",

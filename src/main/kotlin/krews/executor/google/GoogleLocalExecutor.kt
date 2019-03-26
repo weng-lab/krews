@@ -77,7 +77,7 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
     override suspend fun executeTask(
         workflowRunDir: String,
         taskRunId: Int,
-        taskConfig: TaskConfig,
+        taskConfig: TaskConfig?,
         taskRunContext: TaskRunContext<*, *>,
         outputFilesIn: Set<OutputFile>,
         outputFilesOut: Set<OutputFile>,
@@ -92,8 +92,7 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
 
         val virtualMachine = VirtualMachine()
         run.pipeline.resources.virtualMachine = virtualMachine
-        virtualMachine.machineType = googleMachineType(taskConfig.google, taskRunContext.cpus, taskRunContext.memory)
-
+        virtualMachine.machineType = googleMachineType(taskConfig?.google, taskRunContext.cpus, taskRunContext.memory)
         val serviceAccount = ServiceAccount()
         virtualMachine.serviceAccount = serviceAccount
         serviceAccount.scopes = listOf(STORAGE_READ_WRITE_SCOPE)
@@ -101,7 +100,7 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
         val disk = Disk()
         virtualMachine.disks = listOf(disk)
         disk.name = DISK_NAME
-        if (taskConfig.google?.diskSize != null) {
+        if (taskConfig?.google?.diskSize != null) {
             disk.sizeGb = taskConfig.google.diskSize.toType(CapacityType.GB).toInt()
         }
 

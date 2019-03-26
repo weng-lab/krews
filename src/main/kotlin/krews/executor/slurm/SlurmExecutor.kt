@@ -75,7 +75,7 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
     override suspend fun executeTask(
         workflowRunDir: String,
         taskRunId: Int,
-        taskConfig: TaskConfig,
+        taskConfig: TaskConfig?,
         taskRunContext: TaskRunContext<*, *>,
         outputFilesIn: Set<OutputFile>,
         outputFilesOut: Set<OutputFile>,
@@ -104,11 +104,11 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
         appendSbatchParam(sbatchScript, "job-name", slurmWorkflowJobName)
         appendSbatchParam(sbatchScript, "output", logsPath.resolve("out.txt"))
         appendSbatchParam(sbatchScript, "error", logsPath.resolve("err.txt"))
-        appendSbatchParam(sbatchScript, "mem", taskConfig.slurm?.mem ?: taskRunContext.memory)
-        appendSbatchParam(sbatchScript, "cpus-per-task", taskConfig.slurm?.cpus ?: taskRunContext.cpus)
-        appendSbatchParam(sbatchScript, "time", taskConfig.slurm?.time ?: taskRunContext.time)
-        appendSbatchParam(sbatchScript, "partition", taskConfig.slurm?.partition)
-        for ((argName, argVal) in taskConfig.slurm?.sbatchArgs ?: mapOf()) {
+        appendSbatchParam(sbatchScript, "mem", taskConfig?.slurm?.mem ?: taskRunContext.memory)
+        appendSbatchParam(sbatchScript, "cpus-per-task", taskConfig?.slurm?.cpus ?: taskRunContext.cpus)
+        appendSbatchParam(sbatchScript, "time", taskConfig?.slurm?.time ?: taskRunContext.time)
+        appendSbatchParam(sbatchScript, "partition", taskConfig?.slurm?.partition)
+        for ((argName, argVal) in taskConfig?.slurm?.sbatchArgs ?: mapOf()) {
             appendSbatchParam(sbatchScript, argName, argVal)
         }
 

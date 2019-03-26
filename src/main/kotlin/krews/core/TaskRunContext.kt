@@ -1,5 +1,6 @@
 package krews.core
 
+import krews.config.TaskConfig
 import krews.config.convertConfigMap
 import krews.file.File
 import java.time.Duration
@@ -7,6 +8,7 @@ import java.time.Duration
 class TaskRunContextBuilder<I : Any, O : Any> internal constructor(
     val input: I,
     @PublishedApi internal val rawTaskParams: Map<String, Any>,
+    @PublishedApi internal val taskConfig: TaskConfig?,
     val outputClass: Class<O>
 ) {
     var dockerImage: String? = null
@@ -44,7 +46,8 @@ class TaskRunContextBuilder<I : Any, O : Any> internal constructor(
         diskSize = diskSize,
         time = time,
         taskParams = taskParams,
-        taskParamsClass = taskParamsClass
+        taskParamsClass = taskParamsClass,
+        taskConfig = taskConfig
     )
 }
 
@@ -61,5 +64,6 @@ data class TaskRunContext<I: Any, O: Any>(
     val diskSize: Capacity?,
     val time: Duration?,
     val taskParams: Any?,
-    val taskParamsClass: Class<*>?
+    val taskParamsClass: Class<*>?,
+    val taskConfig: TaskConfig?
 )

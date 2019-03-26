@@ -44,7 +44,7 @@ fun createWorkflowConfig(config: Config, workflow: Workflow): WorkflowConfig {
     deepOverrideConfig(configRoot, config.root())
     val rawTaskConfigs = if (configRoot["task"] != null) configRoot["task"] as MutableMap<String, Map<String, Any>> else mutableMapOf()
     configRoot.remove("task")
-    configRoot["tasks"] = createTaskConfigs(rawTaskConfigs, workflow.tasks.values)
+    configRoot["tasks"] = createTaskConfigs(rawTaskConfigs, workflow.tasks)
 
     if (configRoot["params"] == null) {
         configRoot["params"] = mapOf<String, Any>()
@@ -78,15 +78,14 @@ fun createTaskConfigs(rawTaskConfigs: Map<String, Map<String, Any>>, tasks: Coll
     // Gather 3 types of configurations we need: default, by name, and by label
     var defaultTaskConfig: Map<String, Any>? = null
     val tasksToNameConfigs = mutableMapOf<String, Map<String, Any>>()
-    val tasksToLabelConfigs = mutableMapOf<String, MutableSet<Map<String, Any>>>()
+    val tasksToLabelConfigs = mutableMapOf<String, MutableMap<String, Map<String, Any>>>()
     rawTaskConfigs.forEach { (key, configVal) ->
+        // If the key is "default" it applies to all tasks
+        if (key == DEFAULT_TASK_CONFIG_NAME) {
+            defaultTaskConfig = configVal
+            return@forEach
+        }
         val applicableTasks = tasks.filter { task ->
-            // If the key is "default" it applies to all tasks
-            if (key == DEFAULT_TASK_CONFIG_NAME) {
-                defaultTaskConfig = configVal
-                return@filter true
-            }
-
             // If the key matches the task name it applies to this task
             if (key == kebabify(task.name)) {
                 tasksToNameConfigs[task.name] = configVal
@@ -96,7 +95,7 @@ fun createTaskConfigs(rawTaskConfigs: Map<String, Map<String, Any>>, tasks: Coll
             // If the key matches any task labels it applies to this task
             val kebabLabels = task.labels.map { kebabify(it) }
             if (kebabLabels.any { it == key }) {
-                tasksToLabelConfigs.getOrPut(task.name) { mutableSetOf() }.add(configVal)
+                tasksToLabelConfigs.getOrPut(task.name) { mutableMapOf() }[key] = configVal
                 return@filter true
             }
             return@filter false
@@ -116,14 +115,22 @@ fun createTaskConfigs(rawTaskConfigs: Map<String, Map<String, Any>>, tasks: Coll
             deepOverrideConfig(config, defaultTaskConfig!!)
         }
 
+        val labelConfigs = tasksToLabelConfigs[task.name]
+        labelConfigs?.let {
+            // Override in reverse labels order so earlier labels have precedence
+            task.labels.asReversed().forEach { label ->
+                val labelConfig = it[label]
+                labelConfig?.let { configValue ->
+                    deepOverrideConfig(config, configValue)
+                }
+            }
+        }
+
+        // Name config is last so it has precedence over labels
+        // In terms of config, this means that name is basically a label with highest precedence
         val nameConfig = tasksToNameConfigs[task.name]
         if (nameConfig != null) {
             deepOverrideConfig(config, nameConfig)
-        }
-
-        val labelConfigs = tasksToLabelConfigs[task.name]
-        labelConfigs?.forEach { labelConfig ->
-            deepOverrideConfig(config, labelConfig)
         }
     }
     return tasksToConfigs
@@ -148,9 +155,9 @@ private fun kebabify(value: String): String {
  * For example if we have:
  *
  * from = { "a" : { "b" : "b", "c": "c" } }
- * to = { "a" : { "c": "d" }, "e" : "e" }
+ * to = { "a" : { "c": "d" }, "c" : "e" }
  *
- * The result should be: { "a" : { "b" : "b", "c": "d" }, "e" : "e" }
+ * The result should be: { "a" : { "b" : "b", "c": "d" }, "c" : "c" }
  */
 private fun deepOverrideConfig(to: MutableMap<String, Any>, from: Map<String, Any>) {
     from.forEach { (key, value) ->

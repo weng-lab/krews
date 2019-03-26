@@ -32,7 +32,7 @@ class Task<I : Any, O : Any> @PublishedApi internal constructor(
         val rawTaskParams = taskConfig?.params ?: mapOf()
         val inputFlux: Flux<out I> = if (inputPub is Flux) inputPub else Flux.from(inputPub)
 
-        fun processInputMono(input: I) = Mono.fromFuture(processInput(input, rawTaskParams, taskRunner))
+        fun processInputMono(input: I) = Mono.fromFuture(processInput(input, rawTaskParams, taskRunner, taskConfig))
         val processed = if (maintainOrder) {
             inputFlux.flatMapSequentialDelayError({ processInputMono(it) },
                 parToMaxConcurrency(taskConfig?.parallelism), Queues.XS_BUFFER_SIZE)
@@ -44,8 +44,8 @@ class Task<I : Any, O : Any> @PublishedApi internal constructor(
         processed.subscribe(outputPub as TopicProcessor)
     }
 
-    private fun processInput(input: I, rawTaskParams: Map<String, Any>, taskRunner: TaskRunner): CompletableFuture<O> {
-        val taskRunContextBuilder = TaskRunContextBuilder(input, rawTaskParams, outputClass)
+    private fun processInput(input: I, rawTaskParams: Map<String, Any>, taskRunner: TaskRunner, taskConfig: TaskConfig?): CompletableFuture<O> {
+        val taskRunContextBuilder = TaskRunContextBuilder(input, rawTaskParams, taskConfig, outputClass)
         taskRunContextBuilder.taskRunContextInit()
         val taskRunContext = taskRunContextBuilder.build()
         return taskRunner.submit(this, taskRunContext)
