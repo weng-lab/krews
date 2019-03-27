@@ -1,131 +1,101 @@
 package krews.core
 
-import krews.config.LimitedParallelism
-import krews.config.UnlimitedParallelism
 import krews.config.WorkflowConfig
-import krews.db.*
-import krews.executor.INPUTS_DIR
-import krews.executor.LocallyDirectedExecutor
-import krews.executor.OUTPUTS_DIR
-import krews.executor.RUN_DIR
-import krews.file.getInputFilesForObject
-import krews.file.getOutputFilesForObject
-import krews.misc.CacheView
-import krews.misc.mapper
+import krews.executor.*
+import krews.file.*
+import krews.misc.*
 import mu.KotlinLogging
-import org.apache.commons.lang3.concurrent.BasicThreadFactory
-import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.deleteWhere
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.joda.time.DateTime
 import java.util.concurrent.*
 import kotlinx.coroutines.*
-
+import krews.config.LimitedParallelism
+import krews.config.UnlimitedParallelism
 
 private val log = KotlinLogging.logger {}
 
-class TaskRunFuture<I : Any, O : Any>(val task: Task<I, O>, val taskRunContext: TaskRunContext<I, O>): CompletableFuture<O>() {
-    fun complete() = complete(taskRunContext.output)
+class TaskQueue(
+    private val workflowConfig: WorkflowConfig,
+    private val taskRunner: TaskRunner
+) {
+    private val queue = mutableListOf<WorkflowGraphNode>()
+    private val running = mutableListOf<WorkflowGraphNode>()
+
+    fun run
+
+    fun update(nodesToAdd: List<WorkflowGraphNode>) = synchronized(this){
+        this.queue += nodesToAdd
+        val workflowParallelism = workflowConfig.parallelism
+        val queueIterator = this.queue.iterator()
+        queueIterator.forEach { queuedTask ->
+            // Check workflow parallelism
+            if (workflowParallelism is LimitedParallelism && workflowParallelism.limit > running.size) return@forEach
+
+            // Check task parallelism
+            val taskName = queuedTask.taskRunContext.taskName
+            val taskParallelism = workflowConfig.tasks[taskName]?.parallelism ?: UnlimitedParallelism
+            val runningSameTasks = running.filter { it.taskRunContext.taskName == taskName }.size
+            if (taskParallelism is LimitedParallelism && taskParallelism.limit > runningSameTasks) return@forEach
+
+            queueIterator.remove()
+            running += queuedTask
+            taskRunner.runTask(queuedTask)
+        }
+    }
 }
 
-class TaskRunner(private val workflowRun: WorkflowRun,
+class TaskRunner(
+    private val workflowConfig: WorkflowConfig
+) {
+    private val taskDispatcher = Executors.newCachedThreadPool().asCoroutineDispatcher()
+    lateinit var taskQueue: TaskQueue
+
+    fun runTask(graphNode: WorkflowGraphNode) {
+        GlobalScope.launch (taskDispatcher) {
+            val useCache = checkTaskRunCache(graphNode.taskRunContext)
+            val taskRun = TaskRun(
+                taskRunContext = graphNode.taskRunContext,
+                cacheUsed = useCache,
+                startTime = System.currentTimeMillis()
+            )
+            graphNode.taskRun = taskRun
+
+            if (useCache) {
+                // TODO Actually run the task
+            }
+
+            taskRun.completedSuccessfully = true
+            taskRun.completedTime = System.currentTimeMillis()
+
+            // Once the task is complete
+            val tasksToAdd = mutableListOf<WorkflowGraphNode>()
+            for (potentialNode in graphNode.downstream) {
+                var canQueue = true
+                for (potentialNodeUpstream in potentialNode.upstream) {
+                    if (potentialNodeUpstream.taskRun!!.completedSuccessfully != true) {
+                        canQueue = false
+                        break
+                    }
+                }
+                if (canQueue) {
+                    tasksToAdd += potentialNode
+                }
+            }
+            taskQueue.update(tasksToAdd)
+        }
+    }
+
+    private fun checkTaskRunCache(taskRunContext: TaskRunContext<*, *>): Boolean {
+        return false
+    }
+}
+
+class OldTaskRunner(private val workflowRun: WorkflowRun,
                  private val workflowConfig: WorkflowConfig,
-                 private val executor: LocallyDirectedExecutor,
-                 private val db: Database) {
+                 private val executor: LocallyDirectedExecutor) {
 
     private val currentInputFileDownloads = ConcurrentHashMap<String, Future<*>>()
     private val inputDLPool = Executors.newCachedThreadPool(BasicThreadFactory.Builder().namingPattern("input-downloader-%d").build())
     private val workflowRunId = transaction(db) { workflowRun.id.value }
     private val workflowStartTime = transaction(db) { workflowRun.startTime }
-
-    private var stopped = false
-    private val maxConcurrency = when (workflowConfig.parallelism) {
-        is UnlimitedParallelism -> 262144
-        is LimitedParallelism -> workflowConfig.parallelism.limit
-    }
-    private val atMaxConcurrency: Semaphore = Semaphore(maxConcurrency)
-    private val queuedTasks = LinkedBlockingQueue<TaskRunFuture<*, *>>()
-    private val runningTasks = LinkedBlockingQueue<Deferred<Unit>>()
-    // These threads monitor the state of queuedTasks and runningTasks
-    private lateinit var queueMonitorThread: Thread
-    private lateinit var runMonitorThread: Thread
-    private val coroutineExecutor = Executors.newFixedThreadPool(workflowConfig.executorConcurrency)
-    private val coroutineDispatcher = coroutineExecutor.asCoroutineDispatcher()
-
-    private fun doMonitorQueue() {
-        while (true) {
-            try {
-                if (stopped) {
-                    break
-                }
-                if (!atMaxConcurrency.tryAcquire(1, 1000, TimeUnit.MILLISECONDS)) {
-                    continue
-                }
-                val nextTask = queuedTasks.take()
-                val def = GlobalScope.async (coroutineDispatcher) {
-                    try {
-                        run(nextTask)
-                        nextTask.complete()
-                    } catch (e: Throwable) {
-                        nextTask.completeExceptionally(e)
-                    }
-                    Unit
-                }
-                runningTasks.add(def)
-            } catch (e: InterruptedException) {}
-        }
-    }
-
-    private fun doMonitorRunning() {
-        while (true) {
-            try {
-                val task = runningTasks.poll(1000, TimeUnit.MILLISECONDS)
-                if (task == null) {
-                    if (stopped) {
-                        break
-                    }
-                    continue
-                }
-                val isDone = task.isCompleted
-                if (isDone) {
-                    atMaxConcurrency.release()
-                } else {
-                    runningTasks.offer(task)
-                }
-            } catch(e: InterruptedException) {}
-        }
-    }
-
-    fun startMonitorTasks() {
-        queueMonitorThread = Thread { doMonitorQueue() }
-        runMonitorThread = Thread { doMonitorRunning() }
-        queueMonitorThread.start()
-        runMonitorThread.start()
-        log.info { "Started monitoring threads for TaskRunner" }
-    }
-
-    fun stopMonitorTasks() {
-        stopped = true
-        queueMonitorThread.interrupt()
-        runMonitorThread.interrupt()
-        queueMonitorThread.join()
-        runMonitorThread.join()
-        log.info { "Shutdown monitor threads"}
-
-        coroutineExecutor.shutdown()
-        coroutineExecutor.awaitTermination(1000, TimeUnit.MILLISECONDS)
-    }
-
-    fun <I : Any, O : Any, T: Task<I, O>> submit(task: T, taskRunContext: TaskRunContext<I, O>): CompletableFuture<O> {
-        if (stopped) {
-            throw Exception("Can't submit a task to a stopped TaskRunner")
-        }
-        val future = TaskRunFuture(task, taskRunContext)
-        queuedTasks.add(future)
-        return future
-    }
-
 
     private suspend fun <I : Any, O : Any> run(taskFuture: TaskRunFuture<I, O>) {
         val task = taskFuture.task

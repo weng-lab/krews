@@ -8,7 +8,6 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategy
 import com.fasterxml.jackson.databind.jsontype.TypeResolverBuilder
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 
-
 class KrewsTypeResolverBuilder : ObjectMapper.DefaultTypeResolverBuilder(ObjectMapper.DefaultTyping.OBJECT_AND_NON_CONCRETE) {
     override fun useForType(t: JavaType) = super.useForType(t) &&
                 !Map::class.java.isAssignableFrom(t.rawClass) &&

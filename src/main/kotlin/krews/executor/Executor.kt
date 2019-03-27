@@ -11,9 +11,8 @@ const val OUTPUTS_DIR = "outputs"
 const val DIAGNOSTICS_DIR = "diagnostics"
 const val INPUTS_DIR = "inputs"
 const val LOGS_DIR = "logs"
-const val DB_FILENAME = "state/metadata.db"
+const val CACHE_FILENAME = "state/cache.json.gz"
 const val REPORT_FILENAME = "status/report.html"
-
 
 /**
  * Interface that deals with environment specific functionality when directing a workflow locally - from the current process,
