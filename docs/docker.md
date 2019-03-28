@@ -12,7 +12,7 @@ in the future.
     <img src="../img/krews_docker.png" />
 </div>
 
-Krews runs each task in it's workflows in Docker containers. Each execution environment has different ways of 
+Krews runs each task in separate Docker containers. Each execution environment has different ways of 
 running and accessing docker containers and different ways of storing workflow files (state, results, logs, etc...)
 but running a task typically looks like this:
 
