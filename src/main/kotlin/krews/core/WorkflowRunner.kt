@@ -91,34 +91,6 @@ class WorkflowRunner(
             workflowRun.completedTime = DateTime.now().millis
         }
 
-        transaction(db) {
-            // if config.cleanOldOutputs delete output files not created by this run
-            if (workflowConfig.cleanOldFiles) {
-                log.info { "Cleaning input and output files not used by this run..." }
-
-                CachedInputFiles.deleteWhere { CachedInputFiles.latestUseWorkflowRunId neq workflowRun.id.value }
-                val cachedInputFiles = CachedInputFile.all().map { it.path }.toSet()
-                val inputPathFiles = executor.listFiles(INPUTS_DIR).map { it.substringAfter("$INPUTS_DIR/").replace("\\", "/") }
-                for (inputPathFile in inputPathFiles) {
-                    if (!cachedInputFiles.contains(inputPathFile)) {
-                        val fileToDelete = "$INPUTS_DIR/$inputPathFile"
-                        log.info { "Deleting unused input file $fileToDelete" }
-                        executor.deleteFile(fileToDelete)
-                    }
-                }
-                CachedOutputs.deleteWhere { CachedOutputs.latestUseWorkflowRunId neq workflowRun.id.value }
-                val cachedOutputFiles = CachedOutput.all().flatMap { it.outputFiles.split(",") }.toSet()
-                val outputPathFiles = executor.listFiles(OUTPUTS_DIR).map { it.substringAfter("$OUTPUTS_DIR/").replace("\\", "/") }
-                for (outputPathFile in outputPathFiles) {
-                    if (!cachedOutputFiles.contains(outputPathFile)) {
-                        val fileToDelete = "$OUTPUTS_DIR/$outputPathFile"
-                        log.info { "Deleting unused output file $fileToDelete" }
-                        executor.deleteFile(fileToDelete)
-                    }
-                }
-            }
-        }
-
         onShutdown()
     }
 

@@ -58,8 +58,16 @@ nav:
       - 'Files': workflows/#files
       - 'Parameters': workflows/#params
       - 'Code Organization': workflows/#code-organization
+  - 'Execution Environments':
+      - 'Google': execution_environments.md
+      - 'Slurm': execution_environments/#slurm
+      - 'Local Docker': execution_environments/#local-docker
   - 'Configurations':
       - 'Configuration Basics': config.md
       - 'Workflow Configurations': config/#workflow-configurations
       - 'Task Configurations': config/#task-configurations
       - 'Parameters': config/#parameters
+  - 'Output and State':
+      - 'Workflow Output Layout': state/#workflow-output-layout
+      - 'State': state/#state
+      - 'Caching': state/#caching
