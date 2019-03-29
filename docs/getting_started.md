@@ -22,7 +22,7 @@ You can get the Krews library using any Maven compatible build system
 #### Gradle
 ```kotlin
 dependencies {
-    compile("io.krews", "krews", "0.5.18")
+    compile("io.krews", "krews", "0.6.0")
 }
 ```
 
@@ -31,7 +31,7 @@ dependencies {
 <dependency>
   <groupId>io.krews</groupId>
   <artifactId>krews</artifactId>
-  <version>0.5.18</version>
+  <version>0.6.0</version>
 </dependency>
 ```
 
