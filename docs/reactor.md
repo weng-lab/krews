@@ -9,7 +9,7 @@ A **Publisher** is just a higher level interface for both Fluxes and Monos. You 
 They are more sophisticated than traditional streams, notably in operating by push *and* pull, but let's not 
 worry about that for now.
 
-A **Flux** is just a Publisher with Publisher with multiple elements. We will mostly be dealing with these.
+A **Flux** is just a Publisher with multiple elements. We will mostly be dealing with these.
 
 A **Mono** is just a Publisher with one element.
 

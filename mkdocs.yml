@@ -37,7 +37,7 @@ markdown_extensions:
 
 nav:
   - 'Why Krews?':
-      - 'Tooling': why_krews/#tooling
+      - 'Tooling': why_krews.md
       - 'Clean, Concise, and Powerful': why_krews/#clean-concise-powerful
       - 'Docker Native': why_krews/#docker-native
       - 'Cloud Native': why_krews/#cloud-native
@@ -68,6 +68,7 @@ nav:
       - 'Task Configurations': config/#task-configurations
       - 'Parameters': config/#parameters
   - 'Output and State':
-      - 'Workflow Output Layout': state/#workflow-output-layout
+      - 'Caching': state.md
       - 'State': state/#state
-      - 'Caching': state/#caching
+      - 'Reports': state/#reports
+      - 'Workflow Output Layout': state/#workflow-output-layout

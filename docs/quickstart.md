@@ -7,7 +7,7 @@ Instructions on setting up Kotlin projects can be found [here](https://kotlinlan
 
 ## Installing Krews Dependency
 
-You can get install the Krews library using any Maven compatible build system
+You can get the Krews library using any Maven compatible build system
 
 ### Gradle
 ```kotlin

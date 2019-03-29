@@ -19,6 +19,7 @@ meaning you get all the benefits of a modern, type-safe, functional language wit
 fun main(args: Array<String>) = run(sampleWorkflow, args)
 
 val sampleWorkflow = workflow("sample-workflow") {
+    // Reactive "Flux" list object for the numbers 1 to 5
     val range = (1..5).toFlux()
     task<Int, File>("base64", range) {
         dockerImage = "alpine:3.9"
@@ -30,6 +31,18 @@ val sampleWorkflow = workflow("sample-workflow") {
             """
     }
 }
+```
+
+*Configuration*
+```hocon
+local {
+    working-dir=/data
+}
+```
+
+*Run command*
+```
+java -jar my-app.jar --on local --config path/to/my-config.conf
 ```
 
 # Supported Platforms

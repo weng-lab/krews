@@ -84,7 +84,7 @@ Let's take another look at the tasks from the above workflow.
 ### Task Inputs and Outputs
 
 Tasks are declared in Workflows using the `task` function. This function has two generic fields that we must provide 
-with classes (The stuff in <>). The first represents the type of for the Input and the second Represents the type 
+with classes (The stuff in <>). The first represents the type of the Input and the second Represents the type 
 for the output. These classes may include:
 
 - Primitive types like Int, String, and Boolean
