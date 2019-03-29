@@ -41,10 +41,9 @@ nav:
       - 'Clean, Concise, and Powerful': why_krews/#clean-concise-powerful
       - 'Docker Native': why_krews/#docker-native
       - 'Cloud Native': why_krews/#cloud-native
-  - 'Quick Start':
-      - 'Creating a Project': quickstart.md
-      - 'Installing Krews Dependency': quickstart/#installing-krews-dependency
-      - 'Building': quickstart/#building
+  - 'Getting Started':
+      - 'Using the Boilerplate (Recommended)': getting_started.md
+      - 'From Scratch': getting_started/#creating-a-project-from-scratch
   - 'Docker':
       - 'How Krews uses Docker': docker.md
       - 'What about Singularity': docker/#what-about-singularity

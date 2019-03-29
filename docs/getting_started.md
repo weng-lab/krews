@@ -1,22 +1,32 @@
-# Quick Start
+# Getting Started
 
-The fastest way to get started is to clone the [krews-boilerplate](https://github.com/weng-lab/krews-boilerplate)
+## Using the Boilerplate (Recommended)
 
-## Creating a Project
+The fastest way to get started is to clone the [krews-boilerplate](https://github.com/weng-lab/krews-boilerplate). 
+This is not only quick, but is set up using what we consider to be best practices.
+
+The boilerplate README.md contains instructions on what you'll need to replace, as well as instructions 
+on running and building.
+
+## Creating a Project from Scratch
+
+If you're an advanced user and would like to setup your own 
+Krews Application project from scratch, start by setting up a Kotlin project.
+
 Instructions on setting up Kotlin projects can be found [here](https://kotlinlang.org/docs/tutorials/getting-started.html).
 
-## Installing Krews Dependency
+### Installing Krews Dependency
 
 You can get the Krews library using any Maven compatible build system
 
-### Gradle
+#### Gradle
 ```kotlin
 dependencies {
     compile("io.krews", "krews", "0.5.18")
 }
 ```
 
-### Maven
+#### Maven
 ```xml
 <dependency>
   <groupId>io.krews</groupId>
@@ -25,9 +35,9 @@ dependencies {
 </dependency>
 ```
 
-## Building
+### Building
 
-It's highly recommended that you build the application into an executable Jar.
+We recommend that you build the application into an executable Jar.
 
 On Gradle, this can be done using the [Shadow Plugin](https://imperceptiblethoughts.com/shadow/)
 
