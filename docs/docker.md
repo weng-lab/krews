@@ -3,8 +3,8 @@
 Docker is a program for building and running software packages called 
 [containers](https://en.wikipedia.org/wiki/Container_(virtualization)). Containers are a great way of making sure your 
 code runs the same way everywhere without worrying about installing or configuring anything. For this reason Krews 
-uses docker containers for everything. Krews does not even attempt to without containers, nor are there plans to try 
-in the future.
+uses docker containers for everything. Krews does not even attempt to run anything without containers, nor are there 
+plans to try in the future.
 
 ## How Krews uses Docker
 
