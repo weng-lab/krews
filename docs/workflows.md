@@ -50,7 +50,7 @@ Let's break this down.
 
 The `main` function is the application entrypoint. All it does is call the Krews `run` function
 which does all the heavy lifting, parsing command line arguments and running the application with different 
-configurations. More on that later.
+configurations. More on that [later](running_environments.md).
 
 ## Tasks
 
@@ -199,8 +199,8 @@ Workflow params are passed into the workflow itself and task params are passed i
 Task functions run for each input, but the same task params are passed in each time.
 
 Both types of params have a required generic type (again, the stuff in <>'s). This type just needs to be able to 
-deserialize from our config. It's highly recommended that you use a data class for this as well. See the config 
-section for more on this.
+deserialize from our config. It's highly recommended that you use a data class for this as well. See the 
+[configurations page](config.md) for more on this.
 
 Here's what this looks like on our previous example:
 

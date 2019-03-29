@@ -58,8 +58,9 @@ nav:
       - 'Files': workflows/#files
       - 'Parameters': workflows/#params
       - 'Code Organization': workflows/#code-organization
-  - 'Execution Environments':
-      - 'Google': execution_environments.md
+  - 'Running / Environments':
+      - 'Running': running_environments.md
+      - 'Google': running_environments/#google
       - 'Slurm': execution_environments/#slurm
       - 'Local Docker': execution_environments/#local-docker
   - 'Configurations':

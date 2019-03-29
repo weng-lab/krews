@@ -1,4 +1,17 @@
-# Execution Environments
+# Running / Environments
+
+## Running Krews
+
+To run Krews as built as an executable, use:
+
+`java -jar my-app.jar --on google --config path/to/my-config.conf`
+
+The following is a complete list of arguments for Krews applications.
+
+| Name |  Description |  Required |
+|---|---|---|
+| `--on` | Execution environment. See below for all types and explanations. | yes |
+| `--conf` | Configuration file. See [configurations section](config.md) for more. | yes |
 
 ## Google Cloud
 
