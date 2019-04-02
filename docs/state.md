@@ -26,17 +26,12 @@ working directory under state/metadata.db. It should NOT be deleted if you want 
 
 ## Reports
 
-As tasks are run, you can go into your working directory and find your status/report.html file.
+As tasks are run, you can go into your working directory and find your status/report.html file. It will contain 
+information on every task that was run, including whether it completed successfully, in error, or is still in 
+progress.
 
 <div class="img-container">
-    <img src="../img/report_sample_1.png" />
-</div>
-
-It will contain information on every task that was run, including whether it completed successfully, in error, or 
-is still in progress.
-
-<div class="img-container">
-    <img src="../img/report_sample_2.png" />
+    <img src="../img/report_sample.png" />
 </div>
 
 ## Workflow Output Layout

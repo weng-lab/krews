@@ -21,7 +21,7 @@ structures. See the [Boilerplate](https://github.com/weng-lab/krews-boilerplate)
 
 Docker containerization is not only supported, it is required. We do not support running workflow tasks outside 
 containers. This means your workflows will *always* be as reproducible as possible and anyone who uses your 
-workflow or even just your containers will not have to worry about installing amd configuring dependencies.
+workflow or even just your containers will not have to worry about installing or configuring anything.
 
 ## Cloud Native
 
