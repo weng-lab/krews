@@ -17,6 +17,8 @@ data class GoogleWorkflowConfig(
 )
 
 data class GoogleTaskConfig(
+    //
+    val grouping: Int? = null,
     // A native google compute engine machine type. If this is set, it's always used regardless of other configs.
     val machineType: String? = null,
     // A class of machine. Useful for when you don't know the needed resources until runtime.

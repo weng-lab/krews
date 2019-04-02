@@ -1,38 +1,26 @@
 package krews
 
 import com.typesafe.config.ConfigFactory
-import io.kotlintest.Description
-import io.kotlintest.TestResult
-import io.kotlintest.shouldBe
-import io.kotlintest.specs.StringSpec
-import io.mockk.Runs
-import io.mockk.coEvery
-import io.mockk.just
-import io.mockk.mockk
+import io.mockk.*
 import kotlinx.coroutines.delay
-import krews.config.createParamsForConfig
-import krews.config.createWorkflowConfig
-import krews.core.TaskRunContext
-import krews.core.WorkflowRunner
-import krews.core.workflow
+import krews.config.*
+import krews.core.*
 import krews.executor.LocallyDirectedExecutor
-import krews.util.Unit
+import krews.util.deleteDir
 import mu.KotlinLogging
-import reactor.core.publisher.Flux
-import reactor.core.publisher.Mono
-import reactor.core.publisher.toFlux
-import reactor.core.publisher.toMono
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.*
+import reactor.core.publisher.*
 import reactor.util.function.Tuple2
-import java.nio.file.Files
-import java.nio.file.Paths
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
+import java.nio.file.*
+import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicInteger
 
 private val log = KotlinLogging.logger {}
 
-class ZipAppTests : StringSpec(){
-    override fun tags() = setOf(Unit)
+@Disabled
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+class ZipAppTests {
 
     private val testDir = Paths.get("merging-app-test")!!
     private val baseConfig =
@@ -69,17 +57,10 @@ class ZipAppTests : StringSpec(){
         outputsCaptured = Flux.zip(task2.outputPub, task3.outputPub).buffer().toMono()
     }
 
-    override fun afterTest(description: Description, result: TestResult) {
-        if (Files.isDirectory(testDir)) {
-            // Clean up temporary dirs
-            Files.walk(testDir)
-                .sorted(Comparator.reverseOrder())
-                .forEach { Files.delete(it) }
-        }
-    }
+    @AfterAll
+    fun afterTests() = deleteDir(testDir)
 
-    init {
-        "If one task run fails all others that aren't downstream should complete" {
+    @Test fun `If one task run fails all others that aren't downstream should complete`() {
             val (executor , runner) = runWorkflow(baseConfig)
             val task1aBeforeErrorLatch = CountDownLatch(6)
             val alltask1Latch = CountDownLatch(16)
@@ -157,9 +138,8 @@ class ZipAppTests : StringSpec(){
             // When not working properly (the WorkflowRunner shuts down prematurely):
             // This sometimes fails with a SQLite exception
             // Sometimes it fails because the second tasks don't run
-            task1CompleteCount.get() shouldBe 16
+            assertThat(task1CompleteCount.get()).isEqualTo(16)
         }
-    }
 
     private data class ExecutorAndRunner(val executor: LocallyDirectedExecutor, val runner: WorkflowRunner)
 

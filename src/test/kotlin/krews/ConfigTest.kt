@@ -2,20 +2,12 @@ package krews
 
 import com.fasterxml.jackson.module.kotlin.MissingKotlinParameterException
 import com.typesafe.config.ConfigFactory
-import io.kotlintest.matchers.types.shouldBeInstanceOf
-import io.kotlintest.shouldBe
-import io.kotlintest.shouldThrow
-import io.kotlintest.specs.StringSpec
 import krews.config.*
-import krews.core.Capacity
-import krews.core.CapacityType
-import krews.core.GB
-import krews.core.workflow
-import krews.file.File
-import krews.file.InputFile
-import krews.file.LocalInputFile
-import krews.misc.CacheView
-import krews.misc.mapper
+import krews.core.*
+import krews.file.*
+import krews.misc.*
+import org.assertj.core.api.Assertions.*
+import org.junit.jupiter.api.*
 import reactor.core.publisher.toMono
 
 private data class TestWorkflowParams(
@@ -69,6 +61,7 @@ private val sparseParamsConfig =
             without-default = "without-test"
         }
         """.trimIndent()
+
 private val parsedSparseParams = TestWorkflowParams(
     withDefault = "default",
     withoutDefault = "without-test",
@@ -98,6 +91,7 @@ private val completeParamsConfig =
             list = ["list-test"]
         }
         """.trimIndent()
+
 private val parsedCompleteParams = TestWorkflowParams(
     withDefault = "test1",
     withoutDefault = "test2",
@@ -154,46 +148,46 @@ private val completeTestConfig =
         }
         """.trimIndent()
 
-class ConfigTests : StringSpec({
-    "Parsing params without missing not-nullable field should throw exception" {
+class ConfigTests {
+    @Test fun `Parsing params without missing not-nullable field should throw exception`() {
         val config = ConfigFactory.parseString(brokenParamsConfig)
         val params = createParamsForConfig(config)
-        shouldThrow<MissingKotlinParameterException> {
+        assertThatExceptionOfType(MissingKotlinParameterException::class.java).isThrownBy {
             configSampleWorkflow().build(params)
         }
     }
 
-    "Parsing workflow params with defaults and nullability should work" {
+    @Test fun `Parsing workflow params with defaults and nullability should work`() {
         val config = ConfigFactory.parseString(sparseParamsConfig)
         val params = createParamsForConfig(config)
         configSampleWorkflow().build(params)
-        parsedParams shouldBe parsedSparseParams
+        assertThat(parsedParams).isEqualTo(parsedSparseParams)
     }
 
-    "Parsing workflow params with all fields should work" {
+    @Test fun `Parsing workflow params with all fields should work`() {
         val config = ConfigFactory.parseString(completeParamsConfig)
         val params = createParamsForConfig(config)
         configSampleWorkflow().build(params)
-        parsedParams!!.withDefault shouldBe parsedCompleteParams.withDefault
-        parsedParams!!.withoutDefault shouldBe parsedCompleteParams.withoutDefault
-        parsedParams!!.complex shouldBe parsedCompleteParams.complex
-        parsedParams!!.nullableFile!!.path shouldBe parsedCompleteParams.nullableFile!!.path
-        parsedParams!!.nullableFile!!.shouldBeInstanceOf<InputFile>()
-        parsedParams!!.list shouldBe parsedCompleteParams.list
-        parsedParams!!.map shouldBe parsedCompleteParams.map
+        assertThat(parsedParams!!.withDefault).isEqualTo(parsedCompleteParams.withDefault)
+        assertThat(parsedParams!!.withoutDefault).isEqualTo(parsedCompleteParams.withoutDefault)
+        assertThat(parsedParams!!.complex).isEqualTo(parsedCompleteParams.complex)
+        assertThat(parsedParams!!.nullableFile!!.path).isEqualTo(parsedCompleteParams.nullableFile!!.path)
+        assertThat(parsedParams!!.nullableFile!!).isInstanceOf(InputFile::class.java)
+        assertThat(parsedParams!!.list).isEqualTo(parsedCompleteParams.list)
+        assertThat(parsedParams!!.map).isEqualTo(parsedCompleteParams.map)
     }
 
-    "createWorkflowConfig should create complete complex task-based configurations" {
+    @Test fun `createWorkflowConfig should create complete complex task-based configurations`() {
         val config = ConfigFactory.parseString(completeTestConfig)
         val params = createParamsForConfig(config)
         val workflow = configSampleWorkflow().build(params)
         val workflowConfig = createWorkflowConfig(config, workflow)
-        workflowConfig.google shouldBe GoogleWorkflowConfig(
+        assertThat(workflowConfig.google).isEqualTo(GoogleWorkflowConfig(
             projectId = "test-project",
             storageBucket = "test-bucket"
-        )
-        workflowConfig.local shouldBe null
-        workflowConfig.tasks["sample"] shouldBe TaskConfig(
+        ))
+        assertThat(workflowConfig.local).isNull()
+        assertThat(workflowConfig.tasks["sample"]).isEqualTo(TaskConfig(
             params = mapOf(
                 "my-shared-thing" to "override",
                 "db-url" to "postgresql://somewhere:5432/mydb",
@@ -204,9 +198,9 @@ class ConfigTests : StringSpec({
                 machineType = "n1-standard-2",
                 diskSize = 30.GB
             )
-        )
+        ))
 
-        workflowConfig.tasks["sample2"] shouldBe TaskConfig(
+        assertThat(workflowConfig.tasks["sample2"]).isEqualTo(TaskConfig(
             params = mapOf(
                 "my-shared-thing" to "someval"
             ),
@@ -214,9 +208,9 @@ class ConfigTests : StringSpec({
                 machineType = "n1-standard-1",
                 diskSize = 5.GB
             )
-        )
+        ))
 
-        workflowConfig.tasks["sample3"] shouldBe TaskConfig(
+        assertThat(workflowConfig.tasks["sample3"]).isEqualTo(TaskConfig(
             params = mapOf(
                 "my-shared-thing" to "someval"
             ),
@@ -224,15 +218,15 @@ class ConfigTests : StringSpec({
                 machineType = "n1-standard-2",
                 diskSize = 10.GB
             )
-        )
+        ))
     }
 
-    "Json writer with CacheView should not write InputFile.cache" {
+    @Test fun `Json writer with CacheView should not write InputFile cache`() {
         val json = mapper
             .writerWithView(CacheView::class.java)
             .forType(File::class.java)
             .writeValueAsString(LocalInputFile("local/path", "path", true))
-        json shouldBe """{"-type":"krews.file.LocalInputFile","local-path":"local/path","path":"path","last-modified":-1}"""
+        assertThat(json).isEqualTo("""{"-type":"krews.file.LocalInputFile","local-path":"local/path","path":"path","last-modified":-1}""")
     }
 
-})
+}

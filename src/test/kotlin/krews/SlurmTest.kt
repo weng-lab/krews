@@ -1,22 +1,16 @@
 package krews
 
 import com.typesafe.config.ConfigFactory
-import io.kotlintest.*
-import io.kotlintest.matchers.file.shouldExist
-import io.kotlintest.specs.StringSpec
 import io.mockk.spyk
-import krews.config.createParamsForConfig
-import krews.config.createWorkflowConfig
+import krews.config.*
 import krews.core.WorkflowRunner
-import krews.executor.LOGS_DIR
-import krews.executor.REPORT_FILENAME
+import krews.executor.*
 import krews.executor.slurm.SlurmExecutor
-import krews.util.E2E
-import krews.util.localFilesWorkflow
-import krews.util.verifyInputFileCached
+import krews.util.*
 import mu.KotlinLogging
-import java.nio.file.Files
-import java.nio.file.Paths
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.*
+import java.nio.file.*
 import kotlin.streams.toList
 
 private val log = KotlinLogging.logger {}
@@ -28,8 +22,9 @@ private val log = KotlinLogging.logger {}
  * sudo sshfs -o allow_other,defer_permissions brooksj@localhost:/data/zusers.ds/brooksj /data/zusers/brooksj -p 12222
  */
 
-class SlurmExecutorTests : StringSpec() {
-    override fun tags() = setOf(E2E)
+@Disabled
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+class SlurmExecutorTests {
 
     private val testDir = Paths.get("/data/zusers/brooksj/slurm-workflow-test")!!
     private val sampleFilesDir = testDir.resolve("sample-files")
@@ -62,7 +57,8 @@ class SlurmExecutorTests : StringSpec() {
 
         """.trimIndent()
 
-    override fun beforeSpec(description: Description, spec: Spec) {
+    @BeforeAll
+    fun beforeTests() {
         if (Files.isDirectory(testDir)) {
             Files.walk(testDir)
                 .sorted(Comparator.reverseOrder())
@@ -71,29 +67,28 @@ class SlurmExecutorTests : StringSpec() {
         Files.createDirectories(sampleFilesDir)
     }
 
-    init {
-        "Can run a simple workflow on slurm" {
-            // Create 3 files in a temp directory to use as inputs.
-            for (i in 1..3) {
-                val file = Files.createFile(sampleFilesDir.resolve("test-$i.txt"))
-                Files.write(file, "I am test file #$i".toByteArray())
-            }
+    @Test
+    fun `Can run a simple workflow on slurm`() {
+        // Create 3 files in a temp directory to use as inputs.
+        for (i in 1..3) {
+            val file = Files.createFile(sampleFilesDir.resolve("test-$i.txt"))
+            Files.write(file, "I am test file #$i".toByteArray())
+        }
 
-            val executor = runWorkflow(1, "task-param-1")
+        val executor = runWorkflow(1, "task-param-1")
 
-            for (i in 1..3) {
-                inputsDir.resolve("test-$i.txt").shouldExist()
-                base64Dir.resolve("test-$i.b64").shouldExist()
-                gzipDir.resolve("test-$i.b64.gz").shouldExist()
-                verifyInputFileCached(executor, "test-$i.txt")
+        for (i in 1..3) {
+            assertThat(inputsDir.resolve("test-$i.txt")).exists()
+            assertThat(base64Dir.resolve("test-$i.b64")).exists()
+            assertThat(gzipDir.resolve("test-$i.b64.gz")).exists()
+            verifyInputFileCached(executor, "test-$i.txt")
 
-                // Confirm that logs and an html report were generated
-                val runPath = testDir.resolve("run/1/")
-                val logsDirs = Files.list(runPath.resolve(LOGS_DIR)).toList()
-                logsDirs.size shouldBe 6
-                logsDirs[0].resolve("out.txt").shouldExist()
-                runPath.resolve(REPORT_FILENAME).shouldExist()
-            }
+            // Confirm that logs and an html report were generated
+            val runPath = testDir.resolve("run/1/")
+            val logsDirs = Files.list(runPath.resolve(LOGS_DIR)).toList()
+            assertThat(logsDirs.size).isEqualTo(6)
+            assertThat(logsDirs[0].resolve("out.txt")).exists()
+            assertThat(runPath.resolve(REPORT_FILENAME)).exists()
         }
     }
 

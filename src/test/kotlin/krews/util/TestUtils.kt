@@ -1,11 +1,32 @@
 package krews.util
 
-import io.mockk.coVerify
-import io.mockk.verify
+import io.mockk.*
 import krews.executor.LocallyDirectedExecutor
 import mu.KotlinLogging
+import java.nio.file.*
 
 private val log = KotlinLogging.logger {}
+
+/**
+ * Recursively delete directory if it exists
+ */
+fun deleteDir(dir: Path) {
+    if (Files.isDirectory(dir)) {
+        Files.walk(dir)
+            .sorted(Comparator.reverseOrder())
+            .forEach { Files.delete(it) }
+    }
+}
+
+/**
+ * Creates file with parent directories if they don't exist.
+ * Adds given content to file
+ */
+fun createFile(file: Path, content: String) {
+    Files.createDirectories(file.parent)
+    Files.createFile(file)
+    Files.write(file, content.toByteArray())
+}
 
 /**
  * Checks if the executor downloaded an input file into the /input cache directory.
@@ -32,3 +53,4 @@ fun verifyExecuteWithOutput(executorSpy: LocallyDirectedExecutor, path: String, 
             any(), any())
     }
 }
+
