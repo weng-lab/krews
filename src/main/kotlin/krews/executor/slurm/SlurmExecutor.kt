@@ -195,8 +195,10 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
         }
 
         val sbatchScriptAsBase64 = Base64.getEncoder().encodeToString(sbatchScript.toString().toByteArray())
-        val sbatchCommand = "sleep ${kotlin.random.Random.nextDouble(0.0, 5.0)}; " +
-                "echo $sbatchScriptAsBase64 | base64 --decode | sbatch"
+        // Introduce random delay to spread out jobs.
+        delay(kotlin.random.Random.nextLong(0, 5000))
+
+        val sbatchCommand = "echo $sbatchScriptAsBase64 | base64 --decode | sbatch"
         val sbatchResponse = commandExecutor.exec(sbatchCommand)
         val jobId = "\\d+\$".toRegex().find(sbatchResponse)?.value
             ?: throw Exception("JobID not found in response for sbatch command")

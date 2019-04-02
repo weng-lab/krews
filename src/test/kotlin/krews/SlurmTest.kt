@@ -40,8 +40,8 @@ class SlurmExecutorTests : StringSpec() {
 
     private fun config(taskParam: String) =
         """
-        local-files-base-dir = $testDir
         slurm {
+            working-dir = $testDir
             ssh {
                 user = brooksj
                 host = localhost
