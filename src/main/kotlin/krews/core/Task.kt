@@ -27,8 +27,7 @@ class Task<I : Any, O : Any> @PublishedApi internal constructor(
 ) {
     val outputPub: Flux<O> = TopicProcessor.create<O>("$name-topic", 1024)
 
-    internal fun connect(taskConfig: TaskConfig?,
-                         taskRunner: TaskRunner) {
+    internal fun connect(taskConfig: TaskConfig?, taskRunner: TaskRunner) {
         val rawTaskParams = taskConfig?.params ?: mapOf()
         val inputFlux: Flux<out I> = if (inputPub is Flux) inputPub else Flux.from(inputPub)
 

@@ -8,8 +8,8 @@ class Workflow internal constructor(
     internal val tasks: Map<String, Task<*, *>>
 ) {
     @Suppress("UNCHECKED_CAST")
-    fun <I> taskInputPub(taskName: String) = tasks[taskName]!!.inputPub as Publisher<I>
+    fun <I> taskInputPub(taskName: String) = tasks.getValue(taskName).inputPub as Publisher<I>
 
     @Suppress("UNCHECKED_CAST")
-    fun <O> taskOutputPub(taskName: String) = tasks[taskName]!!.outputPub as Flux<O>
+    fun <O> taskOutputPub(taskName: String) = tasks.getValue(taskName).outputPub as Flux<O>
 }

@@ -1,17 +1,12 @@
 package krews
 
-import io.kotlintest.Description
-import io.kotlintest.Spec
-import io.kotlintest.matchers.file.shouldExist
-import io.kotlintest.specs.StringSpec
-import krews.util.Integration
-import krews.util.localFilesWorkflow
-import java.nio.file.Files
-import java.nio.file.Paths
+import krews.util.*
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.*
+import java.nio.file.*
 
-
-class AppTests : StringSpec() {
-    override fun tags() = setOf(Integration)
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+class AppTests {
 
     private val testDir = Paths.get("app-test").toAbsolutePath()!!
     private val inputsDir = testDir.resolve("inputs")
@@ -31,32 +26,24 @@ class AppTests : StringSpec() {
         }
         """.trimIndent()
 
-    override fun beforeSpec(description: Description, spec: Spec) {
+    @BeforeAll fun beforeSpec() {
+        deleteDir(testDir)
         // Create temp sample files dir (and parent test dir) to use for this set of tests
-        Files.createDirectories(sampleFilesDir)
-        Files.createFile(configFile)
-        Files.write(configFile, config.toByteArray())
-        val inputFile = Files.createFile(sampleFilesDir.resolve("test.txt"))
-        Files.write(inputFile, "I am a test file".toByteArray())
+        createFile(configFile, config)
+        val inputFile = sampleFilesDir.resolve("test.txt")
+        createFile(inputFile, "I am a test file")
     }
 
-    override fun afterSpec(description: Description, spec: Spec) {
-        // Clean up temporary dirs
-        Files.walk(testDir)
-            .sorted(Comparator.reverseOrder())
-            .forEach { Files.delete(it) }
-    }
+    @AfterAll fun afterTests() = deleteDir(testDir)
 
-    init {
-        "App run() should execute a simple workflow locally" {
-            run(localFilesWorkflow(), arrayOf("-o", "local", "-c", "$configFile"))
+    @Test fun `App run() should execute a simple workflow locally`() {
+        run(localFilesWorkflow(), arrayOf("-o", "local", "-c", "$configFile"))
 
-            val dbPath = testDir.resolve(Paths.get("state", "metadata.db"))
-            dbPath.shouldExist()
+        val dbPath = testDir.resolve(Paths.get("state", "metadata.db"))
+        assertThat(dbPath).exists()
 
-            inputsDir.resolve("test.txt").shouldExist()
-            base64Path.resolve("test.b64").shouldExist()
-            gzipPath.resolve("test.b64.gz").shouldExist()
-        }
+        assertThat(inputsDir.resolve("test.txt")).exists()
+        assertThat(base64Path.resolve("test.b64")).exists()
+        assertThat(gzipPath.resolve("test.b64.gz")).exists()
     }
 }

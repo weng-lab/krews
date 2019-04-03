@@ -37,14 +37,18 @@ dependencies {
     compile("com.github.ajalt","clikt", "1.5.0")
     compile( "org.jetbrains.kotlinx", "kotlinx-html-jvm", "0.6.11")
     compile( "org.jetbrains.kotlinx", "kotlinx-coroutines-core", "1.1.1")
-    testCompile("io.kotlintest", "kotlintest-runner-junit5", "3.1.10")
+    testImplementation("org.junit.jupiter", "junit-jupiter", "5.4.0")
+    testCompile("org.assertj", "assertj-core", "3.11.1")
     testImplementation("io.mockk", "mockk", "1.9.1")
 }
 
-val test by tasks.getting(Test::class) {
+tasks.withType<Test> {
     useJUnitPlatform()
-    systemProperties = System.getProperties().map { it.key.toString() to it.value }.toMap()
+    testLogging {
+        events("passed", "skipped", "failed")
+    }
 }
+
 
 tasks.withType<KotlinCompile> {
     kotlinOptions.jvmTarget = "1.8"

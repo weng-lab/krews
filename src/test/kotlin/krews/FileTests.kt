@@ -1,14 +1,15 @@
 package krews
 
-import io.kotlintest.shouldBe
-import io.kotlintest.specs.StringSpec
 import krews.file.parseGSURL
+import org.assertj.core.api.Assertions.*
+import org.junit.jupiter.api.*
 
-class FileTests : StringSpec({
-    "parseGSURL correctly parses elements of GS URL" {
+class GSFileUtilTests {
+    @Test
+    fun `parseGSURL correctly parses elements of GS URL`() {
         val x = parseGSURL("gs://abc/x/y/z.txt")
-        x.bucket shouldBe "abc"
-        x.objectPath shouldBe "x/y/z.txt"
-        x.fileName shouldBe "z.txt"
+        assertThat(x.bucket).isEqualTo("abc")
+        assertThat(x.objectPath).isEqualTo("x/y/z.txt")
+        assertThat(x.fileName).isEqualTo("z.txt")
     }
-})
+}
