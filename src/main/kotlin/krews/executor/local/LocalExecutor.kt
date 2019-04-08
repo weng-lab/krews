@@ -1,43 +1,35 @@
 package krews.executor.local
 
 import com.github.dockerjava.api.DockerClient
-import com.github.dockerjava.api.model.Bind
-import com.github.dockerjava.api.model.Frame
-import com.github.dockerjava.api.model.StreamType
-import com.github.dockerjava.api.model.Volume
-import com.github.dockerjava.core.command.LogContainerResultCallback
-import com.github.dockerjava.core.command.PullImageResultCallback
-import com.github.dockerjava.core.command.WaitContainerResultCallback
+import com.github.dockerjava.api.model.*
+import com.github.dockerjava.core.command.*
 import kotlinx.coroutines.delay
-import krews.config.DockerConfig
-import krews.config.TaskConfig
-import krews.config.WorkflowConfig
-import krews.core.TaskRunContext
+import krews.config.*
+import krews.core.*
 import krews.executor.*
-import krews.file.InputFile
-import krews.file.OutputFile
-import krews.file.downloadInputFileLocalFS
-import krews.file.listLocalFiles
+import krews.file.*
 import mu.KotlinLogging
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.Paths
-import java.nio.file.StandardCopyOption
+import java.nio.file.*
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 private val log = KotlinLogging.logger {}
 
+@Suppress("BlockingMethodInNonBlockingContext")
 class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
 
-    private val dockerClient = buildDockerClient(workflowConfig.local!!.docker ?: DockerConfig())
-    private val workflowBasePath = Paths.get(workflowConfig.local!!.workingDir).toAbsolutePath()!!
-    private val inputsPath = workflowBasePath.resolve(INPUTS_DIR)
+    private val dockerClient = buildDockerClient(workflowConfig.local?.docker ?: DockerConfig())
+    private val workflowBasePath = Paths.get(workflowConfig.workingDir).toAbsolutePath()!!
     private val outputsPath = workflowBasePath.resolve(OUTPUTS_DIR)
 
     private val runningContainers: MutableSet<String> = ConcurrentHashMap.newKeySet<String>()
 
-    private var allShutdown = false
+    private val allShutdown = AtomicBoolean(false)
+
+    // Disable grouping because it's meaningless for local executions
+    // This will automatically force executeTask to be called with one TaskRunContext at a time
+    override fun supportsGrouping() = false
 
     override fun downloadFile(fromPath: String, toPath: Path) {
         val fromFile = workflowBasePath.resolve(fromPath)
@@ -70,21 +62,19 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
     override fun listFiles(baseDir: String): Set<String> = listLocalFiles(workflowBasePath.resolve(baseDir))
     override fun deleteFile(file: String) = Files.delete(workflowBasePath.resolve(file))
 
-    override fun downloadInputFile(inputFile: InputFile) = downloadInputFileLocalFS(inputFile, inputsPath)
-
     override suspend fun executeTask(
         workflowRunDir: String,
         taskRunId: Int,
         taskConfig: TaskConfig,
-        taskRunContext: TaskRunContext<*, *>,
-        outputFilesIn: Set<OutputFile>,
-        outputFilesOut: Set<OutputFile>,
-        cachedInputFiles: Set<InputFile>,
-        downloadInputFiles: Set<InputFile>
+        taskRunContexts: List<TaskRunContext<*, *>>
     ) {
-        if (allShutdown) {
+        if (allShutdown.get()) {
             throw Exception("shutdownRunningTasks has already been called")
         }
+        if (taskRunContexts.size > 1) {
+            throw Exception("Local Executor does not handle grouping.")
+        }
+        val taskRunContext = taskRunContexts.first()
 
         // Create a temp directory to use as a mount for input data
         val mountDir = workflowBasePath.resolve("task-$taskRunId-mount")
@@ -98,26 +88,19 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
             dockerClient.pullImageCmd(taskRunContext.dockerImage).exec(PullImageResultCallback()).awaitSuccess()
 
             // Download InputFiles from remote sources
-            for (downloadInputFile in downloadInputFiles) {
+            for (downloadInputFile in taskRunContext.inputFiles) {
                 downloadRemoteInputFile(dockerClient, downloadInputFile, taskRunContext.dockerDataDir, mountDir)
             }
 
             // Create the task execution docker container from config
             val containerId = createContainer(dockerClient, taskRunContext, mountDir)
 
-            // Copy cachedInputFiles into the docker container
-            for (cachedInputFile in cachedInputFiles) {
-                Files.copy(
-                    Paths.get(workflowBasePath.toString(), INPUTS_DIR, cachedInputFile.path),
-                    mountDir.resolve(cachedInputFile.path)
-                )
-            }
-
             // Copy OutputFiles from task input into the docker container
-            if (!outputFilesIn.isEmpty()) {
-                log.info { "Copying output files $outputFilesIn from task input into newly created container $containerId" }
+            if (!taskRunContext.outputFilesIn.isEmpty()) {
+                log.info { "Copying output files ${taskRunContext.outputFilesIn} from task input into newly " +
+                        "created container $containerId" }
             }
-            for (outputFile in outputFilesIn) {
+            for (outputFile in taskRunContext.outputFilesIn) {
                 val toPath = mountDir.resolve(outputFile.path)
                 Files.createDirectories(toPath.parent)
                 Files.copy(outputsPath.resolve(outputFile.path), toPath)
@@ -148,10 +131,10 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
                         copyDiagnosticFiles(mountDir, taskDiagnosticsDir)
                         throw Exception(
                             """
-                        |Container exited with code $statusCode.
-                        |Please see logs at $logBasePath for more information.
-                        |Working files (in data directory) have been copied into $taskDiagnosticsDir
-                        """.trimMargin()
+                            |Container exited with code $statusCode.
+                            |Please see logs at $logBasePath for more information.
+                            |Working files (in data directory) have been copied into $taskDiagnosticsDir
+                            """.trimMargin()
                         )
                     }
                     break
@@ -166,12 +149,13 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
             }
 
             // Copy output files out of docker container into run outputs dir
-            if (outputFilesOut.isNotEmpty()) {
-                log.info { "Copying output files $outputFilesOut for task output out of mounted data dir $mountDir" }
+            if (taskRunContext.outputFilesOut.isNotEmpty()) {
+                log.info { "Copying output files ${taskRunContext.outputFilesOut} for task output out of mounted " +
+                        "data dir $mountDir" }
             } else {
                 log.info { "No output files to copy for this task run." }
             }
-            outputFilesOut.map { it.path }.forEach {
+            taskRunContext.outputFilesOut.map { it.path }.forEach {
                 val to = outputsPath.resolve(it)
                 Files.createDirectories(to.parent)
                 Files.copy(mountDir.resolve(it), to, StandardCopyOption.REPLACE_EXISTING)
@@ -185,7 +169,7 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
     }
 
     override fun shutdownRunningTasks() {
-        allShutdown = true
+        allShutdown.set(true)
         for(containerId in runningContainers) {
             log.info { "Stopping container $containerId..." }
             dockerClient.stopContainerCmd(containerId).exec()
@@ -201,7 +185,8 @@ fun createContainer(dockerClient: DockerClient, taskRunContext: TaskRunContext<*
         .withVolumes(volume)
         .withBinds(Bind(mountDir.toString(), volume))
     if (taskRunContext.command != null) containerCreationCmd.withCmd("/bin/sh", "-c", taskRunContext.command)
-    if (taskRunContext.env?.isNotEmpty() == true) containerCreationCmd.withEnv(taskRunContext.env.map { "${it.key}=${it.value}" })
+    if (taskRunContext.env?.isNotEmpty() == true)
+        containerCreationCmd.withEnv(taskRunContext.env.map { "${it.key}=${it.value}" })
     val createContainerResponse = containerCreationCmd.exec()
     return createContainerResponse.id!!
 }

@@ -128,7 +128,7 @@ internal fun createUploadAction(objectToUpload: String, dataDir: String, file: S
 internal fun gcsPath(bucket: String, vararg pathParts: String?): String {
     var gcsPath = "gs://$bucket"
     pathParts.forEach {
-        if (it != null) gcsPath += "/$it"
+        if (it != null) gcsPath += if (it.startsWith("/")) it else "/$it"
     }
     return gcsPath
 }

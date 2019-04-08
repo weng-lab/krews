@@ -23,7 +23,7 @@ val sampleWorkflow = workflow("sample-workflow") {
     val range = (1..10).toFlux()
 
     // A task that creates base64 files
-    val base64 = task<Int, File>("base64", range) {
+    val base64Out = task<Int, File>("base64", range) {
         dockerImage = "alpine:3.8"
         output = OutputFile("base64/$input.b64")
         command =
@@ -34,7 +34,7 @@ val sampleWorkflow = workflow("sample-workflow") {
     }
     
     // A task that zips files
-    task<File, File>("gzip", base64.outputPub) {
+    task<File, File>("gzip", base64Out) {
         dockerImage = "alpine:3.8"
         output = OutputFile("gzip/${input.filename()}.gz")
         command =
@@ -69,7 +69,7 @@ Tasks operate on every item from an input publisher, process them, and turn them
 
 Let's take another look at the tasks from the above workflow.
 ```kotlin
-    val base64 = task<Int, File>("base64", range) {
+    val base64Out = task<Int, File>("base64", range) {
         // Everything in this scope is calculated per-input 
         dockerImage = "alpine:3.8"
         output = OutputFile("base64/$input.b64")
@@ -174,11 +174,6 @@ on NFS for Slurm Executor.
 - `GSInputFile` refers to files in Google Cloud Storage. May be used with any executor as long as the machine 
 running the task has permissions to access to it.
 
-InputFiles have a `cache` option that, when set to true, will cause Krews to copy them first to `$workingDir/inputs`, 
-and each task that needs it will copy it from that directory instead of directly from the source. This can be 
-useful if you have a type of input file that downloads remote files, from an FTP for example, slowly or with 
-limited bandwidth.
-
 ### Output Files
 
 `OutputFile` is another implementation of `File`. These refer to files that are created by the Krews workflow. 
@@ -228,7 +223,7 @@ val sampleWorkflow = workflow("sample-workflow") {
     val params = params<SampleParams>()
 
     val base64In = (1..params.rangeMax).toFlux().map { Base64Input(it) }
-    val base64 = task<Base64Input, Base64Output>("base64", base64In) {
+    val base64Out = task<Base64Input, Base64Output>("base64", base64In) {
         // and here's our workflow level params
         val taskParams = taskParams<Base64Params>()
 
@@ -241,7 +236,7 @@ val sampleWorkflow = workflow("sample-workflow") {
             """
     }
 
-    val zipIn = base64.outputPub.map { ZipInput(it.base64File) }
+    val zipIn = base64Out.map { ZipInput(it.base64File) }
     task<ZipInput, ZipOutput>("gzip", zipIn) {
         val taskParams = taskParams<ZipParams>()
 
@@ -255,6 +250,25 @@ val sampleWorkflow = workflow("sample-workflow") {
     }
 }
 ```
+
+## Grouping
+
+Sometimes jobs are so small and fast that we spend more time and compute power on the overhead than the job itself.
+For example, on Google this means spinning up new VMs, downloading docker images, downloading large input files 
+that may be needed across many task runs, and tracking and polling with Krews.
+
+For cases like this, Krews allows you to "group" multiple runs from the same task together to be submitted as 
+single jobs. This can be done via task level configuration. For example
+
+```hocon
+task.my-task {
+    grouping = 5
+}
+```
+
+This will submit "my-task" task runs in batches of 5. On Google this means that they will run sequentially on the 
+same VM, in separate containers. On Slurm, this would mean running sequentially in the same SBatch job. For Local 
+Docker Runs this setting is ignored.
 
 ## Code Organization
 
@@ -285,8 +299,8 @@ data class Base64Params(val msg: String)
 data class Base64Input(val index: Int)
 data class Base64Output(val base64File: File)
 
-fun WorkflowBuilder.base64Task(i: Publisher<Base64Input>) = 
-        this.task<Base64Input, Base64Output>("base64", i) {
+fun WorkflowBuilder.base64Task(i: Publisher<Base64Input>): Flux<Base64Output> = 
+        this.task("base64", i) {
     val taskParams = taskParams<Base64Params>()
     val msg = taskParams.msg
     val index = input.index
@@ -303,6 +317,7 @@ fun WorkflowBuilder.base64Task(i: Publisher<Base64Input>) =
 
 Now all our Base64 task related code is in one place. We've also used a 
 [Kotlin Extension Function](https://kotlinlang.org/docs/reference/extensions.html) on a class called WorkflowBuilder 
+with [Single-Expression Function Shorthand](https://kotlinlang.org/docs/reference/functions.html#single-expression-functions) 
 for our task creation function itself. WorkflowBuilder the class used under-the-hood when you call the "workflow" 
 function. This is just some syntax sugar that allows us to make our workflow look like this:
 
@@ -324,9 +339,9 @@ val sampleWorkflow = workflow("sample-workflow") {
 
     val base64In = (1..params.rangeMax).toFlux().map { Base64Input(it) }
     // Here's our base64Task call referencing our extension function
-    val base64 = base64Task(base64In)
+    val base64Out = base64Task(base64In)
 
-    val zipIn = base64.outputPub.map { ZipInput(it.base64File) }
+    val zipIn = base64Out.map { ZipInput(it.base64File) }
     zipTask(zipIn)
 }
 ```

@@ -3,8 +3,7 @@ package krews
 import com.typesafe.config.ConfigFactory
 import io.mockk.spyk
 import krews.config.*
-import krews.core.WorkflowRunner
-import krews.executor.*
+import krews.core.*
 import krews.executor.slurm.SlurmExecutor
 import krews.util.*
 import mu.KotlinLogging
@@ -23,7 +22,6 @@ private val log = KotlinLogging.logger {}
  */
 
 @Disabled
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class SlurmExecutorTests {
 
     private val testDir = Paths.get("/data/zusers/brooksj/slurm-workflow-test")!!
@@ -35,8 +33,8 @@ class SlurmExecutorTests {
 
     private fun config(taskParam: String) =
         """
+        working-dir = $testDir
         slurm {
-            working-dir = $testDir
             ssh {
                 user = brooksj
                 host = localhost
@@ -45,6 +43,9 @@ class SlurmExecutorTests {
         }
         params {
             sample-files-dir = $sampleFilesDir
+        }
+        task.default {
+            grouping = 2
         }
         task.base64 {
             params = {
@@ -78,15 +79,13 @@ class SlurmExecutorTests {
         val executor = runWorkflow(1, "task-param-1")
 
         for (i in 1..3) {
-            assertThat(inputsDir.resolve("test-$i.txt")).exists()
             assertThat(base64Dir.resolve("test-$i.b64")).exists()
             assertThat(gzipDir.resolve("test-$i.b64.gz")).exists()
-            verifyInputFileCached(executor, "test-$i.txt")
 
             // Confirm that logs and an html report were generated
             val runPath = testDir.resolve("run/1/")
             val logsDirs = Files.list(runPath.resolve(LOGS_DIR)).toList()
-            assertThat(logsDirs.size).isEqualTo(6)
+            assertThat(logsDirs.size).isEqualTo(4)
             assertThat(logsDirs[0].resolve("out.txt")).exists()
             assertThat(runPath.resolve(REPORT_FILENAME)).exists()
         }

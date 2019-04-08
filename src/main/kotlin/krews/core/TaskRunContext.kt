@@ -1,12 +1,14 @@
 package krews.core
 
 import krews.config.convertConfigMap
-import krews.file.File
+import krews.file.*
 import java.time.Duration
 
 class TaskRunContextBuilder<I : Any, O : Any> internal constructor(
+    val taskName: String,
     val input: I,
     @PublishedApi internal val rawTaskParams: Map<String, Any>,
+    val inputClass: Class<I>,
     val outputClass: Class<O>
 ) {
     var dockerImage: String? = null
@@ -32,9 +34,11 @@ class TaskRunContextBuilder<I : Any, O : Any> internal constructor(
     val File.dockerPath: String get() = "$dockerDataDir/${this.path}"
 
     internal fun build(): TaskRunContext<I, O> = TaskRunContext(
+        taskName = taskName,
         dockerImage = checkNotNull(dockerImage),
         dockerDataDir = dockerDataDir,
         input = input,
+        inputClass = inputClass,
         output = checkNotNull(output),
         outputClass = outputClass,
         command = command?.trimIndent(),
@@ -49,9 +53,11 @@ class TaskRunContextBuilder<I : Any, O : Any> internal constructor(
 }
 
 data class TaskRunContext<I: Any, O: Any>(
+    val taskName: String,
     val dockerImage: String,
     val dockerDataDir: String,
     val input: I,
+    val inputClass: Class<I>,
     val output: O,
     val outputClass: Class<O>,
     val command: String?,
@@ -62,4 +68,8 @@ data class TaskRunContext<I: Any, O: Any>(
     val time: Duration?,
     val taskParams: Any?,
     val taskParamsClass: Class<*>?
-)
+) {
+    val outputFilesIn by lazy { getOutputFilesForObject(input) }
+    val outputFilesOut by lazy { getOutputFilesForObject(output) }
+    val inputFiles by lazy { getInputFilesForObject(input) + getInputFilesForObject(taskParams) }
+}

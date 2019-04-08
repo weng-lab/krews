@@ -14,13 +14,7 @@ import java.nio.file.Paths
  */
 class GSInputFile(val bucket: String,
                   val objectPath: String,
-                  path: String = objectPath,
-                  cache: Boolean = false) : InputFile(path, cache) {
-
-    override fun downloadLocal(toBaseDir: Path) {
-        val fileFound = downloadObject(googleStorageClient, bucket, objectPath, toBaseDir.resolve(path))
-        if (!fileFound) throw Exception("Attempt to download Input File $this failed. File not found.")
-    }
+                  path: String = objectPath) : InputFile(path) {
 
     override fun fetchLastModified() = googleStorageClient.objects().get(bucket, objectPath).execute().updated.value
     override fun downloadFileImage() = CLOUD_SDK_IMAGE

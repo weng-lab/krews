@@ -3,38 +3,30 @@ package krews.executor.google
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.api.services.genomics.v2alpha1.model.*
 import kotlinx.coroutines.delay
-import krews.config.TaskConfig
-import krews.config.WorkflowConfig
-import krews.config.googleMachineType
-import krews.core.CapacityType
-import krews.core.TaskRunContext
+import krews.config.*
+import krews.core.*
 import krews.executor.*
-import krews.file.GSInputFile
-import krews.file.InputFile
-import krews.file.OutputFile
+import krews.file.*
 import mu.KotlinLogging
 import retry
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.Paths
+import java.nio.file.*
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 
 private val log = KotlinLogging.logger {}
 
 const val CLOUD_SDK_IMAGE = "google/cloud-sdk:alpine"
 
-const val DEFAULT_INPUT_DOWNLOAD_DIR = "/data"
-
-class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
+class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
 
     private val googleConfig = checkNotNull(workflowConfig.google)
         { "google workflow config must be present to use Google Local Executor" }
-    private val bucket = googleConfig.storageBucket
-    private val gcsBase = googleConfig.storageBaseDir
+    private val bucket = googleConfig.bucket
+    private val gcsBase = workflowConfig.workingDir
     private val runningOperations: MutableSet<String> = ConcurrentHashMap.newKeySet<String>()
 
-    private var allShutdown = false
+    private val allShutdown = AtomicBoolean(false)
 
     override fun downloadFile(fromPath: String, toPath: Path) {
         log.info { "Attempting to download $fromPath from bucket $bucket to $toPath..." }
@@ -78,21 +70,20 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
         workflowRunDir: String,
         taskRunId: Int,
         taskConfig: TaskConfig,
-        taskRunContext: TaskRunContext<*, *>,
-        outputFilesIn: Set<OutputFile>,
-        outputFilesOut: Set<OutputFile>,
-        cachedInputFiles: Set<InputFile>,
-        downloadInputFiles: Set<InputFile>
+        taskRunContexts: List<TaskRunContext<*, *>>
     ) {
-        if (allShutdown) {
+        if (allShutdown.get()) {
             throw Exception("shutdownRunningTasks has already been called")
         }
+
         val run = createRunPipelineRequest(googleConfig)
         val actions = run.pipeline.actions
 
         val virtualMachine = VirtualMachine()
         run.pipeline.resources.virtualMachine = virtualMachine
-        virtualMachine.machineType = googleMachineType(taskConfig.google, taskRunContext.cpus, taskRunContext.memory)
+        val maxCpus = taskRunContexts.map { it.cpus }.maxBy { it ?: -1 } ?: taskConfig.google?.cpus
+        val maxMemory = taskRunContexts.map { it.memory }.maxBy { it?.bytes ?: -1 } ?: taskConfig.google?.mem
+        virtualMachine.machineType = googleMachineType(taskConfig.google, maxCpus, maxMemory)
 
         val serviceAccount = ServiceAccount()
         virtualMachine.serviceAccount = serviceAccount
@@ -101,58 +92,67 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
         val disk = Disk()
         virtualMachine.disks = listOf(disk)
         disk.name = DISK_NAME
-        if (taskConfig.google?.diskSize != null) {
-            disk.sizeGb = taskConfig.google.diskSize.toType(CapacityType.GB).toInt()
+        val diskSize = taskRunContexts.map { it.diskSize }.maxBy { it?.bytes ?: -1 } ?: taskConfig.google?.diskSize
+        if (diskSize != null) {
+            disk.sizeGb = diskSize.toType(CapacityType.GB).toInt()
         }
 
         // Create action to periodically copy logs to GCS
         val logPath = gcsPath(bucket, gcsBase, workflowRunDir, LOGS_DIR, taskRunId.toString(), LOG_FILE_NAME)
         actions.add(createPeriodicLogsAction(logPath, googleConfig.logUploadInterval))
 
+        // Create a unique set of inputFiles to dockerDataDir combinations
+        val inputFiles = taskRunContexts
+            .flatMap { c -> c.inputFiles.map { f -> Pair(f, c.dockerDataDir) } }
+            .toSet()
+
         // Create actions to download InputFiles from remote sources
         val downloadRemoteInputFileActions =
-            downloadInputFiles.map { createDownloadRemoteFileAction(it, taskRunContext.dockerDataDir) }
+            inputFiles.map { createDownloadRemoteFileAction(it.first, it.second) }
         actions.addAll(downloadRemoteInputFileActions)
 
-        // Create actions to download InputFiles from our GCS run directories
-        val downloadLocalInputFileActions = cachedInputFiles.map {
-            val inputFileObject = gcsPath(bucket, gcsBase, INPUTS_DIR, it.path)
-            createDownloadAction(inputFileObject, taskRunContext.dockerDataDir, it.path)
-        }
-        actions.addAll(downloadLocalInputFileActions)
+        // Create a unique set of outputFilesIn to dockerDataDir combinations
+        val outputFilesIn = taskRunContexts
+            .flatMap { c -> c.outputFilesIn.map { f -> Pair(f, c.dockerDataDir) } }
+            .toSet()
 
         // Create actions to download each task input OutputFile from the current GCS run directory
         val downloadOutputFileActions = outputFilesIn.map {
-            val outputFileObject = gcsPath(bucket, gcsBase, OUTPUTS_DIR, it.path)
-            createDownloadAction(outputFileObject, taskRunContext.dockerDataDir, it.path)
+            val outputFileObject = gcsPath(bucket, gcsBase, OUTPUTS_DIR, it.first.path)
+            createDownloadAction(outputFileObject, it.second, it.first.path)
         }
         actions.addAll(downloadOutputFileActions)
 
-        // Create the action that runs the task
-        actions.add(
-            createExecuteTaskAction(
-                taskRunContext.dockerImage,
-                taskRunContext.dockerDataDir,
-                taskRunContext.command,
-                taskRunContext.env
+        for (taskRunContext in taskRunContexts) {
+            // Create the action that runs the task
+            actions.add(
+                createExecuteTaskAction(
+                    taskRunContext.dockerImage,
+                    taskRunContext.dockerDataDir,
+                    taskRunContext.command,
+                    taskRunContext.env
+                )
             )
-        )
 
-        // Create the actions to upload each task output OutputFile
-        val uploadActions = outputFilesOut.map {
-            val outputFileObject = gcsPath(bucket, gcsBase, OUTPUTS_DIR, it.path)
-            createUploadAction(outputFileObject, taskRunContext.dockerDataDir, it.path)
+            // Create the actions to upload each task output OutputFile
+            val uploadActions = taskRunContext.outputFilesOut.map {
+                val outputFileObject = gcsPath(bucket, gcsBase, OUTPUTS_DIR, it.path)
+                createUploadAction(outputFileObject, taskRunContext.dockerDataDir, it.path)
+            }
+            actions.addAll(uploadActions)
         }
-        actions.addAll(uploadActions)
 
         // Create the action to upload all data dir files to diagnostic-output directory if execution fails
-        val diagnosticsGSPath = gcsPath(bucket, gcsBase, workflowRunDir, DIAGNOSTICS_DIR, taskRunId.toString())
-        val diagnosticsAction = createDiagnosticUploadAction(diagnosticsGSPath, taskRunContext.dockerDataDir)
-        actions.add(diagnosticsAction)
+        val dockerDataDirs = taskRunContexts.map { it.dockerDataDir }.toSet()
+        for (dockerDataDir in dockerDataDirs) {
+            val diagnosticsGSPath = gcsPath(bucket, gcsBase, workflowRunDir, DIAGNOSTICS_DIR,
+                taskRunId.toString(), dockerDataDir)
+            val diagnosticsAction = createDiagnosticUploadAction(diagnosticsGSPath, dockerDataDir)
+            actions.add(diagnosticsAction)
+        }
 
         // Create action to copy logs to GCS after everything else is complete
         actions.add(createLogsAction(logPath))
-
 
         val context = "task run $taskRunId"
         log.info { "Submitting pipeline job for task run: $run" }
@@ -192,27 +192,11 @@ class GoogleLocalExecutor(private val workflowConfig: WorkflowConfig) : LocallyD
     }
 
     override fun shutdownRunningTasks() {
-        allShutdown = true
+        allShutdown.set(true)
         for (op in runningOperations) {
             log.info { "Canceling operation $op..." }
             googleGenomicsClient.projects().operations().cancel(op, null)
         }
-    }
-
-    override fun downloadInputFile(inputFile: InputFile) {
-        val toObjectPath = gcsObjectPath(gcsBase, INPUTS_DIR, inputFile.path)
-
-        // If the other file is another google storage file, we can copy directly from bucket to bucket without downloading first
-        if (inputFile is GSInputFile) {
-            copyObject(googleStorageClient, inputFile.bucket, inputFile.objectPath, bucket, toObjectPath)
-            return
-        }
-
-        val downloadBasePath = Paths.get(DEFAULT_INPUT_DOWNLOAD_DIR)
-        val downloadedPath = downloadBasePath.resolve(inputFile.path)
-        inputFile.downloadLocal(downloadBasePath)
-        uploadObject(googleStorageClient, bucket, toObjectPath, downloadedPath)
-        Files.delete(downloadedPath)
     }
 
     override fun listFiles(baseDir: String): Set<String> {

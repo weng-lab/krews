@@ -1,18 +1,13 @@
 package krews.executor.local
 
 import com.github.dockerjava.api.DockerClient
-import com.github.dockerjava.api.model.Bind
-import com.github.dockerjava.api.model.Volume
-import com.github.dockerjava.core.DefaultDockerClientConfig
-import com.github.dockerjava.core.DockerClientBuilder
+import com.github.dockerjava.api.model.*
+import com.github.dockerjava.core.*
 import com.github.dockerjava.core.command.WaitContainerResultCallback
 import com.github.dockerjava.jaxrs.JerseyDockerCmdExecFactory
 import krews.config.DockerConfig
-import krews.file.InputFile
-import krews.file.LocalInputFile
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.Paths
+import krews.file.*
+import java.nio.file.*
 
 
 /**

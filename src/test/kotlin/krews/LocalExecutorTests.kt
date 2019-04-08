@@ -3,8 +3,7 @@ package krews
 import com.typesafe.config.ConfigFactory
 import io.mockk.spyk
 import krews.config.*
-import krews.core.WorkflowRunner
-import krews.executor.*
+import krews.core.*
 import krews.executor.local.LocalExecutor
 import krews.util.*
 import org.assertj.core.api.Assertions.assertThat
@@ -13,10 +12,9 @@ import java.nio.file.*
 import kotlin.streams.toList
 
 @Disabled
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@TestMethodOrder(MethodOrderer.OrderAnnotation::class)
 class LocalExecutorTests {
     private val testDir = Paths.get("local-workflow-test")!!
-    private val inputsDir = testDir.resolve("inputs")
     private val outputsDir = testDir.resolve("outputs")
     private val sampleFilesDir = testDir.resolve("sample-files")
     private val unusedFilesDir = testDir.resolve("unused-files")
@@ -25,8 +23,7 @@ class LocalExecutorTests {
 
     private fun config(taskParam: String) =
         """
-        local-files-base-dir = $testDir
-        clean-old-files = true
+        working-dir = $testDir
         params {
             sample-files-dir = $sampleFilesDir
         }
@@ -37,7 +34,6 @@ class LocalExecutorTests {
                     -type = "krews.file.LocalInputFile"
                     local-path = $unusedFilesDir/unused-1.txt
                     path = unused-1.txt
-                    cache = true
                 },
                 {
                     -type = "krews.file.LocalInputFile"
@@ -45,6 +41,7 @@ class LocalExecutorTests {
                     path = unused-2.txt
                 }
             ]
+            grouping = 2
         }
         """.trimIndent()
 
@@ -61,7 +58,7 @@ class LocalExecutorTests {
     @AfterAll
     fun afterTests() = deleteDir(testDir)
 
-    @Test
+    @Test @Order(1)
     fun `Can run a simple workflow locally`() {
         // Create 3 files in a temp directory to use as inputs.
         for (i in 1..3) {
@@ -71,22 +68,12 @@ class LocalExecutorTests {
 
         val executor = runWorkflow(1, "task-param-1")
 
-        val dbPath = testDir.resolve(Paths.get("state", "metadata.db"))
+        val dbPath = testDir.resolve(Paths.get("state", "cache.db"))
         assertThat(dbPath).exists()
 
-        assertThat(inputsDir.resolve("unused-1.txt")).exists()
-        assertThat(inputsDir.resolve("unused-2.txt")).doesNotExist()
-
-        // Even though this file was required for each task, make sure it only tried to download once.
-        verifyInputFileCached(executor, "unused-1.txt", 1)
-        // This file is downloaded by each task execution, not cached
-        verifyInputFileCached(executor, "unused-2.txt", 0)
-
         for (i in 1..3) {
-            assertThat(inputsDir.resolve("test-$i.txt")).exists()
             assertThat(base64Dir.resolve("test-$i.b64")).exists()
             assertThat(gzipDir.resolve("test-$i.b64.gz")).exists()
-            verifyInputFileCached(executor, "test-$i.txt")
         }
 
         // Confirm that logs and an html report were generated
@@ -95,15 +82,13 @@ class LocalExecutorTests {
         assertThat(runPath.resolve(REPORT_FILENAME)).exists()
     }
 
-    @Test
+    @Test @Order(2)
     fun `Can invalidate cache using different task parameters`() {
         val executor = runWorkflow(2, "task-param-2")
 
         for (i in 1..3) {
-            assertThat(inputsDir.resolve("test-$i.txt")).exists()
             assertThat(base64Dir.resolve("test-$i.b64")).exists()
             assertThat(gzipDir.resolve("test-$i.b64.gz")).exists()
-            verifyInputFileCached(executor, "test-$i.txt", 0)
             verifyExecuteWithOutput(executor, "base64/test-$i.b64")
             verifyExecuteWithOutput(executor, "gzip/test-$i.b64.gz")
         }
@@ -114,7 +99,7 @@ class LocalExecutorTests {
         assertThat(runPath.resolve(REPORT_FILENAME)).exists()
     }
 
-    @Test
+    @Test @Order(3)
     fun `Should cache unless invalidated by modified input file`() {
         // Update file #1 and add a new File #4
         Files.delete(sampleFilesDir.resolve("test-1.txt"))
@@ -124,26 +109,19 @@ class LocalExecutorTests {
 
         val executor = runWorkflow(3, "task-param-2")
 
-        for (i in 2..4) {
-            assertThat(inputsDir.resolve("test-$i.txt")).exists()
+        // Verify output files 1 to 4 exist. "1" files should exist from previous run.
+        for (i in 1..4) {
             assertThat(base64Dir.resolve("test-$i.b64")).exists()
             assertThat(gzipDir.resolve("test-$i.b64.gz")).exists()
         }
 
-        // Since test-1.txt is not an input and cleaning old files is on, make sure test-1 input and output files don't exist
-        assertThat(inputsDir.resolve("test-1.txt")).doesNotExist()
-        assertThat(base64Dir.resolve("test-1.b64")).doesNotExist()
-        assertThat(gzipDir.resolve("test-1.b64.gz")).doesNotExist()
-
-        verifyInputFileCached(executor, "test-2.txt", 0)
-        verifyInputFileCached(executor, "test-3.txt")
-        verifyInputFileCached(executor, "test-4.txt")
-
-        // Verify tasks were re-run for test-3 and test-4 and NOT for test-2
+        // Verify tasks were re-run for test-3 and test-4 and NOT for test-1 and test-2
+        verifyExecuteWithOutput(executor, "base64/test-1.b64", 0)
         verifyExecuteWithOutput(executor, "base64/test-2.b64", 0)
         verifyExecuteWithOutput(executor, "base64/test-3.b64")
         verifyExecuteWithOutput(executor, "base64/test-4.b64")
 
+        verifyExecuteWithOutput(executor, "gzip/test-1.b64.gz", 0)
         verifyExecuteWithOutput(executor, "gzip/test-2.b64.gz", 0)
         verifyExecuteWithOutput(executor, "gzip/test-3.b64.gz")
         verifyExecuteWithOutput(executor, "gzip/test-4.b64.gz")
@@ -154,22 +132,15 @@ class LocalExecutorTests {
         assertThat(runPath.resolve(REPORT_FILENAME)).exists()
     }
 
-    @Test
-    fun `Cache should be invalidated if input file or output file is removed manually`() {
+    @Test @Order(4)
+    fun `Cache should be invalidated if output file is removed manually`() {
         Files.delete(outputsDir.resolve("base64/test-2.b64"))
-        Files.delete(inputsDir.resolve("test-3.txt"))
-
         val executor = runWorkflow(4, "task-param-2")
 
         for (i in 2..4) {
-            assertThat(inputsDir.resolve("test-$i.txt")).exists()
             assertThat(base64Dir.resolve("test-$i.b64")).exists()
             assertThat(gzipDir.resolve("test-$i.b64.gz")).exists()
         }
-
-        verifyInputFileCached(executor, "test-2.txt", 0)
-        verifyInputFileCached(executor, "test-3.txt")
-        verifyInputFileCached(executor, "test-4.txt", 0)
 
         verifyExecuteWithOutput(executor, "base64/test-2.b64")
         // Although it downloads the input file again, it doesn't need to reprocess the task
@@ -186,7 +157,6 @@ class LocalExecutorTests {
         assertThat(Files.list(runPath.resolve(LOGS_DIR)).toList().size).isEqualTo(2)
         assertThat(runPath.resolve(REPORT_FILENAME)).exists()
     }
-
 
     /**
      * Convenience function that runs the SimpleWorkflow and returns a LocalExecutor spy

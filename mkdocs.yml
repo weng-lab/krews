@@ -56,6 +56,7 @@ nav:
       - 'Tasks': workflows/#tasks
       - 'Files': workflows/#files
       - 'Parameters': workflows/#params
+      - 'Grouping': workflows/#grouping
       - 'Code Organization': workflows/#code-organization
   - 'Running / Environments':
       - 'Running': running_environments.md

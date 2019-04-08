@@ -13,8 +13,11 @@ class CommandExecutor(private val sshConfig: SshConfig?) {
     fun exec(command: String): String {
         log.info { "Executing command:\n$command" }
 
-        val runCmd = if (sshConfig != null) arrayOf("ssh ${sshConfig.user}@${sshConfig.host} -p ${sshConfig.port} -X $command")
-            else arrayOf("/bin/sh", "-c", command)
+        val runCmd =
+            if (sshConfig != null)
+                arrayOf("ssh", "${sshConfig.user}@${sshConfig.host}", "-p", "${sshConfig.port}", "-X", command)
+            else
+                arrayOf("/bin/sh", "-c", command)
         val process = Runtime.getRuntime().exec(runCmd)
         val result = process.inputStream.reader().readText()
         log.info { "Command results:\n$result" }

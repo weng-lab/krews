@@ -1,31 +1,34 @@
 package krews.misc
 
+import com.fasterxml.jackson.module.kotlin.readValue
 import krews.db.WorkflowRun
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.transactions.transaction
 import kotlinx.html.*
 import kotlinx.html.stream.appendHTML
-import krews.db.TaskRun
-import krews.db.TaskRuns
-import krews.executor.DIAGNOSTICS_DIR
-import krews.executor.LOGS_DIR
-import krews.executor.OUTPUTS_DIR
-import org.joda.time.DateTime
+import krews.core.*
+import krews.db.*
+import mu.KotlinLogging
 import java.text.SimpleDateFormat
 import java.time.Duration
 import java.util.*
 
-internal fun createReport(db: Database, workflowRun: WorkflowRun, out: Appendable) =
+
+private val log = KotlinLogging.logger {}
+
+internal fun createReport(db: Database, workflowRun: WorkflowRun, out: Appendable) {
     transaction(db) {
-        val taskRuns = TaskRun.find { TaskRuns.workflowRunId eq workflowRun.id }
+        val taskRuns = TaskRun.all()
         createReport(workflowRun, taskRuns, out)
     }
+}
 
 private val timeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
 private fun durationFormat(duration: Duration) = duration.toString()
     .substring(2)
     .replace("(\\d[HMS])(?!$)", "$1 ")
     .toLowerCase()
+    .trim()
 
 private fun createReport(workflowRun: WorkflowRun, taskRuns: Iterable<TaskRun>, out: Appendable) {
     out.appendHTML().html {
@@ -33,6 +36,7 @@ private fun createReport(workflowRun: WorkflowRun, taskRuns: Iterable<TaskRun>, 
             title("Workflow ${workflowRun.workflowName} Run Report")
             link(rel = "stylesheet", href = "https://maxcdn.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css")
             link(rel = "stylesheet", href = "https://cdn.datatables.net/1.10.19/css/dataTables.bootstrap4.min.css")
+            link(rel = "stylesheet", href = "https://cdn.datatables.net/responsive/2.2.3/css/responsive.bootstrap4.min.css")
         }
         body {
             div("container-fluid") {
@@ -62,25 +66,26 @@ private fun createReport(workflowRun: WorkflowRun, taskRuns: Iterable<TaskRun>, 
                         Status.FAILED -> {
                             h4 { +"Run failed" }
                             p {
-                                +("Find out what went wrong by checking failed tasks below, logs (/run/${workflowRun.startTime}/$LOGS_DIR) " +
-                                        "and diagnostic outputs (/run/${workflowRun.startTime}/$DIAGNOSTICS_DIR)")
+                                +("Find out what went wrong by checking failed tasks below, logs " +
+                                        "(/run/${workflowRun.startTime}/$LOGS_DIR) and diagnostic outputs " +
+                                        "(/run/${workflowRun.startTime}/$DIAGNOSTICS_DIR)")
                             }
                         }
                     }
                 }
 
 
-                table(classes = "table table-striped table-bordered") {
+                table(classes = "table table-striped table-bordered dt-responsive nowrap") {
                     id = "tasks"
 
                     thead {
                         tr {
-                            th { +"Task Name" }
-                            th { +"Task Run ID" }
-                            th { +"Command" }
-                            th { +"Status" }
-                            th { +"Start Time" }
-                            th { +"Duration" }
+                            th(classes = "all") { +"Task Name" }
+                            th(classes = "all") { +"Task Run ID" }
+                            th(classes = "all") { +"Status" }
+                            th(classes = "all") { +"Start Time" }
+                            th(classes = "all") { +"Duration" }
+                            th(classes = "none") { +"Execution Details" }
                         }
                     }
 
@@ -94,7 +99,6 @@ private fun createReport(workflowRun: WorkflowRun, taskRuns: Iterable<TaskRun>, 
                             tr {
                                 td { +taskRun.taskName }
                                 td { +"${taskRun.id}" }
-                                td(classes = "command-cell") { pre { +"${taskRun.command}" } }
                                 td {
                                     when(taskStatus) {
                                         Status.IN_PROGRESS -> span(classes="badge badge-secondary") { +"In Progress" }
@@ -105,6 +109,10 @@ private fun createReport(workflowRun: WorkflowRun, taskRuns: Iterable<TaskRun>, 
                                 td { +timeFormat.format(Date(taskRun.startTime)) }
                                 val endTime = taskRun.completedTime ?: System.currentTimeMillis()
                                 td { +durationFormat(Duration.ofMillis(endTime - taskRun.startTime)) }
+
+                                td {
+                                    createExecutionDetails(taskRun)
+                                }
                             }
                         }
                     }
@@ -116,8 +124,34 @@ private fun createReport(workflowRun: WorkflowRun, taskRuns: Iterable<TaskRun>, 
             script(src = "https://maxcdn.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js") {}
             script(src = "https://cdn.datatables.net/1.10.19/js/jquery.dataTables.min.js") {}
             script(src = "https://cdn.datatables.net/1.10.19/js/dataTables.bootstrap4.min.js") {}
+            script(src = "https://cdn.datatables.net/responsive/2.2.3/js/dataTables.responsive.min.js") {}
+            script(src = "https://cdn.datatables.net/responsive/2.2.3/js/responsive.bootstrap4.min.js") {}
             script { unsafe { raw(SCRIPT) } }
             style { unsafe { raw(STYLE) } }
+        }
+    }
+}
+
+private fun TD.createExecutionDetails(taskRun: TaskRun) {
+    table(classes="table table-striped table-bordered mt-2") {
+        thead {
+            tr {
+                th { +"Docker Image" }
+                th { +"Command" }
+            }
+        }
+        tbody {
+            val taskRunExecutions = mapper.readValue<List<TaskRunExecution>>(taskRun.executionsJson)
+            for (taskRunExecution in taskRunExecutions) {
+                tr {
+                    td {
+                        +taskRunExecution.image
+                    }
+                    td(classes = "command-cell") {
+                        pre { +"${taskRunExecution.command}" }
+                    }
+                }
+            }
         }
     }
 }
@@ -129,8 +163,8 @@ private val STYLE =
         max-width: 600px;
         max-height: 250px;
     }
-    th {
-        font-weight: normal;
+    #tasks {
+        width: 100%;
     }
     """.trimIndent()
 

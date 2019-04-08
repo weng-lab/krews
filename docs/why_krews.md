@@ -28,7 +28,7 @@ workflow or even just your containers will not have to worry about installing or
 Krews currently supports the [Google Genomics Pipelines API](https://cloud.google.com/genomics/) as a first 
 class citizen. It was the first integration written, and support was not shoe-horned into a model that does not 
 support it well. It will take full advantage of the Pipelines API's ability to create and use exactly the VM 
-you need for every task.
+you need for every task. It can also group many small tasks to run together easily.
 
 Not only that, but with the Pipelines API Krews can automatically create a "Master" VM, copy itself to the VM 
 (via Google Cloud Storage), and run there completely. Logs for the master process and each krews task, Krews' state 

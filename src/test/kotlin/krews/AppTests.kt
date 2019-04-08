@@ -5,7 +5,6 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.*
 import java.nio.file.*
 
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class AppTests {
 
     private val testDir = Paths.get("app-test").toAbsolutePath()!!
@@ -26,7 +25,8 @@ class AppTests {
         }
         """.trimIndent()
 
-    @BeforeAll fun beforeSpec() {
+    @BeforeAll
+    fun beforeTest() {
         deleteDir(testDir)
         // Create temp sample files dir (and parent test dir) to use for this set of tests
         createFile(configFile, config)
@@ -34,9 +34,11 @@ class AppTests {
         createFile(inputFile, "I am a test file")
     }
 
-    @AfterAll fun afterTests() = deleteDir(testDir)
+    @AfterAll
+    fun afterTests() = deleteDir(testDir)
 
-    @Test fun `App run() should execute a simple workflow locally`() {
+    @Test
+    fun `App run() should execute a simple workflow locally`() {
         run(localFilesWorkflow(), arrayOf("-o", "local", "-c", "$configFile"))
 
         val dbPath = testDir.resolve(Paths.get("state", "metadata.db"))

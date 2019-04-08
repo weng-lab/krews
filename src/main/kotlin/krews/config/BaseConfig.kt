@@ -8,14 +8,18 @@ data class TaskConfig (
     // Task level Slurm executor configuration
     val slurm: SlurmTaskConfig? = null,
     // The maximum allowed parallelism for this task
-    val parallelism: Parallelism = UnlimitedParallelism
+    val parallelism: Parallelism = UnlimitedParallelism,
+    // The number of tasks "executions" that will be run with the same job / vm.
+    val grouping: Int = 1
 )
 
 data class WorkflowConfig (
     // Workflow level input parameters
     val params: Map<String, Any> = mapOf(),
+    // Working Directory
+    val workingDir: String,
     // Local executor configuration
-    val local: LocalWorkflowConfig = LocalWorkflowConfig(),
+    val local: LocalWorkflowConfig? = null,
     // Google executor configuration
     val google: GoogleWorkflowConfig? = null,
     // Slurm executor configuration
@@ -27,7 +31,7 @@ data class WorkflowConfig (
     // The concurrency for task setup, status checking, and cleanup
     val executorConcurrency: Int = 16,
     // Delay between uploading the latest database to project working storage
-    val dbUploadDelay: Long = 60,
+    val dbUploadDelay: Long = 300,
     // Delay between generating updated status reports (in seconds)
-    val reportGenerationDelay: Long = 60
+    val reportGenerationDelay: Long = 120
 )

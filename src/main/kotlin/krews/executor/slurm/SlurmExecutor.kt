@@ -1,23 +1,18 @@
 package krews.executor.slurm
 
 import kotlinx.coroutines.delay
-import krews.config.TaskConfig
-import krews.config.WorkflowConfig
-import krews.core.TaskRunContext
-import krews.executor.INPUTS_DIR
-import krews.executor.LOGS_DIR
+import krews.config.*
+import krews.core.*
 import krews.executor.LocallyDirectedExecutor
-import krews.executor.OUTPUTS_DIR
 import krews.file.*
 import krews.misc.CommandExecutor
 import mu.KotlinLogging
 import org.apache.commons.io.FileUtils
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.Paths
+import java.nio.file.*
 import java.util.*
 import java.util.UUID.randomUUID
 import retrySuspend
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.pow
 
 private val log = KotlinLogging.logger {}
@@ -31,11 +26,10 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
     private val slurmWorkflowJobName = randomUUID().toString()
 
     private val commandExecutor = CommandExecutor(workflowConfig.slurm?.ssh)
-    private val workflowBasePath = Paths.get(workflowConfig.slurm!!.workingDir).toAbsolutePath()!!
-    private val inputsPath = workflowBasePath.resolve(INPUTS_DIR)
+    private val workflowBasePath = Paths.get(workflowConfig.workingDir).toAbsolutePath()!!
     private val outputsPath = workflowBasePath.resolve(OUTPUTS_DIR)
 
-    private var allShutdown = false
+    private var allShutdown = AtomicBoolean(false)
 
     override fun downloadFile(fromPath: String, toPath: Path) {
         val fromFile = workflowBasePath.resolve(fromPath)
@@ -70,128 +64,126 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
     override fun listFiles(baseDir: String): Set<String> = listLocalFiles(workflowBasePath.resolve(baseDir))
     override fun deleteFile(file: String) = Files.delete(workflowBasePath.resolve(file))
 
-    override fun downloadInputFile(inputFile: InputFile) = downloadInputFileLocalFS(inputFile, inputsPath)
-
     override suspend fun executeTask(
         workflowRunDir: String,
         taskRunId: Int,
         taskConfig: TaskConfig,
-        taskRunContext: TaskRunContext<*, *>,
-        outputFilesIn: Set<OutputFile>,
-        outputFilesOut: Set<OutputFile>,
-        cachedInputFiles: Set<InputFile>,
-        downloadInputFiles: Set<InputFile>
+        taskRunContexts: List<TaskRunContext<*, *>>
     ) {
-        if (allShutdown) {
+        if (allShutdown.get()) {
             throw Exception("shutdownRunningTasks has already been called")
         }
         val runBasePath = workflowBasePath.resolve(workflowRunDir)
         val logsPath = runBasePath.resolve(LOGS_DIR).resolve(taskRunId.toString())
         logsPath.toFile().mkdirs()
 
-        val taskUUID = randomUUID().toString()
-
-        // Create a temp directory to use as a mount for input data
-        val mountDir = "/tmp/task-$taskUUID-mount"
-        val mountTmpDir = "$mountDir/tmp"
-
-        // Manually override singularity runtime dir to work-around deletion issue
-        // https://github.com/sylabs/singularity/issues/1255
-        val singularityRuntimeDir = "/tmp/singularity-$taskUUID"
-
         val sbatchScript = StringBuilder("#!/bin/bash\n#\n")
+
+        val mem = taskConfig.slurm?.mem ?: taskRunContexts.map { it.memory }.maxBy { it?.bytes ?: -1 }
+        val cpus = taskConfig.slurm?.cpus ?: taskRunContexts.map { it.cpus }.maxBy { it ?: -1 }
+        val timePerTask = taskConfig.slurm?.time ?: taskRunContexts.map { it.cpus }.maxBy { it ?: -1 }
+        val time = if (timePerTask != null) timePerTask * taskRunContexts.size else null
 
         appendSbatchParam(sbatchScript, "job-name", slurmWorkflowJobName)
         appendSbatchParam(sbatchScript, "output", logsPath.resolve("out.txt"))
         appendSbatchParam(sbatchScript, "error", logsPath.resolve("err.txt"))
-        appendSbatchParam(sbatchScript, "mem", taskConfig.slurm?.mem ?: taskRunContext.memory)
-        appendSbatchParam(sbatchScript, "cpus-per-task", taskConfig.slurm?.cpus ?: taskRunContext.cpus)
-        appendSbatchParam(sbatchScript, "time", taskConfig.slurm?.time ?: taskRunContext.time)
+        appendSbatchParam(sbatchScript, "mem", mem)
+        appendSbatchParam(sbatchScript, "cpus-per-task", cpus)
+        appendSbatchParam(sbatchScript, "time", time)
         appendSbatchParam(sbatchScript, "partition", taskConfig.slurm?.partition)
         for ((argName, argVal) in taskConfig.slurm?.sbatchArgs ?: mapOf()) {
             appendSbatchParam(sbatchScript, argName, argVal)
         }
 
-        val tmpDir = Paths.get(taskRunContext.dockerDataDir, "tmp")
-
         sbatchScript.append("\n")
         sbatchScript.append("set -x\n")
-        sbatchScript.append("trap 'rm -rf $mountDir; rm -rf $singularityRuntimeDir' EXIT\n")
-        sbatchScript.append("export MOUNT_DIR=$mountDir\n")
-        sbatchScript.append("export SINGULARITY_LOCALCACHEDIR=$singularityRuntimeDir\n")
-        sbatchScript.append("export SINGULARITY_BINDPATH=\$MOUNT_DIR:${taskRunContext.dockerDataDir}\n")
-        sbatchScript.append("export SINGULARITYENV_TMP_DIR=$tmpDir\n")
 
-        sbatchScript.append("\n")
-        sbatchScript.append("# Create Singularity Local Cache Dir\n")
-        sbatchScript.append("mkdir $singularityRuntimeDir\n")
+        for (taskRunContext in taskRunContexts) {
+            val taskUUID = randomUUID().toString()
 
-        // Add downloading cached input files into mounted dir to script
-        if (cachedInputFiles.isNotEmpty()) {
+            // Create a temp directory to use as a mount for input data
+            val mountDir = "/tmp/task-$taskUUID-mount"
+            val mountTmpDir = "$mountDir/tmp"
+
+            // Manually override singularity runtime dir to work-around deletion issue
+            // https://github.com/sylabs/singularity/issues/1255
+            val singularityRuntimeDir = "/tmp/singularity-$taskUUID"
+
             sbatchScript.append("\n")
-            sbatchScript.append("# Copy local files needed for job into mounted singularity data directory.\n")
-        }
-        for (cachedInputFile in cachedInputFiles) {
-            val cachedFilePath = Paths.get(workflowBasePath.toString(), INPUTS_DIR, cachedInputFile.path)
-            val mountDirFilePath = "$mountDir/${cachedInputFile.path}"
-            sbatchScript.append(copyCommand(cachedFilePath.toString(), mountDirFilePath))
-        }
+            sbatchScript.append("### SubTask taskUUID ###")
+            sbatchScript.append("trap 'rm -rf $mountDir; rm -rf $singularityRuntimeDir' EXIT\n")
 
-        // Add copying local non-cached input files into mounted dir to script.
-        val localCopyInputFiles = downloadInputFiles.filterIsInstance<LocalInputFile>()
-        for (localCopyInputFile in localCopyInputFiles) {
-            val mountDirFilePath = "$mountDir/${localCopyInputFile.path}"
-            sbatchScript.append(copyCommand(localCopyInputFile.localPath, mountDirFilePath))
-        }
+            val tmpDir = Paths.get(taskRunContext.dockerDataDir, "tmp")
+            sbatchScript.append("export MOUNT_DIR=$mountDir\n")
+            sbatchScript.append("export SINGULARITY_LOCALCACHEDIR=$singularityRuntimeDir\n")
+            sbatchScript.append("export SINGULARITY_BINDPATH=\$MOUNT_DIR:${taskRunContext.dockerDataDir}\n")
+            sbatchScript.append("export SINGULARITYENV_TMP_DIR=$tmpDir\n")
 
-        val remoteDownloadInputFiles = downloadInputFiles.filter { it !is LocalInputFile }
-        if (remoteDownloadInputFiles.isNotEmpty()) {
             sbatchScript.append("\n")
-            sbatchScript.append("# Download files to mounted directory using singularity.\n")
-        }
-        for (remoteDownloadInputFile in remoteDownloadInputFiles) {
-            val downloadCommand = remoteDownloadInputFile.downloadFileCommand(taskRunContext.dockerDataDir)
-            sbatchScript.append("singularity exec --containall docker://${remoteDownloadInputFile.downloadFileImage()} $downloadCommand\n")
-            sbatchScript.append("echo $?\n")
-        }
+            sbatchScript.append("# Create Singularity Local Cache Dir\n")
+            sbatchScript.append("mkdir $singularityRuntimeDir\n")
 
-        // Copy OutputFiles from task input into the docker container
-        if (!outputFilesIn.isEmpty()) {
-            log.info { "Copying output files $outputFilesIn from task input into mounted working dir for singularity: $mountDir" }
+            val inputFiles = taskRunContext.inputFiles
+            val outputFilesIn = taskRunContext.outputFilesIn
+            val outputFilesOut = taskRunContext.outputFilesOut
+
+            // Add copying local input files into mounted dir to script.
+            val localCopyInputFiles = inputFiles.filterIsInstance<LocalInputFile>()
+            for (localCopyInputFile in localCopyInputFiles) {
+                val mountDirFilePath = "$mountDir/${localCopyInputFile.path}"
+                sbatchScript.append(copyCommand(localCopyInputFile.localPath, mountDirFilePath))
+            }
+
+            val remoteDownloadInputFiles = inputFiles.filter { it !is LocalInputFile }
+            if (remoteDownloadInputFiles.isNotEmpty()) {
+                sbatchScript.append("\n")
+                sbatchScript.append("# Download files to mounted directory using singularity.\n")
+            }
+            for (remoteDownloadInputFile in remoteDownloadInputFiles) {
+                val downloadCommand = remoteDownloadInputFile.downloadFileCommand(taskRunContext.dockerDataDir)
+                sbatchScript.append("singularity exec --containall " +
+                        "docker://${remoteDownloadInputFile.downloadFileImage()} $downloadCommand\n")
+                sbatchScript.append("echo $?\n")
+            }
+
+            // Copy OutputFiles from task input into the docker container
+            if (!outputFilesIn.isEmpty()) {
+                log.info { "Copying output files $outputFilesIn from task input into mounted working dir for singularity: $mountDir" }
+                sbatchScript.append("\n")
+                sbatchScript.append("# Copy output files from previous tasks into mounted singularity data directory.\n")
+            }
+            for (outputFile in outputFilesIn) {
+                val fromPath = outputsPath.resolve(outputFile.path)
+                val mountDirFilePath = "$mountDir/${outputFile.path}"
+                sbatchScript.append(copyCommand(fromPath.toString(), mountDirFilePath))
+            }
             sbatchScript.append("\n")
-            sbatchScript.append("# Copy output files from previous tasks into mounted singularity data directory.\n")
-        }
-        for (outputFile in outputFilesIn) {
-            val fromPath = outputsPath.resolve(outputFile.path)
-            val mountDirFilePath = "$mountDir/${outputFile.path}"
-            sbatchScript.append(copyCommand(fromPath.toString(), mountDirFilePath))
-        }
-        sbatchScript.append("\n")
 
-        // Copy the run command into a sh file
-        if (taskRunContext.command != null) {
-            sbatchScript.append("mkdir -p $mountTmpDir\n")
-            val runScriptContents = "set -e\n${taskRunContext.command}"
-            val runScriptAsBase64 = Base64.getEncoder().encodeToString(runScriptContents.toByteArray())
-            sbatchScript.append("echo $runScriptAsBase64 | base64 --decode > $mountTmpDir/$RUN_SCRIPT_NAME\n")
-        }
+            // Copy the run command into a sh file
+            if (taskRunContext.command != null) {
+                sbatchScript.append("mkdir -p $mountTmpDir\n")
+                val runScriptContents = "set -e\n${taskRunContext.command}"
+                val runScriptAsBase64 = Base64.getEncoder().encodeToString(runScriptContents.toByteArray())
+                sbatchScript.append("echo $runScriptAsBase64 | base64 --decode > $mountTmpDir/$RUN_SCRIPT_NAME\n")
+            }
 
-        // Add running the task to script
-        sbatchScript.append("\n")
-        sbatchScript.append("# Run task command.\n")
-        sbatchScript.append("singularity exec --containall docker://${taskRunContext.dockerImage}")
-        if (taskRunContext.command != null) sbatchScript.append(" /bin/sh $tmpDir/$RUN_SCRIPT_NAME")
-        sbatchScript.append("\n")
-
-        // Add copying output files into output dir to script
-        if (outputFilesOut.isNotEmpty()) {
+            // Add running the task to script
             sbatchScript.append("\n")
-            sbatchScript.append("# Copy output files out of mounted directory.\n")
-        }
-        for (outputFile in outputFilesOut) {
-            val cachedFilePath = outputsPath.resolve(outputFile.path)
-            val mountDirFilePath = "$mountDir/${outputFile.path}"
-            sbatchScript.append(copyCommand(mountDirFilePath, cachedFilePath.toString()))
+            sbatchScript.append("# Run task command.\n")
+            sbatchScript.append("singularity exec --containall docker://${taskRunContext.dockerImage}")
+            if (taskRunContext.command != null) sbatchScript.append(" /bin/sh $tmpDir/$RUN_SCRIPT_NAME")
+            sbatchScript.append("\n")
+
+            // Add copying output files into output dir to script
+            if (outputFilesOut.isNotEmpty()) {
+                sbatchScript.append("\n")
+                sbatchScript.append("# Copy output files out of mounted directory.\n")
+            }
+            for (outputFile in outputFilesOut) {
+                val cachedFilePath = outputsPath.resolve(outputFile.path)
+                val mountDirFilePath = "$mountDir/${outputFile.path}"
+                sbatchScript.append(copyCommand(mountDirFilePath, cachedFilePath.toString()))
+            }
         }
 
         val sbatchScriptAsBase64 = Base64.getEncoder().encodeToString(sbatchScript.toString().toByteArray())
@@ -234,7 +226,7 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
     }
 
     override fun shutdownRunningTasks() {
-        allShutdown = true
+        allShutdown.set(true)
         commandExecutor.exec("scancel --jobname=$slurmWorkflowJobName")
     }
 

@@ -3,9 +3,7 @@ package krews.executor.google
 import com.google.api.services.genomics.v2alpha1.model.*
 import krews.WORKFLOW_RUN_TIMESTAMP_ENV_VAR
 import krews.config.WorkflowConfig
-import krews.executor.LOGS_DIR
-import krews.executor.REPORT_FILENAME
-import krews.executor.RUN_DIR
+import krews.core.*
 import krews.executor.RemoteDirectedExecutor
 import mu.KotlinLogging
 import org.joda.time.DateTime
@@ -23,8 +21,8 @@ class GoogleExecutor(workflowConfig: WorkflowConfig) : RemoteDirectedExecutor {
 
     private val googleConfig = checkNotNull(workflowConfig.google)
         { "google workflow config must be present to use Google Executor" }
-    private val bucket = googleConfig.storageBucket
-    private val gcsBase = googleConfig.storageBaseDir
+    private val bucket = googleConfig.bucket
+    private val gcsBase = workflowConfig.workingDir
 
 
     override fun execute(executablePath: Path, configPath: Path) {

@@ -5,7 +5,6 @@ import com.typesafe.config.ConfigFactory
 import krews.config.*
 import krews.core.*
 import krews.file.*
-import krews.misc.*
 import org.assertj.core.api.Assertions.*
 import org.junit.jupiter.api.*
 import reactor.core.publisher.toMono
@@ -108,14 +107,16 @@ private val completeTestConfig =
         """
         $completeParamsConfig
 
+        working-dir = /test
         parallelism = 5
 
         google = {
             project-id = test-project
-            storage-bucket = test-bucket
+            bucket = test-bucket
         }
 
         task.default {
+            grouping = 3
             params {
                 my-shared-thing = someval
             }
@@ -126,7 +127,7 @@ private val completeTestConfig =
             }
         }
 
-        # Overrides for gzip krews.core.task
+        # Overrides for sample2
         task.small {
             google {
                 machine-type = n1-standard-1
@@ -145,6 +146,7 @@ private val completeTestConfig =
             google {
                 disk-size = 30GB
             }
+            grouping = 1
         }
         """.trimIndent()
 
@@ -184,7 +186,7 @@ class ConfigTests {
         val workflowConfig = createWorkflowConfig(config, workflow)
         assertThat(workflowConfig.google).isEqualTo(GoogleWorkflowConfig(
             projectId = "test-project",
-            storageBucket = "test-bucket"
+            bucket = "test-bucket"
         ))
         assertThat(workflowConfig.local).isNull()
         assertThat(workflowConfig.tasks["sample"]).isEqualTo(TaskConfig(
@@ -197,7 +199,8 @@ class ConfigTests {
             google = GoogleTaskConfig(
                 machineType = "n1-standard-2",
                 diskSize = 30.GB
-            )
+            ),
+            grouping = 1
         ))
 
         assertThat(workflowConfig.tasks["sample2"]).isEqualTo(TaskConfig(
@@ -207,7 +210,8 @@ class ConfigTests {
             google = GoogleTaskConfig(
                 machineType = "n1-standard-1",
                 diskSize = 5.GB
-            )
+            ),
+            grouping = 3
         ))
 
         assertThat(workflowConfig.tasks["sample3"]).isEqualTo(TaskConfig(
@@ -217,16 +221,9 @@ class ConfigTests {
             google = GoogleTaskConfig(
                 machineType = "n1-standard-2",
                 diskSize = 10.GB
-            )
+            ),
+            grouping = 3
         ))
-    }
-
-    @Test fun `Json writer with CacheView should not write InputFile cache`() {
-        val json = mapper
-            .writerWithView(CacheView::class.java)
-            .forType(File::class.java)
-            .writeValueAsString(LocalInputFile("local/path", "path", true))
-        assertThat(json).isEqualTo("""{"-type":"krews.file.LocalInputFile","local-path":"local/path","path":"path","last-modified":-1}""")
     }
 
 }

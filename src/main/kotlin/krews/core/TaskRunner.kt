@@ -1,315 +1,183 @@
 package krews.core
 
-import krews.config.LimitedParallelism
-import krews.config.UnlimitedParallelism
-import krews.config.WorkflowConfig
+import com.fasterxml.jackson.core.type.TypeReference
+import krews.config.*
 import krews.db.*
-import krews.executor.INPUTS_DIR
 import krews.executor.LocallyDirectedExecutor
-import krews.executor.OUTPUTS_DIR
-import krews.executor.RUN_DIR
-import krews.file.getInputFilesForObject
-import krews.file.getOutputFilesForObject
-import krews.misc.CacheView
 import krews.misc.mapper
 import mu.KotlinLogging
-import org.apache.commons.lang3.concurrent.BasicThreadFactory
-import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.deleteWhere
-import org.jetbrains.exposed.sql.transactions.transaction
-import org.joda.time.DateTime
+import org.jetbrains.exposed.sql.*
 import java.util.concurrent.*
 import kotlinx.coroutines.*
+import org.apache.commons.lang3.concurrent.BasicThreadFactory
+import java.util.*
+import java.util.concurrent.atomic.AtomicBoolean
 
 
 private val log = KotlinLogging.logger {}
 
-class TaskRunFuture<I : Any, O : Any>(val task: Task<I, O>, val taskRunContext: TaskRunContext<I, O>): CompletableFuture<O>() {
-    fun complete() = complete(taskRunContext.output)
+class TaskRunFuture<I : Any, O : Any>(
+    val taskRunContext: TaskRunContext<I, O>,
+    private val executor: LocallyDirectedExecutor
+): CompletableFuture<O>() {
+    fun complete() {
+        // Add last modified timestamps to output files in task output
+        taskRunContext.outputFilesOut.forEach { file ->
+            file.lastModified = executor.fileLastModified("$OUTPUTS_DIR/${file.path}")
+        }
+        complete(taskRunContext.output)
+    }
 }
 
-class TaskRunner(private val workflowRun: WorkflowRun,
+class TaskRunner(workflowRun: WorkflowRun,
                  private val workflowConfig: WorkflowConfig,
                  private val executor: LocallyDirectedExecutor,
-                 private val db: Database) {
+                 private val runRepo: RunRepo,
+                 cacheDb: Database) {
 
-    private val currentInputFileDownloads = ConcurrentHashMap<String, Future<*>>()
-    private val inputDLPool = Executors.newCachedThreadPool(BasicThreadFactory.Builder().namingPattern("input-downloader-%d").build())
-    private val workflowRunId = transaction(db) { workflowRun.id.value }
-    private val workflowStartTime = transaction(db) { workflowRun.startTime }
+    private val workflowRunId = workflowRun.id.value
+    private val workflowStartTime = runRepo.workflowStartTime(workflowRun)
+    private val cache = Cache(cacheDb, executor)
 
-    private var stopped = false
-    private val maxConcurrency = when (workflowConfig.parallelism) {
-        is UnlimitedParallelism -> 262144
-        is LimitedParallelism -> workflowConfig.parallelism.limit
-    }
-    private val atMaxConcurrency: Semaphore = Semaphore(maxConcurrency)
-    private val queuedTasks = LinkedBlockingQueue<TaskRunFuture<*, *>>()
-    private val runningTasks = LinkedBlockingQueue<Deferred<Unit>>()
-    // These threads monitor the state of queuedTasks and runningTasks
-    private lateinit var queueMonitorThread: Thread
-    private lateinit var runMonitorThread: Thread
+    private val stopped = AtomicBoolean(false)
     private val coroutineExecutor = Executors.newFixedThreadPool(workflowConfig.executorConcurrency)
     private val coroutineDispatcher = coroutineExecutor.asCoroutineDispatcher()
 
-    private fun doMonitorQueue() {
-        while (true) {
-            try {
-                if (stopped) {
-                    break
-                }
-                if (!atMaxConcurrency.tryAcquire(1, 1000, TimeUnit.MILLISECONDS)) {
-                    continue
-                }
-                val nextTask = queuedTasks.take()
-                val def = GlobalScope.async (coroutineDispatcher) {
-                    try {
-                        run(nextTask)
-                        nextTask.complete()
-                    } catch (e: Throwable) {
-                        nextTask.completeExceptionally(e)
-                    }
-                    Unit
-                }
-                runningTasks.add(def)
-            } catch (e: InterruptedException) {}
-        }
+    private val taskRunThreadFactory = BasicThreadFactory.Builder().namingPattern("task-run-%d").build()
+    private val taskRunPool = Executors.newSingleThreadScheduledExecutor(taskRunThreadFactory)
+
+    private val groupingBuffers: MutableMap<String, MutableList<TaskRunFuture<*, *>>> = Collections.synchronizedMap(mutableMapOf())
+    private val queue: MutableList<List<TaskRunFuture<*, *>>> = Collections.synchronizedList(mutableListOf())
+    private val running: MutableList<List<TaskRunFuture<*, *>>> = Collections.synchronizedList(mutableListOf())
+
+    init {
+        taskRunPool.scheduleWithFixedDelay({ checkQueue() }, 1, 1, TimeUnit.SECONDS)
     }
 
-    private fun doMonitorRunning() {
-        while (true) {
-            try {
-                val task = runningTasks.poll(1000, TimeUnit.MILLISECONDS)
-                if (task == null) {
-                    if (stopped) {
-                        break
-                    }
-                    continue
-                }
-                val isDone = task.isCompleted
-                if (isDone) {
-                    atMaxConcurrency.release()
-                } else {
-                    runningTasks.offer(task)
-                }
-            } catch(e: InterruptedException) {}
-        }
-    }
-
-    fun startMonitorTasks() {
-        queueMonitorThread = Thread { doMonitorQueue() }
-        runMonitorThread = Thread { doMonitorRunning() }
-        queueMonitorThread.start()
-        runMonitorThread.start()
-        log.info { "Started monitoring threads for TaskRunner" }
-    }
-
-    fun stopMonitorTasks() {
-        stopped = true
-        queueMonitorThread.interrupt()
-        runMonitorThread.interrupt()
-        queueMonitorThread.join()
-        runMonitorThread.join()
-        log.info { "Shutdown monitor threads"}
-
+    fun stop() {
+        stopped.set(true)
+        taskRunPool.shutdown()
+        taskRunPool.awaitTermination(1, TimeUnit.SECONDS)
         coroutineExecutor.shutdown()
         coroutineExecutor.awaitTermination(1000, TimeUnit.MILLISECONDS)
     }
 
-    fun <I : Any, O : Any, T: Task<I, O>> submit(task: T, taskRunContext: TaskRunContext<I, O>): CompletableFuture<O> {
-        if (stopped) {
-            throw Exception("Can't submit a task to a stopped TaskRunner")
+    /**
+     * Check queue and if parallelism allows for more running tasks, launch task runs
+     */
+    private fun checkQueue() {
+        if (stopped.get()) return
+
+        var openSlots =
+            if (workflowConfig.parallelism is LimitedParallelism) {
+                workflowConfig.parallelism.limit - running.size
+            } else null
+        val queueIter = queue.iterator()
+        queueIter.forEach { queued ->
+            if (openSlots == 0) return@forEach
+            if (openSlots != null) openSlots--
+            queueIter.remove()
+            GlobalScope.launch (coroutineDispatcher) {
+                try {
+                    this@TaskRunner.run(queued.map { it.taskRunContext })
+                    queued.forEach {
+                        cache.updateCache(it.taskRunContext, workflowRunId)
+                        it.complete()
+                    }
+                } catch (e: Throwable) {
+                    queued.forEach { it.completeExceptionally(e) }
+                }
+            }
         }
-        val future = TaskRunFuture(task, taskRunContext)
-        queuedTasks.add(future)
-        return future
     }
 
+    /**
+     * Submit a TaskRunContext.
+     *
+     * The cache will be checked, if the cache is used the taskRunContext will skip and complete immediately.
+     * Otherwise the taskRunContext will be added to a grouping buffer for the task. If the buffer is over a
+     * configured grouping threshold, the group will be queued.
+     */
+    fun <I : Any, O : Any> submit(taskRunContext: TaskRunContext<I, O>): CompletableFuture<O> = synchronized(this) {
+        log.info { "HERE: In Submit - $taskRunContext" }
+        val taskName = taskRunContext.taskName
+        groupingBuffers.putIfAbsent(taskName, Collections.synchronizedList(mutableListOf()))
 
-    private suspend fun <I : Any, O : Any> run(taskFuture: TaskRunFuture<I, O>) {
-        val task = taskFuture.task
-        val taskRunContext = taskFuture.taskRunContext
-        val taskConfig = workflowConfig.tasks[task.name]!!
-
-        val inputJson = mapper
-            .writerWithView(CacheView::class.java)
-            .forType(task.inputClass)
-            .writeValueAsString(taskRunContext.input)
-        log.info {
-            """
-            |Running task "${task.name}" for dockerImage "${taskRunContext.dockerImage}"
-            |Input: $inputJson
-            |Command:
-            |${taskRunContext.command}
-            """.trimMargin()
+        val taskRunFuture = TaskRunFuture(taskRunContext, executor)
+        // Check the cache
+        val useCache = cache.checkCache(taskRunContext, workflowRunId)
+        if (useCache) {
+            log.info { "Valid cached execution found for the following. Skipping execution.\n$taskRunContext" }
+            taskRunFuture.complete()
+            return taskRunFuture
+        } else {
+            log.info { "Cache not used for the following. Queueing...\n$taskRunContext" }
         }
 
-        val paramsJson =
-            if (taskRunContext.taskParams != null) {
-                mapper.writerWithView(CacheView::class.java)
-                    .forType(taskRunContext.taskParamsClass)
-                    .writeValueAsString(taskRunContext.taskParams)
-            } else null
-
-        val now = DateTime.now()
-        val taskRun: TaskRun = transaction(db) {
-            TaskRun.new {
-                this.workflowRun = this@TaskRunner.workflowRun
-                this.startTime = now.millis
-                this.taskName = task.name
-                this.inputJson = inputJson
-                this.paramsJson = paramsJson
-                this.command = taskRunContext.command
-                this.image = taskRunContext.dockerImage
-            }
+        val taskGroupingConfig = if (executor.supportsGrouping()) {
+            workflowConfig.tasks.getValue(taskName).grouping
+        } else 1
+        val taskGroupingBuffer = groupingBuffers.getValue(taskName)
+        taskGroupingBuffer += taskRunFuture
+        log.debug { "Task $taskName grouping buffer size currently ${taskGroupingBuffer.size}. " +
+                "Grouping config set to $taskGroupingConfig." }
+        if (taskGroupingBuffer.size >= taskGroupingConfig) {
+            log.debug { "Task grouping buffer for $taskName full. Queueing..." }
+            val taskBufferCopy = taskGroupingBuffer.map { it }
+            queue += taskBufferCopy
+            taskGroupingBuffer.clear()
         }
+        return taskRunFuture
+    }
 
-        val taskRunId: Int = transaction(db) { taskRun.id.value }
+    /**
+     * Notify the TaskRunner that we have received all taskRunContexts for a task, and therefor we should
+     * queue any groupings that may not be full.
+     */
+    fun taskComplete(taskName: String) = synchronized(this) {
+        log.info { "HERE: IN TASK COMPLETE" }
+
+        val taskGroupingBuffer = groupingBuffers.getValue(taskName)
+        if (taskGroupingBuffer.size > 0) {
+            val taskBufferCopy = taskGroupingBuffer.map { it }
+            queue += taskBufferCopy
+            taskGroupingBuffer.clear()
+        }
+    }
+
+    /**
+     * Run a group of TaskRunContexts as a single executor job.
+     */
+    private suspend fun run(taskRunContexts: List<TaskRunContext<*, *>>) {
+        val taskName = taskRunContexts.first().taskName
+        val taskConfig = workflowConfig.tasks.getValue(taskName)
+
+        val taskRunExecutions = taskRunContexts
+            .map { TaskRunExecution(it.dockerImage, it.command) }
+
+        val taskRunExecutionsJson = mapper
+            .writer()
+            .forType(object : TypeReference<List<TaskRunExecution>>(){})
+            .writeValueAsString(taskRunExecutions)
+
+        val taskRun = runRepo.createTaskRun(taskName, taskRunExecutionsJson)
+        val taskRunId = taskRun.id.value
+
         log.info { "Task run created with id $taskRunId." }
-        val loggingPrefix = "Task Run ${task.name} - $taskRunId:"
-        val output = taskRunContext.output
+        val loggingPrefix = "Task Run $taskName - $taskRunId:"
         try {
-            log.info { "$loggingPrefix checking for input files to download..." }
-
-            // Download input files marked with "cache"
-            val allInputFiles = getInputFilesForObject(taskRunContext.input) + getInputFilesForObject(taskRunContext.taskParams)
-            for (inputFile in allInputFiles) {
-                if (!inputFile.cache) continue
-
-                val cachedInputFile = transaction(db) {
-                    CachedInputFile
-                        .find { CachedInputFiles.path eq inputFile.path }
-                        .firstOrNull()
-                }
-
-                val cachedInputPath = "$INPUTS_DIR/${inputFile.path}"
-
-                val needsDownload = cachedInputFile == null
-                        || cachedInputFile.lastModifiedTime != inputFile.lastModified
-                        || !executor.fileExists(cachedInputPath)
-                        || cachedInputFile.cachedCopyLastModifiedTime != executor.fileLastModified(cachedInputPath)
-
-                if (needsDownload) {
-                    val dlFuture = currentInputFileDownloads.getOrPut(inputFile.path) {
-                        log.info { "$loggingPrefix initiating download of input file $inputFile..." }
-                        inputDLPool.submit {
-                            executor.downloadInputFile(inputFile)
-                            // Save changes. Delete any old entries for this input file path and create a new one.
-                            transaction(db) {
-                                CachedInputFiles.deleteWhere { CachedInputFiles.path eq inputFile.path }
-                                CachedInputFile.new {
-                                    path = inputFile.path
-                                    lastModifiedTime = inputFile.lastModified
-                                    cachedCopyLastModifiedTime = executor.fileLastModified(cachedInputPath)
-                                    latestUseWorkflowRunId = workflowRunId
-                                }
-                            }
-                        }
-                    }
-                    log.info { "$loggingPrefix waiting for download of input file $inputFile to complete..." }
-                    dlFuture.get()
-                } else {
-                    log.info { "$loggingPrefix using cached copy of input file $inputFile" }
-                    transaction(db) { cachedInputFile!!.latestUseWorkflowRunId = workflowRunId }
-                }
-            }
-
-            // Check output cache to see if we can skip running this task.
-            log.info {
-                """
-                |$loggingPrefix
-                |Checking cache against
-                |task-name = ${task.name}
-                |input-json = $inputJson
-                |params-json = $paramsJson
-                |command = ${taskRunContext.command}
-                """.trimMargin()
-            }
-            val cachedOutput: CachedOutput? = transaction(db) {
-                CachedOutput.find {
-                    CachedOutputs.taskName eq task.name and
-                            (CachedOutputs.image eq taskRunContext.dockerImage) and
-                            (CachedOutputs.inputJson eq inputJson) and
-                            (CachedOutputs.paramsJson eq paramsJson) and
-                            (CachedOutputs.command eq taskRunContext.command)
-                }.firstOrNull()
-            }
-
-            var useCache = false
-            if (cachedOutput != null) {
-                useCache = true
-                val cachedOutputFilePaths = cachedOutput.outputFiles.split(",")
-                for (outputFilePath in cachedOutputFilePaths) {
-                    if (!executor.fileExists("$OUTPUTS_DIR/$outputFilePath")) {
-                        log.info { "$loggingPrefix Output file from cache $outputFilePath not found in output directory. Cache will not be used." }
-                        transaction(db) { cachedOutput.delete() }
-                        useCache = false
-                        break
-                    }
-                }
-            }
-
-            val outputFilesOut = getOutputFilesForObject(output)
-
-            if (useCache) {
-                log.info { "$loggingPrefix Valid cached outputs found. Skipping execution." }
-                transaction(db) {
-                    taskRun.cacheUsed = true
-                    cachedOutput!!.latestUseWorkflowRunId = workflowRunId
-                }
-
-            } else {
-                log.info { "$loggingPrefix Valid cached outputs not found. Executing..." }
-                val outputFilesIn = getOutputFilesForObject(taskRunContext.input)
-                val cachedInputFiles = allInputFiles.filter { it.cache }.toSet()
-                val downloadInputFiles = allInputFiles.filter { !it.cache }.toSet()
-                executor.executeTask(
-                    "$RUN_DIR/$workflowStartTime",
-                    taskRunId,
-                    taskConfig,
-                    taskRunContext,
-                    outputFilesIn,
-                    outputFilesOut,
-                    cachedInputFiles,
-                    downloadInputFiles
-                )
-            }
-
-            // Add last modified timestamps to output files in task output
-            for (outputFile in outputFilesOut) {
-                outputFile.lastModified = executor.fileLastModified("$OUTPUTS_DIR/${outputFile.path}")
-            }
-
-            if (!useCache) {
-                val outputFilePaths = outputFilesOut.joinToString(",") { it.path }
-                transaction(db) {
-                    CachedOutput.new {
-                        this.taskName = task.name
-                        this.image = taskRunContext.dockerImage
-                        this.inputJson = inputJson
-                        this.paramsJson = paramsJson
-                        this.command = taskRunContext.command
-                        this.outputFiles = outputFilePaths
-                        this.latestUseWorkflowRunId = workflowRunId
-                    }
-                }
-            }
-
-            val outputJson = mapper
-                .writerWithView(CacheView::class.java)
-                .forType(task.outputClass)
-                .writeValueAsString(taskRunContext.output)
+            executor.executeTask(
+                "$RUN_DIR/$workflowStartTime",
+                taskRunId,
+                taskConfig,
+                taskRunContexts
+            )
 
             log.info { "$loggingPrefix Task completed successfully! Saving status..." }
-            transaction(db) {
-                taskRun.outputJson = outputJson
-                taskRun.completedSuccessfully = true
-                taskRun.completedTime = DateTime.now().millis
-                log.info { "Task status save complete." }
-            }
+            runRepo.completeTaskRun(taskRun, successful = true)
+            log.info { "Task status save complete." }
         } catch (e: Exception) {
-            transaction(db) { taskRun.completedTime = DateTime.now().millis }
+            runRepo.completeTaskRun(taskRun, successful = false)
             throw e
         }
     }

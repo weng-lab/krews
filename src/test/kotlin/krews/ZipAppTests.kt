@@ -6,6 +6,7 @@ import kotlinx.coroutines.delay
 import krews.config.*
 import krews.core.*
 import krews.executor.LocallyDirectedExecutor
+import krews.util.coEveryMatchTaskRun
 import krews.util.deleteDir
 import mu.KotlinLogging
 import org.assertj.core.api.Assertions.assertThat
@@ -19,7 +20,6 @@ import java.util.concurrent.atomic.AtomicInteger
 private val log = KotlinLogging.logger {}
 
 @Disabled
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ZipAppTests {
 
     private val testDir = Paths.get("merging-app-test")!!
@@ -41,8 +41,8 @@ class ZipAppTests {
             output = input
             command = ""
         }
-        val task2input = task1a.outputPub.buffer(3)
-        val task3input = task1b.outputPub.buffer(3)
+        val task2input = task1a.buffer(3)
+        val task3input = task1b.buffer(3)
         val task2 = task<List<Int>, List<Int>>("task2", task2input, maintainOrder = true) {
             dockerImage = "task2"
             output = input
@@ -54,92 +54,85 @@ class ZipAppTests {
             command = ""
         }
 
-        outputsCaptured = Flux.zip(task2.outputPub, task3.outputPub).buffer().toMono()
+        outputsCaptured = Flux.zip(task2, task3).buffer().toMono()
     }
 
     @AfterAll
     fun afterTests() = deleteDir(testDir)
 
-    @Test fun `If one task run fails all others that aren't downstream should complete`() {
-            val (executor , runner) = runWorkflow(baseConfig)
-            val task1aBeforeErrorLatch = CountDownLatch(6)
-            val alltask1Latch = CountDownLatch(16)
-            val task1CompleteCount = AtomicInteger(0)
-            val alltask1aLatch = CountDownLatch(8)
-            coEvery {
-                executor.executeTask(any(), any(), any(), match { it.dockerImage == "task1a" }, any(), any(), any(), any())
-            } coAnswers {
-                val task1s = (this.args[3] as TaskRunContext<Int, Int>).input
-                if (task1s <= 6) {
-                    task1aBeforeErrorLatch.countDown()
-                }
-                if (task1s == 6) {
-                    // Ensure 5 task runs complete before throwing an error.
-                    while (!task1aBeforeErrorLatch.await(100, TimeUnit.MILLISECONDS)) {
-                        delay(100)
-                    }
-                    throw Exception("Test Error - task1a")
-                } else {
-                    alltask1Latch.countDown()
-                    while(!alltask1Latch.await(100, TimeUnit.MILLISECONDS)) {
-                        delay(100)
-                    }
-                    delay(1000)
-                    task1CompleteCount.incrementAndGet()
-                    alltask1aLatch.countDown()
-                }
+    @Test
+    fun `If one task run fails all others that aren't downstream should complete`() {
+        val (executor, runner) = runWorkflow(baseConfig)
+        val task1aBeforeErrorLatch = CountDownLatch(6)
+        val alltask1Latch = CountDownLatch(16)
+        val task1CompleteCount = AtomicInteger(0)
+        val alltask1aLatch = CountDownLatch(8)
+        coEveryMatchTaskRun(executor) { it.dockerImage == "task1a" } coAnswers {
+            val task1s = (this.args[3] as TaskRunContext<Int, Int>).input
+            if (task1s <= 6) {
+                task1aBeforeErrorLatch.countDown()
             }
-
-            val task1bBeforeErrorLatch = CountDownLatch(3)
-            coEvery {
-                executor.executeTask(any(), any(), any(), match { it.dockerImage == "task1b" }, any(), any(), any(), any())
-            } coAnswers {
-                val task1s = (this.args[3] as TaskRunContext<Int, Int>).input
-                if (task1s <= 3) {
-                    task1bBeforeErrorLatch.countDown()
+            if (task1s == 6) {
+                // Ensure 5 task runs complete before throwing an error.
+                while (!task1aBeforeErrorLatch.await(100, TimeUnit.MILLISECONDS)) {
+                    delay(100)
                 }
-                if (task1s == 3) {
-                    // Ensure 2 task runs complete before throwing an error.
-                    while (!task1bBeforeErrorLatch.await(100, TimeUnit.MILLISECONDS)) {
-                        delay(100)
-                    }
-                    throw Exception("Test Error - task1b")
-                } else {
-                    alltask1Latch.countDown()
-                    while(!alltask1Latch.await(100, TimeUnit.MILLISECONDS)) {
-                        delay(100)
-                    }
-                    while (!alltask1aLatch.await(100, TimeUnit.MILLISECONDS)) {
-                        delay(100)
-                    }
-                    // Must be long enough that everything can shutdown
-                    delay(2000)
-                    task1CompleteCount.incrementAndGet()
-                }
-            }
-
-            val task2Count = AtomicInteger()
-            coEvery {
-                executor.executeTask(any(), any(), any(), match { it.dockerImage == "task2" }, any(), any(), any(), any())
-            } coAnswers {
-                println("Task2 args ${this.args}")
-                val count = task2Count.incrementAndGet()
-                if (count == 2) {
-                    //throw Exception("Test Error - task2")
+                throw Exception("Test Error - task1a")
+            } else {
+                alltask1Latch.countDown()
+                while (!alltask1Latch.await(100, TimeUnit.MILLISECONDS)) {
+                    delay(100)
                 }
                 delay(1000)
+                task1CompleteCount.incrementAndGet()
+                alltask1aLatch.countDown()
             }
-
-            coEvery {
-                executor.executeTask(any(), any(), any(), match { it.dockerImage == "task3" }, any(), any(), any(), any())
-            } just Runs
-
-            runner.run()
-            // When not working properly (the WorkflowRunner shuts down prematurely):
-            // This sometimes fails with a SQLite exception
-            // Sometimes it fails because the second tasks don't run
-            assertThat(task1CompleteCount.get()).isEqualTo(16)
         }
+
+        val task1bBeforeErrorLatch = CountDownLatch(3)
+        coEveryMatchTaskRun(executor) { it.dockerImage == "task1b" } coAnswers {
+            val task1s = (this.args[3] as TaskRunContext<Int, Int>).input
+            if (task1s <= 3) {
+                task1bBeforeErrorLatch.countDown()
+            }
+            if (task1s == 3) {
+                // Ensure 2 task runs complete before throwing an error.
+                while (!task1bBeforeErrorLatch.await(100, TimeUnit.MILLISECONDS)) {
+                    delay(100)
+                }
+                throw Exception("Test Error - task1b")
+            } else {
+                alltask1Latch.countDown()
+                while (!alltask1Latch.await(100, TimeUnit.MILLISECONDS)) {
+                    delay(100)
+                }
+                while (!alltask1aLatch.await(100, TimeUnit.MILLISECONDS)) {
+                    delay(100)
+                }
+                // Must be long enough that everything can shutdown
+                delay(2000)
+                task1CompleteCount.incrementAndGet()
+            }
+        }
+
+        val task2Count = AtomicInteger()
+        coEveryMatchTaskRun(executor) { it.dockerImage == "task2" } coAnswers {
+            println("Task2 args ${this.args}")
+            val count = task2Count.incrementAndGet()
+            if (count == 2) {
+                //throw Exception("Test Error - task2")
+            }
+            delay(1000)
+        }
+
+        coEveryMatchTaskRun(executor) { it.dockerImage == "task3" } just Runs
+
+        runner.run()
+        // When not working properly (the WorkflowRunner shuts down prematurely):
+        // This sometimes fails with a SQLite exception
+        // Sometimes it fails because the second tasks don't run
+        assertThat(task1CompleteCount.get()).isEqualTo(16)
+    }
 
     private data class ExecutorAndRunner(val executor: LocallyDirectedExecutor, val runner: WorkflowRunner)
 
