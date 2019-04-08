@@ -8,8 +8,7 @@ data class GoogleWorkflowConfig(
     val projectId: String,
     val regions: List<String> = listOf(),
     val zones: List<String> = listOf(),
-    val storageBucket: String,
-    val storageBaseDir: String? = null,
+    val bucket: String,
     // Interval in seconds between checks for pipeline job completion
     val jobCompletionPollInterval: Int = 10,
     // Interval in seconds between pipeline job log uploads to GCS
@@ -17,8 +16,6 @@ data class GoogleWorkflowConfig(
 )
 
 data class GoogleTaskConfig(
-    //
-    val grouping: Int? = null,
     // A native google compute engine machine type. If this is set, it's always used regardless of other configs.
     val machineType: String? = null,
     // A class of machine. Useful for when you don't know the needed resources until runtime.

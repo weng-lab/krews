@@ -2,18 +2,8 @@ package krews.executor
 
 import krews.config.TaskConfig
 import krews.core.TaskRunContext
-import krews.file.InputFile
-import krews.file.OutputFile
+import krews.file.*
 import java.nio.file.Path
-
-const val RUN_DIR = "run"
-const val OUTPUTS_DIR = "outputs"
-const val DIAGNOSTICS_DIR = "diagnostics"
-const val INPUTS_DIR = "inputs"
-const val LOGS_DIR = "logs"
-const val DB_FILENAME = "state/metadata.db"
-const val REPORT_FILENAME = "status/report.html"
-
 
 /**
  * Interface that deals with environment specific functionality when directing a workflow locally - from the current process,
@@ -48,33 +38,17 @@ interface LocallyDirectedExecutor {
      * for downloading the given input files from remote sources, and possibly more for environment specific requirements.
      *
      * This function should returns when the task is complete.
-     *
-     * @param outputFilesIn: Output files coming from a task's current "Input Element." These will already exist in the
-     * current environment's storage.
-     * @param outputFilesOut: Output files coming from a task's current "Output Element." These need to end up in the
-     * current environment's storage.
-     * @param cachedInputFiles: Input files that exist in the current environment's storage.
-     * @param downloadInputFiles: Input files that need to be downloaded from original sources.
      */
     suspend fun executeTask(workflowRunDir: String,
                     taskRunId: Int,
                     taskConfig: TaskConfig,
-                    taskRunContext: TaskRunContext<*, *>,
-                    outputFilesIn: Set<OutputFile>,
-                    outputFilesOut: Set<OutputFile>,
-                    cachedInputFiles: Set<InputFile>,
-                    downloadInputFiles: Set<InputFile>)
+                    taskRunContexts: List<TaskRunContext<*, *>>)
 
     /**
      * Shuts down all tasks currently executing.
      * This function should NOT block if possible. This will run on SIGTERM. Fire-and-forget shutdown signalling is ok here.
      */
     fun shutdownRunningTasks()
-
-    /**
-     * Download input file from remote source and load it into /inputs directory.
-     */
-    fun downloadInputFile(inputFile: InputFile)
 
     fun listFiles(baseDir: String): Set<String>
 

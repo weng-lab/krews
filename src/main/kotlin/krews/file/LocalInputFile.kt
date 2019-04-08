@@ -12,11 +12,7 @@ import java.nio.file.StandardCopyOption
  * @param localPath: Path to locally accessible file.
  * @param path: Unique relative path used by Krews for storage and in task containers. Set to objectPath by default.
  */
-class LocalInputFile(val localPath: String, path: String = defaultPath(localPath), cache: Boolean = false) : InputFile(path, cache) {
-
-    override fun downloadLocal(toBaseDir: Path) {
-        Files.copy(Paths.get(localPath), toBaseDir.resolve(path), StandardCopyOption.REPLACE_EXISTING)
-    }
+class LocalInputFile(val localPath: String, path: String = defaultPath(localPath)) : InputFile(path) {
 
     override fun fetchLastModified(): Long {
         val localPath = Paths.get(this.localPath)
@@ -31,4 +27,4 @@ class LocalInputFile(val localPath: String, path: String = defaultPath(localPath
 
 private fun defaultPath(localPath: String) = Paths.get(localPath).fileName.toString()
 
-private val exception = IllegalStateException("LocalInputFile may only be used with local executor")
+private val exception = IllegalStateException("LocalInputFile may not be used with remote executor.")

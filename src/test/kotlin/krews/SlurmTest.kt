@@ -3,8 +3,7 @@ package krews
 import com.typesafe.config.ConfigFactory
 import io.mockk.spyk
 import krews.config.*
-import krews.core.WorkflowRunner
-import krews.executor.*
+import krews.core.*
 import krews.executor.slurm.SlurmExecutor
 import krews.util.*
 import mu.KotlinLogging
@@ -23,7 +22,6 @@ private val log = KotlinLogging.logger {}
  */
 
 @Disabled
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class SlurmExecutorTests {
 
     private val testDir = Paths.get("/data/zusers/brooksj/slurm-workflow-test")!!
@@ -81,7 +79,6 @@ class SlurmExecutorTests {
             assertThat(inputsDir.resolve("test-$i.txt")).exists()
             assertThat(base64Dir.resolve("test-$i.b64")).exists()
             assertThat(gzipDir.resolve("test-$i.b64.gz")).exists()
-            verifyInputFileCached(executor, "test-$i.txt")
 
             // Confirm that logs and an html report were generated
             val runPath = testDir.resolve("run/1/")

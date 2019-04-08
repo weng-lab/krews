@@ -33,6 +33,3 @@ val mapper by lazy {
     mapper.enable(MapperFeature.ACCEPT_CASE_INSENSITIVE_ENUMS)
     mapper
 }
-
-internal class ConfigView
-internal class CacheView

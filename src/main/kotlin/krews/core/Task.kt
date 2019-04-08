@@ -1,16 +1,10 @@
 package krews.core
 
-import krews.config.LimitedParallelism
-import krews.config.Parallelism
-import krews.config.TaskConfig
-import krews.config.UnlimitedParallelism
+import krews.config.*
 import mu.KotlinLogging
 import org.reactivestreams.Publisher
-import reactor.core.publisher.Flux
-import reactor.core.publisher.Mono
-import reactor.core.publisher.TopicProcessor
+import reactor.core.publisher.*
 import reactor.util.concurrent.Queues
-import java.util.concurrent.CompletableFuture
 
 const val DEFAULT_DOCKER_DATA_DIR = "/data"
 
@@ -20,8 +14,8 @@ class Task<I : Any, O : Any> @PublishedApi internal constructor(
     val name: String,
     val inputPub: Publisher<out I>,
     val labels: List<String> = listOf(),
-    internal val inputClass: Class<I>,
-    internal val outputClass: Class<O>,
+    private val inputClass: Class<I>,
+    private val outputClass: Class<O>,
     private val maintainOrder: Boolean,
     private val taskRunContextInit: TaskRunContextBuilder<I, O>.() -> Unit
 ) {
@@ -31,23 +25,25 @@ class Task<I : Any, O : Any> @PublishedApi internal constructor(
         val rawTaskParams = taskConfig?.params ?: mapOf()
         val inputFlux: Flux<out I> = if (inputPub is Flux) inputPub else Flux.from(inputPub)
 
-        fun processInputMono(input: I) = Mono.fromFuture(processInput(input, rawTaskParams, taskRunner))
+        fun processInputMono(input: I) = Mono.fromFuture(taskRunner.submit(createTaskRunContext(input, rawTaskParams)))
         val processed = if (maintainOrder) {
             inputFlux.flatMapSequentialDelayError({ processInputMono(it) },
                 parToMaxConcurrency(taskConfig?.parallelism), Queues.XS_BUFFER_SIZE)
         } else {
             inputFlux.flatMapDelayError({ processInputMono(it) },
                 parToMaxConcurrency(taskConfig?.parallelism), Queues.XS_BUFFER_SIZE)
-        }.onErrorContinue { t: Throwable, _ -> log.error(t) { } }
+        }
 
+        processed.doAfterTerminate { taskRunner.taskComplete(name) }
+        processed.onErrorContinue { t: Throwable, _ -> log.error(t) { } }
         processed.subscribe(outputPub as TopicProcessor)
     }
 
-    private fun processInput(input: I, rawTaskParams: Map<String, Any>, taskRunner: TaskRunner): CompletableFuture<O> {
-        val taskRunContextBuilder = TaskRunContextBuilder(input, rawTaskParams, outputClass)
+
+    private fun createTaskRunContext(input: I, rawTaskParams: Map<String, Any>): TaskRunContext<I, O> {
+        val taskRunContextBuilder = TaskRunContextBuilder(name, input, rawTaskParams, inputClass, outputClass)
         taskRunContextBuilder.taskRunContextInit()
-        val taskRunContext = taskRunContextBuilder.build()
-        return taskRunner.submit(this, taskRunContext)
+        return taskRunContextBuilder.build()
     }
 }
 

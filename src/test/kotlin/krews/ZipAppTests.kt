@@ -19,7 +19,6 @@ import java.util.concurrent.atomic.AtomicInteger
 private val log = KotlinLogging.logger {}
 
 @Disabled
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ZipAppTests {
 
     private val testDir = Paths.get("merging-app-test")!!
@@ -60,6 +59,7 @@ class ZipAppTests {
     @AfterAll
     fun afterTests() = deleteDir(testDir)
 
+    /*
     @Test fun `If one task run fails all others that aren't downstream should complete`() {
             val (executor , runner) = runWorkflow(baseConfig)
             val task1aBeforeErrorLatch = CountDownLatch(6)
@@ -140,7 +140,7 @@ class ZipAppTests {
             // Sometimes it fails because the second tasks don't run
             assertThat(task1CompleteCount.get()).isEqualTo(16)
         }
-
+*/
     private data class ExecutorAndRunner(val executor: LocallyDirectedExecutor, val runner: WorkflowRunner)
 
     private fun runWorkflow(config: String): ExecutorAndRunner {

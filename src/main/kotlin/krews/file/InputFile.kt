@@ -1,10 +1,7 @@
 package krews.file
 
-import com.fasterxml.jackson.annotation.JsonView
-import krews.misc.ConfigView
 import mu.KotlinLogging
 import retry
-import java.nio.file.Path
 
 private val log = KotlinLogging.logger {}
 
@@ -17,11 +14,12 @@ private val log = KotlinLogging.logger {}
  * @param path The relative path for this input file. It will be used as the storage path under the
  *      /run/$run-timestamp/inputs directory, as well as the local task docker container path.
  */
-abstract class InputFile(path: String,
-                         @field:JsonView(ConfigView::class) val cache: Boolean = false) : File(path) {
+abstract class InputFile(path: String) : File(path) {
 
     val lastModified: Long by lazy {
-        retry("Fetch last modified date for InputFile with path $path", 3) {
+        val msg = "Fetching last modified date for InputFile with path $path"
+        log.debug { msg }
+        retry(msg, 3) {
             fetchLastModified()
         }
     }
@@ -42,11 +40,4 @@ abstract class InputFile(path: String,
      * @param containerBaseDir: The container local directory that the input file will be downloaded to
      */
     internal abstract fun downloadFileCommand(containerBaseDir: String): String
-
-    /**
-     * Download locally on the master process.
-     *
-     * @param toBaseDir: The local directory that the input file will be downloaded to
-     */
-    internal abstract fun downloadLocal(toBaseDir: Path)
 }

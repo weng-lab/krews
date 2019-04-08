@@ -61,16 +61,3 @@ fun listLocalFiles(dir: Path): Set<String> {
         .map { it.toString() }
         .toList().toSet()
 }
-
-/**
- * Downloads the given input file to the local file system
- */
-fun downloadInputFileLocalFS(inputFile: InputFile, inputsPath: Path) {
-    if (inputFile is LocalInputFile) {
-        val toPath = inputsPath.resolve(inputFile.path)
-        Files.createDirectories(toPath.parent)
-        Files.copy(Paths.get(inputFile.localPath), toPath, StandardCopyOption.REPLACE_EXISTING)
-        return
-    }
-    inputFile.downloadLocal(inputsPath)
-}

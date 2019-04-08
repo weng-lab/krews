@@ -1,6 +1,7 @@
 package krews.util
 
 import io.mockk.*
+import krews.core.TaskRunContext
 import krews.executor.LocallyDirectedExecutor
 import mu.KotlinLogging
 import java.nio.file.*
@@ -29,18 +30,6 @@ fun createFile(file: Path, content: String) {
 }
 
 /**
- * Checks if the executor downloaded an input file into the /input cache directory.
- *
- * @param times: the number of times it was called. Setting to 0 will verify it was not executed.
- */
-fun verifyInputFileCached(executorSpy: LocallyDirectedExecutor, path: String, times: Int = 1) {
-    log.debug { "Verifying task downloaded input cache file with path $path exactly $times times" }
-    verify(exactly = times) {
-        executorSpy.downloadInputFile(match { it.path == path })
-    }
-}
-
-/**
  * Checks if an executor (spy) was called to execute with a given output file (as a path)
  *
  * @param times: the number of times it was called. Setting to 0 will verify it was not executed.
@@ -48,9 +37,30 @@ fun verifyInputFileCached(executorSpy: LocallyDirectedExecutor, path: String, ti
 fun verifyExecuteWithOutput(executorSpy: LocallyDirectedExecutor, path: String, times: Int = 1) {
     log.debug { "Verifying task execute for output file with path $path exactly $times times" }
     coVerify(exactly = times) {
-        executorSpy.executeTask(any(), any(), any(), any(), any(),
-            match { if (it.isEmpty()) false else it.iterator().next().path == path },
-            any(), any())
+        val executeTRMatch = match<List<TaskRunContext<*, *>>> {
+            for (tr in it) {
+                for (outputFile in tr.outputFilesOut) {
+                    if (outputFile.path == path) {
+                        return@match true
+                    }
+                }
+            }
+            return@match false
+        }
+        executorSpy.executeTask(any(), any(), any(), executeTRMatch)
     }
 }
 
+fun coEveryMatchTaskRun(executorSpy: LocallyDirectedExecutor, matchFn: (taskRunContext: TaskRunContext<*, *>) -> Boolean): MockKStubScope<Unit, Unit> {
+    return coEvery {
+        val dockerMatch = match<List<TaskRunContext<*, *>>> {
+            for (tr in it) {
+                if (matchFn(tr)) {
+                    return@match true
+                }
+            }
+            return@match false
+        }
+        executorSpy.executeTask(any(), any(), any(), dockerMatch)
+    }
+}

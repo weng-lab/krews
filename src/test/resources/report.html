@@ -1,0 +1,144 @@
+<html>
+  <head>
+    <title>Workflow local-files-workflow Run Report</title>
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/1.10.19/css/dataTables.bootstrap4.min.css" rel="stylesheet">
+      <link href="https://cdn.datatables.net/responsive/2.2.3/css/responsive.bootstrap4.min.css" rel="stylesheet">
+  </head>
+  <body>
+    <div class="container-fluid">
+      <h1 class="display-4">Krews Report for local-files-workflow<br><small class="text-muted">Run 1</small></h1>
+      <div class="alert alert-success">
+        <h4>Run completed successfully!</h4>
+        <p>You can find your output files under /run/1/outputs</p>
+      </div>
+      <table class="table table-striped table-bordered dt-responsive nowrap" style="width: 100%;" id="tasks">
+        <thead>
+          <tr>
+            <th class="all">Task Name</th>
+            <th class="all">Task Run ID</th>
+            <th class="none">Execution Details</th>
+            <th class="all">Status</th>
+            <th class="all">Start Time</th>
+            <th class="all">Duration</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>base64</td>
+            <td>1</td>
+            <td>
+                <table class="table table-striped table-bordered mt-2">
+                    <thead>
+                        <tr>
+                            <th>Docker Image</th>
+                            <th>Command</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>testimage:1.0.1</td>
+                            <td class="command-cell">
+                                <pre>
+echo task-param-1
+mkdir -p /data/base64
+base64 /data/test-3.txt &gt; /data/base64/test-3.b64 base64 /data/test-3.txt &gt; /data/base64/test-3.b64
+                                </pre>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>testimage:1.0.1</td>
+                            <td>
+                                <pre>
+echo task-param-1
+mkdir -p /data/base64
+base64 /data/test-3.txt &gt; /data/base64/test-3.b64
+                                </pre>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </td>
+            <td><span class="badge badge-success">Succeeded</span></td>
+            <td>2019-04-03 12:07:38</td>
+            <td>5.346s</td>
+          </tr>
+          <tr>
+            <td>base64</td>
+            <td>2</td>
+            <td class="command-cell">
+              <pre>echo task-param-1
+mkdir -p /data/base64
+base64 /data/test-1.txt &gt; /data/base64/test-1.b64</pre>
+            </td>
+            <td><span class="badge badge-success">Succeeded</span></td>
+            <td>2019-04-03 12:07:38</td>
+            <td>3.602s</td>
+          </tr>
+          <tr>
+            <td>base64</td>
+            <td>3</td>
+            <td class="command-cell">
+              <pre>echo task-param-1
+mkdir -p /data/base64
+base64 /data/test-2.txt &gt; /data/base64/test-2.b64</pre>
+            </td>
+            <td><span class="badge badge-success">Succeeded</span></td>
+            <td>2019-04-03 12:07:38</td>
+            <td>3.599s</td>
+          </tr>
+          <tr>
+            <td>gzip</td>
+            <td>4</td>
+            <td class="command-cell">
+              <pre>echo running gzip on base64/test-2.b64
+mkdir -p /data/gzip
+gzip -c /data/base64/test-2.b64 &gt; /data/gzip/test-2.b64.gz</pre>
+            </td>
+            <td><span class="badge badge-success">Succeeded</span></td>
+            <td>2019-04-03 12:07:42</td>
+            <td>3.301s</td>
+          </tr>
+          <tr>
+            <td>gzip</td>
+            <td>5</td>
+            <td class="command-cell">
+              <pre>echo running gzip on base64/test-1.b64
+mkdir -p /data/gzip
+gzip -c /data/base64/test-1.b64 &gt; /data/gzip/test-1.b64.gz</pre>
+            </td>
+            <td><span class="badge badge-success">Succeeded</span></td>
+            <td>2019-04-03 12:07:42</td>
+            <td>2.526s</td>
+          </tr>
+          <tr>
+            <td>gzip</td>
+            <td>6</td>
+            <td class="command-cell">
+              <pre>echo running gzip on base64/test-3.b64
+mkdir -p /data/gzip
+gzip -c /data/base64/test-3.b64 &gt; /data/gzip/test-3.b64.gz</pre>
+            </td>
+            <td><span class="badge badge-success">Succeeded</span></td>
+            <td>2019-04-03 12:07:43</td>
+            <td>2.41s</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js"></script>
+    <script src="https://cdn.datatables.net/1.10.19/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.10.19/js/dataTables.bootstrap4.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.2.3/js/dataTables.responsive.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.2.3/js/responsive.bootstrap4.min.js"></script>
+    <script>$(document).ready(function() {
+    $('#tasks').DataTable();
+} );</script>
+    <style>.command-cell {
+    overflow: auto;
+    max-width: 800px;
+}</style>
+  </body>
+</html>

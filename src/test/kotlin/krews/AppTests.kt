@@ -5,7 +5,6 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.*
 import java.nio.file.*
 
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class AppTests {
 
     private val testDir = Paths.get("app-test").toAbsolutePath()!!

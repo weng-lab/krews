@@ -8,12 +8,16 @@ data class TaskConfig (
     // Task level Slurm executor configuration
     val slurm: SlurmTaskConfig? = null,
     // The maximum allowed parallelism for this task
-    val parallelism: Parallelism = UnlimitedParallelism
+    val parallelism: Parallelism = UnlimitedParallelism,
+    // The number of tasks "executions" that will be run with the same job / vm.
+    val grouping: Int = 1
 )
 
 data class WorkflowConfig (
     // Workflow level input parameters
     val params: Map<String, Any> = mapOf(),
+    // Working Directory
+    val workingDir: String,
     // Local executor configuration
     val local: LocalWorkflowConfig = LocalWorkflowConfig(),
     // Google executor configuration

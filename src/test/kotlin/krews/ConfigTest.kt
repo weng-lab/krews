@@ -5,7 +5,6 @@ import com.typesafe.config.ConfigFactory
 import krews.config.*
 import krews.core.*
 import krews.file.*
-import krews.misc.*
 import org.assertj.core.api.Assertions.*
 import org.junit.jupiter.api.*
 import reactor.core.publisher.toMono
@@ -184,7 +183,7 @@ class ConfigTests {
         val workflowConfig = createWorkflowConfig(config, workflow)
         assertThat(workflowConfig.google).isEqualTo(GoogleWorkflowConfig(
             projectId = "test-project",
-            storageBucket = "test-bucket"
+            bucket = "test-bucket"
         ))
         assertThat(workflowConfig.local).isNull()
         assertThat(workflowConfig.tasks["sample"]).isEqualTo(TaskConfig(
@@ -221,6 +220,7 @@ class ConfigTests {
         ))
     }
 
+    /*
     @Test fun `Json writer with CacheView should not write InputFile cache`() {
         val json = mapper
             .writerWithView(CacheView::class.java)
@@ -228,5 +228,5 @@ class ConfigTests {
             .writeValueAsString(LocalInputFile("local/path", "path", true))
         assertThat(json).isEqualTo("""{"-type":"krews.file.LocalInputFile","local-path":"local/path","path":"path","last-modified":-1}""")
     }
-
+    */
 }
