@@ -922,8 +922,8 @@ related to the file and task runs that created it:</p>
 <p>For each task run, if these fields match was we have saved and the file still exists in the outputs directory 
 with the same last modified time, we skip the running the task.</p>
 <h2 id="state-file">State File<a class="headerlink" href="#state-file" title="Permanent link">&para;</a></h2>
-<p>Krews keeps it&rsquo;s cache and some other metadata in a SQLite file database. This file is periodically copied into your
-working directory under state/metadata.db. It should NOT be deleted if you want to make full use of caching.</p>
+<p>Krews keeps it&rsquo;s cache in a SQLite file database. This file is periodically copied into your 
+working directory under state/cache.db. It should NOT be deleted if you want to make full use of caching.</p>
 <h2 id="reports">Reports<a class="headerlink" href="#reports" title="Permanent link">&para;</a></h2>
 <p>As tasks are run, you can go into your working directory and find your status/report.html file. It will contain 
 information on every task that was run, including whether it completed successfully, in error, or is still in 
