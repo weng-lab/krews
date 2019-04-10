@@ -132,7 +132,8 @@ class ConcurrencyTest {
         assertThat(outputsCaptured.block()?.toSet()).isEqualTo((1..15).toSet())
     }
 
-    @Test fun `Tasks should be run depth-first`() {
+    @Test
+    fun `Tasks should be run depth-first`() {
         val (executor, runner) = runWorkflow(baseConfig)
         val task1Count = AtomicInteger()
         val task2Latch = CountDownLatch(1)
