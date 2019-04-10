@@ -3,7 +3,7 @@
 </h1>
 
 Krews, short for "Kotlin Reactive Workflows" is a framework for creating scalable and reproducible 
-scientific data pipelines using [Docker Containers](https://www.docker.com/) piped together with  
+scientific data pipelines using [Docker Containers](https://www.docker.com/) piped together with 
 [Project Reactor](https://projectreactor.io/), a mature functional reactive programming library. 
 
 Workflows are written using a [Kotlin](https://kotlinlang.org/) DSL in plain old Kotlin projects, 
