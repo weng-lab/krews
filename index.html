@@ -538,6 +538,18 @@
 
 
   <li class="md-nav__item">
+    <a href="workflows/#grouping" title="Grouping" class="md-nav__link">
+      Grouping
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
     <a href="workflows/#code-organization" title="Code Organization" class="md-nav__link">
       Code Organization
     </a>
@@ -802,14 +814,16 @@
 <p>Krews, short for &ldquo;Kotlin Reactive Workflows&rdquo; is a framework for creating scalable and reproducible 
 scientific data pipelines using <a href="https://www.docker.com/">Docker Containers</a> piped together with<br />
 <a href="https://projectreactor.io/">Project Reactor</a>, a mature functional reactive programming library. </p>
-<p>Workflows are written using a <a href="https://kotlinlang.org/">Kotlin</a> DSL in plain old Kotlin JVM projects, 
+<p>Workflows are written using a <a href="https://kotlinlang.org/">Kotlin</a> DSL in plain old Kotlin projects, 
 meaning you get all the benefits of a modern, type-safe, functional language with fantastic tooling.</p>
 <h1 id="quick-example">Quick Example<a class="headerlink" href="#quick-example" title="Permanent link">&para;</a></h1>
 <div class="codehilite"><pre><span></span><span class="k">fun</span> <span class="nf">main</span><span class="p">(</span><span class="n">args</span><span class="p">:</span> <span class="n">Array</span><span class="p">&lt;</span><span class="n">String</span><span class="p">&gt;)</span> <span class="p">=</span> <span class="n">run</span><span class="p">(</span><span class="n">sampleWorkflow</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
 
 <span class="k">val</span> <span class="py">sampleWorkflow</span> <span class="p">=</span> <span class="n">workflow</span><span class="p">(</span><span class="s">&quot;sample-workflow&quot;</span><span class="p">)</span> <span class="p">{</span>
+
     <span class="c1">// Reactive &quot;Flux&quot; list object for the numbers 1 to 5</span>
     <span class="k">val</span> <span class="py">range</span> <span class="p">=</span> <span class="p">(</span><span class="m">1.</span><span class="p">.</span><span class="m">5</span><span class="p">).</span><span class="n">toFlux</span><span class="p">()</span>
+
     <span class="n">task</span><span class="p">&lt;</span><span class="n">Int</span><span class="p">,</span> <span class="n">File</span><span class="p">&gt;(</span><span class="s">&quot;base64&quot;</span><span class="p">,</span> <span class="n">range</span><span class="p">)</span> <span class="p">{</span>
         <span class="n">dockerImage</span> <span class="p">=</span> <span class="s">&quot;alpine:3.9&quot;</span>
         <span class="n">output</span> <span class="p">=</span> <span class="n">OutputFile</span><span class="p">(</span><span class="s">&quot;base64/$input.b64&quot;</span><span class="p">)</span>
@@ -823,9 +837,7 @@ meaning you get all the benefits of a modern, type-safe, functional language wit
 </pre></div>
 
 <p><em>Configuration</em>
-<div class="codehilite"><pre><span></span>local {
-    working-dir=/data
-}
+<div class="codehilite"><pre><span></span>working-dir = /data/sample-workflow
 </pre></div></p>
 <p><em>Run command</em>
 <div class="codehilite"><pre><span></span>java -jar my-app.jar --on local --config path/to/my-config.conf

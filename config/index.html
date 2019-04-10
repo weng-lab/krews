@@ -538,6 +538,18 @@
 
 
   <li class="md-nav__item">
+    <a href="../workflows/#grouping" title="Grouping" class="md-nav__link">
+      Grouping
+    </a>
+  </li>
+
+        
+          
+          
+          
+
+
+  <li class="md-nav__item">
     <a href="../workflows/#code-organization" title="Code Organization" class="md-nav__link">
       Code Organization
     </a>
@@ -1358,11 +1370,18 @@ one in <code>task.my-task-name</code>, and one in <code>task.my-task-label</code
 <td>no</td>
 <td>unlimited</td>
 </tr>
+<tr>
+<td>grouping</td>
+<td>The number of task runs that are submitted per job for this task. Not applicable to Local Docker Execution.</td>
+<td>no</td>
+<td>1</td>
+</tr>
 </tbody>
 </table>
 <p><strong>Example</strong></p>
 <div class="codehilite"><pre><span></span>task.my-task-name {
     parallelism = 10
+    grouping = 5
 }
 </pre></div>
 
