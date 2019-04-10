@@ -1,6 +1,7 @@
 package krews.core
 
 import krews.config.*
+import krews.file.getOutputFilesForObject
 import mu.KotlinLogging
 import org.reactivestreams.Publisher
 import reactor.core.publisher.*
@@ -39,8 +40,6 @@ class Task<I : Any, O : Any> @PublishedApi internal constructor(
         val processed = rawProcessed
             .onErrorContinue { t: Throwable, _ -> log.error(t) { } }
 
-        processed.doAfterTerminate { taskRunner.taskComplete(name) }
-        processed.onErrorContinue { t: Throwable, _ -> log.error(t) { } }
         processed.subscribe(outputPub as TopicProcessor)
     }
 

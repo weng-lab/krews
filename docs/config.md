@@ -156,12 +156,14 @@ one in `task.my-task-name`, and one in `task.my-task-label` they could all be pa
 name | description | required | default
 --- | --- | --- | ---
 parallelism | The maximum number of *this* task that can run concurrently. Set to an integer or "unlimited." | no | unlimited
+grouping | The number of task runs that are submitted per job for this task. Not applicable to Local Docker Execution. | no | 1
 
 **Example**
 
 ```hocon
 task.my-task-name {
     parallelism = 10
+    grouping = 5
 }
 ```
 

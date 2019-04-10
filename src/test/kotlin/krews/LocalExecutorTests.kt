@@ -41,6 +41,8 @@ class LocalExecutorTests {
                     path = unused-2.txt
                 }
             ]
+        }
+        task.default {
             grouping = 2
         }
         """.trimIndent()
@@ -55,7 +57,7 @@ class LocalExecutorTests {
         createFile(unusedFilesDir.resolve("unused-2.txt"), "I am an unused task input file")
     }
 
-    //@AfterAll
+    @AfterAll
     fun afterTests() = deleteDir(testDir)
 
     @Test @Order(1)

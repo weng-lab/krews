@@ -99,7 +99,6 @@ class TaskRunner(workflowRun: WorkflowRun,
      * configured grouping threshold, the group will be queued.
      */
     fun <I : Any, O : Any> submit(taskRunContext: TaskRunContext<I, O>): CompletableFuture<O> = synchronized(this) {
-        log.info { "HERE: In Submit - $taskRunContext" }
         val taskName = taskRunContext.taskName
         groupingBuffers.putIfAbsent(taskName, Collections.synchronizedList(mutableListOf()))
 
@@ -135,8 +134,6 @@ class TaskRunner(workflowRun: WorkflowRun,
      * queue any groupings that may not be full.
      */
     fun taskComplete(taskName: String) = synchronized(this) {
-        log.info { "HERE: IN TASK COMPLETE" }
-
         val taskGroupingBuffer = groupingBuffers.getValue(taskName)
         if (taskGroupingBuffer.size > 0) {
             val taskBufferCopy = taskGroupingBuffer.map { it }
