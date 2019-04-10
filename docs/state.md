@@ -21,8 +21,8 @@ with the same last modified time, we skip the running the task.
 
 ## State File
 
-Krews keeps it's cache and some other metadata in a SQLite file database. This file is periodically copied into your
-working directory under state/metadata.db. It should NOT be deleted if you want to make full use of caching.
+Krews keeps it's cache in a SQLite file database. This file is periodically copied into your 
+working directory under state/cache.db. It should NOT be deleted if you want to make full use of caching.
 
 ## Reports
 
