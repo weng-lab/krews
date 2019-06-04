@@ -12,8 +12,8 @@ class TaskRunContextBuilder<I : Any, O : Any> internal constructor(
     val outputClass: Class<O>
 ) {
     var dockerImage: String? = null
-    var outputsDir: String = DEFAULT_DOCKER_DATA_DIR
-    var dockerDataFilesDir: String = "${DEFAULT_DOCKER_DATA_DIR}_files"
+    var inputsDir: String = DEFAULT_DOCKER_INPUTS_DIR
+    var outputsDir: String = DEFAULT_DOCKER_OUTPUTS_DIR
     var command: String? = null
     var output: O? = null
     var env: Map<String, String>? = null
@@ -36,11 +36,11 @@ class TaskRunContextBuilder<I : Any, O : Any> internal constructor(
 
     val File.dockerPath: String get() {
         return when {
-            this is InputFile -> "$dockerDataFilesDir/${this.path}"
+            this is InputFile -> "$inputsDir/${this.path}"
             this is OutputFile -> if (this.createdTaskName == taskName) {
                 "$outputsDir/${this.path}"
             } else {
-                "$dockerDataFilesDir/${this.path}"
+                "$inputsDir/${this.path}"
             }
             else -> throw Exception("Unknown file type!")
         }
@@ -63,15 +63,15 @@ class TaskRunContextBuilder<I : Any, O : Any> internal constructor(
         val outputFilesOut = getOutputFilesForObject(output) + outputFiles
         val inputFiles = getInputFilesForObject(input) + getInputFilesForObject(taskParams) + inputFiles
 
-        if (dockerDataFilesDir == outputsDir) {
-            throw Exception("The dockerDataFilesDir and outputsDir cannot be the same due to container limitations.")
+        if (inputsDir == outputsDir) {
+            throw Exception("The inputsDir and outputsDir cannot be the same due to container limitations.")
         }
 
         return TaskRunContext(
             taskName = taskName,
             dockerImage = checkNotNull(dockerImage),
+            inputsDir = inputsDir,
             outputsDir = outputsDir,
-            dockerDataFilesDir = dockerDataFilesDir,
             input = input,
             inputClass = inputClass,
             output = checkNotNull(output),
@@ -94,8 +94,8 @@ class TaskRunContextBuilder<I : Any, O : Any> internal constructor(
 data class TaskRunContext<I: Any, O: Any>(
     val taskName: String,
     val dockerImage: String,
+    val inputsDir: String,
     val outputsDir: String,
-    val dockerDataFilesDir: String,
     val input: I,
     val inputClass: Class<I>,
     val output: O,

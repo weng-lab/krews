@@ -1,7 +1,5 @@
 package krews.file
 
-import krews.core.TaskRunContext
-
 /**
  * Krews' representation of a File that results from running a task.
  *

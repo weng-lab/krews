@@ -7,7 +7,8 @@ import org.reactivestreams.Publisher
 import reactor.core.publisher.*
 import reactor.util.concurrent.Queues
 
-const val DEFAULT_DOCKER_DATA_DIR = "/data"
+const val DEFAULT_DOCKER_INPUTS_DIR = "/inputs"
+const val DEFAULT_DOCKER_OUTPUTS_DIR = "/outputs"
 
 private val log = KotlinLogging.logger {}
 

@@ -103,7 +103,7 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
 
         // Create a unique set of inputFiles to dockerDataDir combinations
         val inputFiles = taskRunContexts
-            .flatMap { c -> c.inputFiles.map { f -> Pair(f, c.dockerDataFilesDir) } }
+            .flatMap { c -> c.inputFiles.map { f -> Pair(f, c.inputsDir) } }
             .toSet()
 
         // Create actions to download InputFiles from remote sources
@@ -113,7 +113,7 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
 
         // Create a unique set of outputFilesIn to dockerDataDir combinations
         val outputFilesIn = taskRunContexts
-            .flatMap { c -> c.outputFilesIn.map { f -> Pair(f, c.dockerDataFilesDir) } }
+            .flatMap { c -> c.outputFilesIn.map { f -> Pair(f, c.inputsDir) } }
             .toSet()
 
         // Create actions to download each task input OutputFile from the current GCS run directory
@@ -128,8 +128,8 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
             actions.add(
                 createExecuteTaskAction(
                     taskRunContext.dockerImage,
+                    taskRunContext.inputsDir,
                     taskRunContext.outputsDir,
-                    taskRunContext.dockerDataFilesDir,
                     taskRunContext.command,
                     taskRunContext.env
                 )
@@ -150,8 +150,8 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
             val diagnosticsAction = createDiagnosticUploadAction(diagnosticsGSPath, dockerDataDir)
             actions.add(diagnosticsAction)
         }
-        for (dockerDataDir in taskRunContexts.map { it.dockerDataFilesDir }.toSet()) {
-            val diagnosticsGSPath = gcsPath(bucket, gcsBase, workflowRunDir, "$DIAGNOSTICS_DIR/files",
+        for (dockerDataDir in taskRunContexts.map { it.inputsDir }.toSet()) {
+            val diagnosticsGSPath = gcsPath(bucket, gcsBase, workflowRunDir, "$DIAGNOSTICS_DIR/inputs",
                 taskRunId.toString(), dockerDataDir)
             val diagnosticsAction = createDiagnosticUploadAction(diagnosticsGSPath, dockerDataDir)
             actions.add(diagnosticsAction)
@@ -222,14 +222,14 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
  */
 internal fun createExecuteTaskAction(
     dockerImage: String,
+    inputsDir: String,
     outputsDir: String,
-    dockerDataFileDir: String,
     command: String?,
     env: Map<String, String>?
 ): Action {
     val action = Action()
     action.imageUri = dockerImage
-    action.mounts = listOf(createMount(outputsDir), createMount(dockerDataFileDir))
+    action.mounts = listOf(createMount(outputsDir), createMount(inputsDir))
     val tmpDir = "$outputsDir/tmp"
     val actionEnv = mutableMapOf("TMPDIR" to tmpDir)
     if (env != null) actionEnv.putAll(env)

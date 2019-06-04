@@ -153,7 +153,7 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
                     val runScriptContents = "set -e\n${taskRunContext.command}"
                     val runScriptAsBase64 = Base64.getEncoder().encodeToString(runScriptContents.toByteArray())
                     sbatchScript.append("echo $runScriptAsBase64 | base64 --decode > $mountTmpDir/$singUUID-script.sh\n")
-                    Pair("/bin/sh ${taskRunContext.dockerDataFilesDir}/$RUN_SCRIPT_NAME", "$mountTmpDir/$singUUID-script.sh:${taskRunContext.dockerDataFilesDir}/$RUN_SCRIPT_NAME:ro")
+                    Pair("/bin/sh ${taskRunContext.inputsDir}/$RUN_SCRIPT_NAME", "$mountTmpDir/$singUUID-script.sh:${taskRunContext.inputsDir}/$RUN_SCRIPT_NAME:ro")
                 } else {
                     Pair("", null)
                 }
@@ -164,9 +164,9 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
             val inputFiles = taskRunContext.inputFiles
             val outputFilesIn = taskRunContext.outputFilesIn
             val outputsBind = "$mountOuputsDir:${taskRunContext.outputsDir}"
-            val localInputsBind = inputFiles.filterIsInstance<LocalInputFile>().joinToString(",") { "${it.localPath}:${taskRunContext.dockerDataFilesDir}/${it.path}:ro" }
-            val remoteInputsBind = inputFiles.filter { it !is LocalInputFile }.joinToString(",") { "$mountDownloadedDir/${it.path}:${taskRunContext.dockerDataFilesDir}/${it.path}:ro" }
-            val outputFilesInBinds = outputFilesIn.joinToString(",") { "${outputsPath.resolve(it.path)}:${taskRunContext.dockerDataFilesDir}/${it.path}:ro" }
+            val localInputsBind = inputFiles.filterIsInstance<LocalInputFile>().joinToString(",") { "${it.localPath}:${taskRunContext.inputsDir}/${it.path}:ro" }
+            val remoteInputsBind = inputFiles.filter { it !is LocalInputFile }.joinToString(",") { "$mountDownloadedDir/${it.path}:${taskRunContext.inputsDir}/${it.path}:ro" }
+            val outputFilesInBinds = outputFilesIn.joinToString(",") { "${outputsPath.resolve(it.path)}:${taskRunContext.inputsDir}/${it.path}:ro" }
             val binds = listOfNotNull(outputsBind, localInputsBind, remoteInputsBind, outputFilesInBinds, scriptBind).joinToString(",")
             sbatchScript.append("export SINGULARITY_BIND=\"$binds\"\n")
 

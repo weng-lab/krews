@@ -178,26 +178,26 @@ fun createContainer(dockerClient: DockerClient, taskRunContext: TaskRunContext<*
         taskRunContext.inputFiles
             .filterIsInstance<LocalInputFile>()
             .map {
-                val volume = Volume(taskRunContext.dockerDataFilesDir + "/${it.path}" )
+                val volume = Volume(taskRunContext.inputsDir + "/${it.path}" )
                 val bind = Bind(it.localPath, volume, AccessMode.ro)
                 bind
             },
         taskRunContext.inputFiles
             .filter { it !is LocalInputFile }
             .map {
-                val volume = Volume(taskRunContext.dockerDataFilesDir + "/${it.path}" )
+                val volume = Volume(taskRunContext.inputsDir + "/${it.path}" )
                 val bind = Bind(downloadedDir.resolve(it.path).toString(), volume, AccessMode.ro)
                 bind
             },
         taskRunContext.outputFilesIn
             .map {
-                val volume = Volume(taskRunContext.dockerDataFilesDir + "/${it.path}" )
+                val volume = Volume(taskRunContext.inputsDir + "/${it.path}" )
                 val bind = Bind(allOutputsDir.resolve(it.path).toString(), volume, AccessMode.ro)
                 bind
             }
     ).flatten().toMutableList()
     val mountVolume = Volume(taskRunContext.outputsDir)
-    val filesVolume = Volume(taskRunContext.dockerDataFilesDir)
+    val filesVolume = Volume(taskRunContext.inputsDir)
     val mountBind = Bind(outputsDir.toString(), mountVolume)
     binds.add(mountBind)
     val containerCreationCmd = dockerClient.createContainerCmd(taskRunContext.dockerImage)

@@ -106,7 +106,7 @@ class WorkflowRunner(
                 .subscribeOn(Schedulers.elastic())
 
             // and block until it's done
-            leavesFlux.doOnEach { "flux: $it" }.blockLast()
+            leavesFlux.blockLast()
 
             val failedTasks = runRepo.failedTasksCount()
             return failedTasks == 0
