@@ -23,8 +23,7 @@ class TaskRunContextBuilder<I : Any, O : Any> internal constructor(
     var time: Duration? = null
     @PublishedApi internal var taskParams: Any? = null
     @PublishedApi internal var taskParamsClass: Class<*>? = null
-    val inputFiles = mutableSetOf<InputFile>()
-    val outputFiles = mutableSetOf<OutputFile>()
+    private val outputFilesIn: Set<OutputFile> = getOutputFilesForObject(input)
 
     inline fun <reified P : Any> taskParams(): P {
         if (taskParams == null || taskParams !is P) {
@@ -37,31 +36,18 @@ class TaskRunContextBuilder<I : Any, O : Any> internal constructor(
     val File.dockerPath: String get() {
         return when {
             this is InputFile -> "$inputsDir/${this.path}"
-            this is OutputFile -> if (this.createdTaskName == taskName) {
-                "$outputsDir/${this.path}"
-            } else {
+            this is OutputFile -> if (outputFilesIn.contains(this)) {
                 "$inputsDir/${this.path}"
+            } else {
+                "$outputsDir/${this.path}"
             }
             else -> throw Exception("Unknown file type!")
         }
     }
 
-    fun outputFile(path: String): OutputFile {
-        val file = OutputFile(path, taskName)
-        outputFiles.add(file)
-        return file
-    }
-
-    fun localInputFile(localPath: String, path: String = localPath): InputFile {
-        val file = LocalInputFile(localPath, path)
-        inputFiles.add(file)
-        return file
-    }
-
     internal fun build(): TaskRunContext<I, O> {
-        val outputFilesIn = getOutputFilesForObject(input)
-        val outputFilesOut = getOutputFilesForObject(output) + outputFiles
-        val inputFiles = getInputFilesForObject(input) + getInputFilesForObject(taskParams) + inputFiles
+        val inputFiles = getInputFilesForObject(input) + getInputFilesForObject(taskParams)
+        val outputFilesOut = getOutputFilesForObject(output)
 
         if (inputsDir == outputsDir) {
             throw Exception("The inputsDir and outputsDir cannot be the same due to container limitations.")

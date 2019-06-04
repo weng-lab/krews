@@ -28,22 +28,22 @@ fun localFilesWorkflow() = workflow("local-files-workflow") {
         val taskParams = taskParams<Bast64TaskParams>()
         val file = input.file
         dockerImage = "alpine:3.8"
-        output = outputFile("base64/${file.filenameNoExt()}.b64")
+        output = OutputFile("base64/${file.filenameNoExt()}.b64")
         command =
             """
             echo ${taskParams.someVal}
-            mkdir -p /data/base64
+            mkdir -p $(dirname ${output!!.dockerPath})
             base64 ${file.dockerPath} > ${output!!.dockerPath}
             """
     }
 
     task<File, File>("gzip", base64) {
         dockerImage = "alpine:3.8"
-        output = outputFile("gzip/${input.filename()}.gz")
+        output = OutputFile("gzip/${input.filename()}.gz")
         command =
             """
             echo running gzip on ${input.path}
-            mkdir -p /data/gzip
+            mkdir -p $(dirname ${output!!.dockerPath})
             gzip -c ${input.dockerPath} > ${output!!.dockerPath}
             """
     }
@@ -63,21 +63,21 @@ fun gsFilesWorkflow() = workflow("gs-files-workflow") {
 
     val base64 = task<File, File>("base64", inputFiles) {
         dockerImage = "alpine:3.8"
-        output = outputFile("base64/${input.filenameNoExt()}.b64")
+        output = OutputFile("base64/${input.filenameNoExt()}.b64")
         command =
             """
-            mkdir -p /data/base64
-            base64 /data/${input.path} > /data/base64/${input.filenameNoExt()}.b64
+            mkdir -p $(dirname ${output!!.dockerPath})
+            base64 ${input.dockerPath} > ${output!!.dockerPath}
             """
     }
 
     task<File, File>("gzip", base64) {
         dockerImage = "alpine:3.8"
-        output = outputFile("gzip/${input.filename()}.gz")
+        output = OutputFile("gzip/${input.filename()}.gz")
         command =
             """
-            mkdir -p /data/gzip
-            gzip /data/${input.path} > /data/gzip/${input.filename()}.gz
+            mkdir -p $(dirname ${output!!.dockerPath})
+            gzip ${input.dockerPath} > ${output!!.dockerPath}
             """
     }
 }
