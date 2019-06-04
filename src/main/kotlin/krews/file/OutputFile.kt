@@ -1,5 +1,7 @@
 package krews.file
 
+import krews.core.TaskRunContext
+
 /**
  * Krews' representation of a File that results from running a task.
  *
@@ -15,7 +17,7 @@ package krews.file
  * For example, an input type of `data class MyData(val myMap: Map<String, WFile>)` would copy all WFiles in
  * MyData.myMap values.
  */
-class OutputFile(path: String) : File(path) {
+class OutputFile(path: String, val createdTaskName: String) : File(path) {
     var lastModified: Long = -1
         internal set
 

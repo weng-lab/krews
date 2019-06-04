@@ -8,7 +8,6 @@ import java.nio.file.*
 class AppTests {
 
     private val testDir = Paths.get("app-test").toAbsolutePath()!!
-    private val inputsDir = testDir.resolve("inputs")
     private val outputsDir = testDir.resolve("outputs")
     private val base64Path = outputsDir.resolve("base64")
     private val gzipPath = outputsDir.resolve("gzip")
@@ -16,9 +15,10 @@ class AppTests {
     private val configFile = testDir.resolve("app-test.conf")!!
     private val config =
         """
-        local-files-base-dir = $testDir
+        working-dir = "$testDir"
+
         params {
-            sample-files-dir = $sampleFilesDir
+            sample-files-dir = "$sampleFilesDir"
         }
         task.base64.params = {
             some-val = test
@@ -41,10 +41,10 @@ class AppTests {
     fun `App run() should execute a simple workflow locally`() {
         run(localFilesWorkflow(), arrayOf("-o", "local", "-c", "$configFile"))
 
-        val dbPath = testDir.resolve(Paths.get("state", "metadata.db"))
+        val dbPath = testDir.resolve(Paths.get("state", "cache.db"))
         assertThat(dbPath).exists()
 
-        assertThat(inputsDir.resolve("test.txt")).exists()
+        assertThat(sampleFilesDir.resolve("test.txt")).exists()
         assertThat(base64Path.resolve("test.b64")).exists()
         assertThat(gzipPath.resolve("test.b64.gz")).exists()
     }

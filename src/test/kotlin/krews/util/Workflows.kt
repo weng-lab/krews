@@ -28,23 +28,23 @@ fun localFilesWorkflow() = workflow("local-files-workflow") {
         val taskParams = taskParams<Bast64TaskParams>()
         val file = input.file
         dockerImage = "alpine:3.8"
-        output = OutputFile("base64/${file.filenameNoExt()}.b64")
+        output = outputFile("base64/${file.filenameNoExt()}.b64")
         command =
             """
             echo ${taskParams.someVal}
             mkdir -p /data/base64
-            base64 /data/${file.path} > /data/base64/${file.filenameNoExt()}.b64
+            base64 ${file.dockerPath} > ${output!!.dockerPath}
             """
     }
 
     task<File, File>("gzip", base64) {
         dockerImage = "alpine:3.8"
-        output = OutputFile("gzip/${input.filename()}.gz")
+        output = outputFile("gzip/${input.filename()}.gz")
         command =
             """
             echo running gzip on ${input.path}
             mkdir -p /data/gzip
-            gzip -c /data/${input.path} > /data/gzip/${input.filename()}.gz
+            gzip -c ${input.dockerPath} > ${output!!.dockerPath}
             """
     }
 }
@@ -63,7 +63,7 @@ fun gsFilesWorkflow() = workflow("gs-files-workflow") {
 
     val base64 = task<File, File>("base64", inputFiles) {
         dockerImage = "alpine:3.8"
-        output = OutputFile("base64/${input.filenameNoExt()}.b64")
+        output = outputFile("base64/${input.filenameNoExt()}.b64")
         command =
             """
             mkdir -p /data/base64
@@ -73,7 +73,7 @@ fun gsFilesWorkflow() = workflow("gs-files-workflow") {
 
     task<File, File>("gzip", base64) {
         dockerImage = "alpine:3.8"
-        output = OutputFile("gzip/${input.filename()}.gz")
+        output = outputFile("gzip/${input.filename()}.gz")
         command =
             """
             mkdir -p /data/gzip

@@ -22,6 +22,26 @@ class GSInputFile(val bucket: String,
         "gsutil cp gs://$bucket/$objectPath $containerBaseDir/$path"
 
     override fun toString() = "GSInputFile(bucket='$bucket', objectPath='$objectPath', path='$path')"
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as GSInputFile
+
+        if (bucket != other.bucket) return false
+        if (objectPath != other.objectPath) return false
+        if (path != other.path) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = bucket.hashCode()
+        result = 31 * result + objectPath.hashCode()
+        result = 31 * result + path.hashCode()
+        return result
+    }
 }
 
 private val gsPathRegex = """gs://(.*?)/(.*)""".toRegex()

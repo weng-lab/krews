@@ -12,6 +12,7 @@ import kotlinx.coroutines.*
 import org.apache.commons.lang3.concurrent.BasicThreadFactory
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 
 private val log = KotlinLogging.logger {}
@@ -21,11 +22,20 @@ class TaskRunFuture<I : Any, O : Any>(
     private val executor: LocallyDirectedExecutor
 ): CompletableFuture<O>() {
     fun complete() {
+        var allOutputsExist = true
         // Add last modified timestamps to output files in task output
         taskRunContext.outputFilesOut.forEach { file ->
-            file.lastModified = executor.fileLastModified("$OUTPUTS_DIR/${file.path}")
+            if (executor.fileExists("$OUTPUTS_DIR/${file.path}")) {
+                file.lastModified = executor.fileLastModified("$OUTPUTS_DIR/${file.path}")
+            } else {
+                allOutputsExist = false
+            }
         }
-        complete(taskRunContext.output)
+        if (allOutputsExist) {
+            complete(taskRunContext.output)
+        } else {
+            completeExceptionally(Exception("All output files were not created."))
+        }
     }
 }
 
@@ -47,8 +57,8 @@ class TaskRunner(workflowRun: WorkflowRun,
     private val taskRunPool = Executors.newSingleThreadScheduledExecutor(taskRunThreadFactory)
 
     private val groupingBuffers: MutableMap<String, MutableList<TaskRunFuture<*, *>>> = Collections.synchronizedMap(mutableMapOf())
-    private val queue: MutableList<List<TaskRunFuture<*, *>>> = Collections.synchronizedList(mutableListOf())
-    private val running: MutableList<List<TaskRunFuture<*, *>>> = Collections.synchronizedList(mutableListOf())
+    private val queue: LinkedBlockingQueue<List<TaskRunFuture<*, *>>> =  LinkedBlockingQueue()
+    private val running: AtomicInteger = AtomicInteger(0)
 
     init {
         taskRunPool.scheduleWithFixedDelay({ checkQueue() }, 1, 1, TimeUnit.SECONDS)
@@ -69,15 +79,15 @@ class TaskRunner(workflowRun: WorkflowRun,
         if (stopped.get()) return
 
         var openSlots =
-            if (workflowConfig.parallelism is LimitedParallelism) {
-                workflowConfig.parallelism.limit - running.size
-            } else null
-        val queueIter = queue.iterator()
-        queueIter.forEach { queued ->
-            if (openSlots == 0) return@forEach
-            if (openSlots != null) openSlots--
-            queueIter.remove()
+            if (workflowConfig.parallelism is LimitedParallelism) workflowConfig.parallelism.limit - running.get()
+            else Integer.MAX_VALUE - running.get()
+
+        while (openSlots > 0) {
+            openSlots--
+            // This MUST be a queue. The queue may be modified (in submit) concurrently, so it needs to be thread-safe, and cannot be iterated over.
+            val queued = queue.poll() ?: break
             GlobalScope.launch (coroutineDispatcher) {
+                running.incrementAndGet()
                 try {
                     this@TaskRunner.run(queued.map { it.taskRunContext })
                     queued.forEach {
@@ -87,6 +97,7 @@ class TaskRunner(workflowRun: WorkflowRun,
                 } catch (e: Throwable) {
                     queued.forEach { it.completeExceptionally(e) }
                 }
+                running.decrementAndGet()
             }
         }
     }
@@ -123,7 +134,7 @@ class TaskRunner(workflowRun: WorkflowRun,
         if (taskGroupingBuffer.size >= taskGroupingConfig) {
             log.debug { "Task grouping buffer for $taskName full. Queueing..." }
             val taskBufferCopy = taskGroupingBuffer.map { it }
-            queue += taskBufferCopy
+            queue.put(taskBufferCopy)
             taskGroupingBuffer.clear()
         }
         return taskRunFuture
@@ -134,6 +145,10 @@ class TaskRunner(workflowRun: WorkflowRun,
      * queue any groupings that may not be full.
      */
     fun taskComplete(taskName: String) = synchronized(this) {
+        // TODO: how is this called before submit (when task fails)
+        if (!groupingBuffers.containsKey(taskName)) {
+            return
+        }
         val taskGroupingBuffer = groupingBuffers.getValue(taskName)
         if (taskGroupingBuffer.size > 0) {
             val taskBufferCopy = taskGroupingBuffer.map { it }

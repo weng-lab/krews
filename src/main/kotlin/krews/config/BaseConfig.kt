@@ -18,7 +18,12 @@ data class WorkflowConfig (
     val params: Map<String, Any> = mapOf(),
     // Working Directory
     val workingDir: String,
-    // Local executor configuration
+    // Local executor configurationtask.getvals.params {
+    //    script {
+    //        -type = "krews.file.LocalInputFile"
+    //        local-path = "../getvals.py"
+    //    },
+    //}
     val local: LocalWorkflowConfig? = null,
     // Google executor configuration
     val google: GoogleWorkflowConfig? = null,

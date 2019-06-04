@@ -34,7 +34,6 @@ internal fun buildDockerClient(config: DockerConfig): DockerClient {
  */
 internal fun downloadRemoteInputFile(dockerClient: DockerClient, inputFile: InputFile, dockerDataDir: String, mountDir: Path) {
     if (inputFile is LocalInputFile) {
-        Files.copy(Paths.get(inputFile.localPath), mountDir.resolve(inputFile.path))
         return
     }
     val volume = Volume(dockerDataDir)
