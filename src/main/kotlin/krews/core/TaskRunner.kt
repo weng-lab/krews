@@ -18,24 +18,10 @@ import java.util.concurrent.atomic.AtomicInteger
 private val log = KotlinLogging.logger {}
 
 class TaskRunFuture<I : Any, O : Any>(
-    val taskRunContext: TaskRunContext<I, O>,
-    private val executor: LocallyDirectedExecutor
+    val taskRunContext: TaskRunContext<I, O>
 ): CompletableFuture<O>() {
     fun complete() {
-        var allOutputsExist = true
-        // Add last modified timestamps to output files in task output
-        taskRunContext.outputFilesOut.forEach { file ->
-            if (executor.fileExists("$OUTPUTS_DIR/${file.path}")) {
-                file.lastModified = executor.fileLastModified("$OUTPUTS_DIR/${file.path}")
-            } else {
-                allOutputsExist = false
-            }
-        }
-        if (allOutputsExist) {
-            complete(taskRunContext.output)
-        } else {
-            completeExceptionally(Exception("All output files were not created."))
-        }
+        complete(taskRunContext.output)
     }
 }
 
@@ -88,15 +74,7 @@ class TaskRunner(workflowRun: WorkflowRun,
             val queued = queue.poll() ?: break
             GlobalScope.launch (coroutineDispatcher) {
                 running.incrementAndGet()
-                try {
-                    this@TaskRunner.run(queued.map { it.taskRunContext })
-                    queued.forEach {
-                        cache.updateCache(it.taskRunContext, workflowRunId)
-                        it.complete()
-                    }
-                } catch (e: Throwable) {
-                    queued.forEach { it.completeExceptionally(e) }
-                }
+                this@TaskRunner.run(queued)
                 running.decrementAndGet()
             }
         }
@@ -113,7 +91,7 @@ class TaskRunner(workflowRun: WorkflowRun,
         val taskName = taskRunContext.taskName
         groupingBuffers.putIfAbsent(taskName, Collections.synchronizedList(mutableListOf()))
 
-        val taskRunFuture = TaskRunFuture(taskRunContext, executor)
+        val taskRunFuture = TaskRunFuture(taskRunContext)
         // Check the cache
         val useCache = cache.checkCache(taskRunContext, workflowRunId)
         if (useCache) {
@@ -134,7 +112,11 @@ class TaskRunner(workflowRun: WorkflowRun,
         if (taskGroupingBuffer.size >= taskGroupingConfig) {
             log.debug { "Task grouping buffer for $taskName full. Queueing..." }
             val taskBufferCopy = taskGroupingBuffer.map { it }
-            queue.put(taskBufferCopy)
+            try {
+                queue.put(taskBufferCopy)
+            } catch (e: Exception) {
+                log.error { "Unexpected error: $e" }
+            }
             taskGroupingBuffer.clear()
         }
         return taskRunFuture
@@ -160,7 +142,8 @@ class TaskRunner(workflowRun: WorkflowRun,
     /**
      * Run a group of TaskRunContexts as a single executor job.
      */
-    private suspend fun run(taskRunContexts: List<TaskRunContext<*, *>>) {
+    private suspend fun run(taskRunFutures: List<TaskRunFuture<*, *>>) {
+        val taskRunContexts = taskRunFutures.map { it.taskRunContext }
         val taskName = taskRunContexts.first().taskName
         val taskConfig = workflowConfig.tasks.getValue(taskName)
 
@@ -185,12 +168,43 @@ class TaskRunner(workflowRun: WorkflowRun,
                 taskRunContexts
             )
 
-            log.info { "$loggingPrefix Task completed successfully! Saving status..." }
-            runRepo.completeTaskRun(taskRun, successful = true)
+            var allContextsSuccessful = true
+            taskRunFutures.forEach {
+                val taskRunContext = it.taskRunContext
+                var allOutputsExist = true
+                // Add last modified timestamps to output files in task output
+                taskRunContext.outputFilesOut.forEach { file ->
+                    if (executor.fileExists("$OUTPUTS_DIR/${file.path}")) {
+                        file.lastModified = executor.fileLastModified("$OUTPUTS_DIR/${file.path}")
+                    } else {
+                        allOutputsExist = false
+                    }
+                }
+                cache.updateCache(it.taskRunContext, workflowRunId)
+                if (allOutputsExist) {
+                    it.complete()
+                } else {
+                    it.completeExceptionally(Exception("All output files were not created."))
+                    allContextsSuccessful = false
+                }
+            }
+
+            if (allContextsSuccessful) {
+                log.info { "$loggingPrefix Task completed successfully! Saving status..." }
+                runRepo.completeTaskRun(taskRun, completed = "completed")
+            } else {
+                log.info { "$loggingPrefix Task completed partially successful! Saving status..." }
+                runRepo.completeTaskRun(taskRun, completed = "partially completed")
+            }
+
             log.info { "Task status save complete." }
         } catch (e: Exception) {
-            runRepo.completeTaskRun(taskRun, successful = false)
-            throw e
+            log.info { "$loggingPrefix Task failed! Saving status..." }
+            runRepo.completeTaskRun(taskRun, completed = "failed")
+
+            taskRunFutures.forEach {
+                it.completeExceptionally(e)
+            }
         }
     }
 

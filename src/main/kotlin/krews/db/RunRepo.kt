@@ -27,7 +27,7 @@ class RunRepo(private val runDb: Database) {
 
     fun failedTasksCount() = transaction(runDb) {
         TaskRuns.select {
-            TaskRuns.completedSuccessfully.eq(false)
+            TaskRuns.completionStatus.neq("completed")
         }.count()
     }
 
@@ -40,9 +40,9 @@ class RunRepo(private val runDb: Database) {
         }
     }
 
-    fun completeTaskRun(taskRun: TaskRun, successful: Boolean) = transaction(runDb) {
+    fun completeTaskRun(taskRun: TaskRun, completed: String) = transaction(runDb) {
         taskUpdatedSinceLastReport.set(true)
-        taskRun.completedSuccessfully = successful
+        taskRun.completionStatus = completed
         taskRun.completedTime = DateTime.now().millis
     }
 

@@ -118,6 +118,12 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
         // Ensure we cleanup after ourselves on exit
         sbatchScript.append("trap 'rm -rf $mountDir;' EXIT\n")
 
+        sbatchScript.append("mkdir -p $mountOuputsDir\n")
+        sbatchScript.append("mkdir -p $mountDownloadedDir\n")
+        sbatchScript.append("mkdir -p $mountTmpDir\n")
+        sbatchScript.append("mkdir -p $mountSingularitiesDir\n")
+
+
         // First download the set of all remote input files into downloaded
         val remoteDownloadInputFiles = taskRunContexts.flatMap { trc -> trc.inputFiles.filter { it !is LocalInputFile } }.toSet()
         if (remoteDownloadInputFiles.isNotEmpty()) {
@@ -149,7 +155,6 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
             // Copy the run command into a sh file
             val (containerCommand, scriptBind) =
                 if (taskRunContext.command != null) {
-                    sbatchScript.append("mkdir -p $mountTmpDir\n")
                     val runScriptContents = "set -e\n${taskRunContext.command}"
                     val runScriptAsBase64 = Base64.getEncoder().encodeToString(runScriptContents.toByteArray())
                     sbatchScript.append("echo $runScriptAsBase64 | base64 --decode > $mountTmpDir/$singUUID-script.sh\n")
@@ -167,7 +172,7 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
             val localInputsBind = inputFiles.filterIsInstance<LocalInputFile>().joinToString(",") { "${it.localPath}:${taskRunContext.inputsDir}/${it.path}:ro" }
             val remoteInputsBind = inputFiles.filter { it !is LocalInputFile }.joinToString(",") { "$mountDownloadedDir/${it.path}:${taskRunContext.inputsDir}/${it.path}:ro" }
             val outputFilesInBinds = outputFilesIn.joinToString(",") { "${outputsPath.resolve(it.path)}:${taskRunContext.inputsDir}/${it.path}:ro" }
-            val binds = listOfNotNull(outputsBind, localInputsBind, remoteInputsBind, outputFilesInBinds, scriptBind).joinToString(",")
+            val binds = listOfNotNull(outputsBind, localInputsBind, remoteInputsBind, outputFilesInBinds, scriptBind).filter { !it.isEmpty() }.joinToString(",")
             sbatchScript.append("export SINGULARITY_BIND=\"$binds\"\n")
 
             // Add running the task to script
@@ -184,7 +189,7 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
 
                 for (outputFile in outputFilesOut) {
                     val cachedFilePath = outputsPath.resolve(outputFile.path)
-                    val mountDirFilePath = "$mountDir/${outputFile.path}"
+                    val mountDirFilePath = "$mountOuputsDir/${outputFile.path}"
                     sbatchScript.append(copyCommand(mountDirFilePath, cachedFilePath.toString()))
                 }
             }
