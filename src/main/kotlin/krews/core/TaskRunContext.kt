@@ -12,7 +12,8 @@ class TaskRunContextBuilder<I : Any, O : Any> internal constructor(
     val outputClass: Class<O>
 ) {
     var dockerImage: String? = null
-    var dockerDataDir: String = DEFAULT_DOCKER_DATA_DIR
+    var inputsDir: String = DEFAULT_DOCKER_INPUTS_DIR
+    var outputsDir: String = DEFAULT_DOCKER_OUTPUTS_DIR
     var command: String? = null
     var output: O? = null
     var env: Map<String, String>? = null
@@ -22,6 +23,7 @@ class TaskRunContextBuilder<I : Any, O : Any> internal constructor(
     var time: Duration? = null
     @PublishedApi internal var taskParams: Any? = null
     @PublishedApi internal var taskParamsClass: Class<*>? = null
+    private val outputFilesIn: Set<OutputFile> = getOutputFilesForObject(input)
 
     inline fun <reified P : Any> taskParams(): P {
         if (taskParams == null || taskParams !is P) {
@@ -31,31 +33,55 @@ class TaskRunContextBuilder<I : Any, O : Any> internal constructor(
         return taskParams as P
     }
 
-    val File.dockerPath: String get() = "$dockerDataDir/${this.path}"
+    val File.dockerPath: String get() {
+        return when {
+            this is InputFile -> "$inputsDir/${this.path}"
+            this is OutputFile -> if (outputFilesIn.contains(this)) {
+                "$inputsDir/${this.path}"
+            } else {
+                "$outputsDir/${this.path}"
+            }
+            else -> throw Exception("Unknown file type!")
+        }
+    }
 
-    internal fun build(): TaskRunContext<I, O> = TaskRunContext(
-        taskName = taskName,
-        dockerImage = checkNotNull(dockerImage),
-        dockerDataDir = dockerDataDir,
-        input = input,
-        inputClass = inputClass,
-        output = checkNotNull(output),
-        outputClass = outputClass,
-        command = command?.trimIndent(),
-        env = env,
-        cpus = cpus,
-        memory = memory,
-        diskSize = diskSize,
-        time = time,
-        taskParams = taskParams,
-        taskParamsClass = taskParamsClass
-    )
+    internal fun build(): TaskRunContext<I, O> {
+        val inputFiles = getInputFilesForObject(input) + getInputFilesForObject(taskParams)
+        val outputFilesOut = getOutputFilesForObject(output)
+
+        if (inputsDir == outputsDir) {
+            throw Exception("The inputsDir and outputsDir cannot be the same due to container limitations.")
+        }
+
+        return TaskRunContext(
+            taskName = taskName,
+            dockerImage = checkNotNull(dockerImage),
+            inputsDir = inputsDir,
+            outputsDir = outputsDir,
+            input = input,
+            inputClass = inputClass,
+            output = checkNotNull(output),
+            outputClass = outputClass,
+            command = command?.trimIndent(),
+            env = env,
+            cpus = cpus,
+            memory = memory,
+            diskSize = diskSize,
+            time = time,
+            taskParams = taskParams,
+            taskParamsClass = taskParamsClass,
+            outputFilesIn = outputFilesIn,
+            outputFilesOut = outputFilesOut,
+            inputFiles = inputFiles
+        )
+    }
 }
 
 data class TaskRunContext<I: Any, O: Any>(
     val taskName: String,
     val dockerImage: String,
-    val dockerDataDir: String,
+    val inputsDir: String,
+    val outputsDir: String,
     val input: I,
     val inputClass: Class<I>,
     val output: O,
@@ -67,9 +93,8 @@ data class TaskRunContext<I: Any, O: Any>(
     val diskSize: Capacity?,
     val time: Duration?,
     val taskParams: Any?,
-    val taskParamsClass: Class<*>?
-) {
-    val outputFilesIn by lazy { getOutputFilesForObject(input) }
-    val outputFilesOut by lazy { getOutputFilesForObject(output) }
-    val inputFiles by lazy { getInputFilesForObject(input) + getInputFilesForObject(taskParams) }
-}
+    val taskParamsClass: Class<*>?,
+    val outputFilesIn: Set<OutputFile>,
+    val outputFilesOut: Set<OutputFile>,
+    val inputFiles: Set<InputFile>
+)

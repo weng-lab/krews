@@ -32,8 +32,8 @@ fun localFilesWorkflow() = workflow("local-files-workflow") {
         command =
             """
             echo ${taskParams.someVal}
-            mkdir -p /data/base64
-            base64 /data/${file.path} > /data/base64/${file.filenameNoExt()}.b64
+            mkdir -p $(dirname ${output!!.dockerPath})
+            base64 ${file.dockerPath} > ${output!!.dockerPath}
             """
     }
 
@@ -43,8 +43,8 @@ fun localFilesWorkflow() = workflow("local-files-workflow") {
         command =
             """
             echo running gzip on ${input.path}
-            mkdir -p /data/gzip
-            gzip -c /data/${input.path} > /data/gzip/${input.filename()}.gz
+            mkdir -p $(dirname ${output!!.dockerPath})
+            gzip -c ${input.dockerPath} > ${output!!.dockerPath}
             """
     }
 }
@@ -66,8 +66,8 @@ fun gsFilesWorkflow() = workflow("gs-files-workflow") {
         output = OutputFile("base64/${input.filenameNoExt()}.b64")
         command =
             """
-            mkdir -p /data/base64
-            base64 /data/${input.path} > /data/base64/${input.filenameNoExt()}.b64
+            mkdir -p $(dirname ${output!!.dockerPath})
+            base64 ${input.dockerPath} > ${output!!.dockerPath}
             """
     }
 
@@ -76,8 +76,8 @@ fun gsFilesWorkflow() = workflow("gs-files-workflow") {
         output = OutputFile("gzip/${input.filename()}.gz")
         command =
             """
-            mkdir -p /data/gzip
-            gzip /data/${input.path} > /data/gzip/${input.filename()}.gz
+            mkdir -p $(dirname ${output!!.dockerPath})
+            gzip ${input.dockerPath} > ${output!!.dockerPath}
             """
     }
 }

@@ -93,7 +93,8 @@ private fun createReport(workflowRun: WorkflowRun, taskRuns: Iterable<TaskRun>, 
                         for (taskRun in taskRuns) {
                             val taskStatus = when {
                                 taskRun.completedTime == null -> Status.IN_PROGRESS
-                                taskRun.completedSuccessfully -> Status.SUCCEEDED
+                                taskRun.completionStatus == "completed" -> Status.SUCCEEDED
+                                taskRun.completionStatus == "partially completed" -> Status.PARTIALLY_SUCCEDED
                                 else -> Status.FAILED
                             }
                             tr {
@@ -103,6 +104,7 @@ private fun createReport(workflowRun: WorkflowRun, taskRuns: Iterable<TaskRun>, 
                                     when(taskStatus) {
                                         Status.IN_PROGRESS -> span(classes="badge badge-secondary") { +"In Progress" }
                                         Status.SUCCEEDED -> span(classes="badge badge-success") { +"Succeeded" }
+                                        Status.PARTIALLY_SUCCEDED -> span(classes="badge badge-warning") { +"Partially Succeeded" }
                                         Status.FAILED -> span(classes="badge badge-danger") { +"Failed" }
                                     }
                                 }
@@ -176,5 +178,5 @@ private val SCRIPT =
     """.trimIndent()
 
 private enum class Status(val colorClass: String) {
-    IN_PROGRESS("secondary"), SUCCEEDED("success"), FAILED("danger")
+    IN_PROGRESS("secondary"), SUCCEEDED("success"), PARTIALLY_SUCCEDED("warning"), FAILED("danger")
 }

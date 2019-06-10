@@ -6,7 +6,8 @@ import org.jetbrains.exposed.dao.*
 object TaskRuns : IntIdTable("task_run") {
     val taskName = text("task_name")
     val startTime = long("start_time")
-    val completedSuccessfully = bool("completed_successfully")
+    // "completed", "partially completed", "failed"
+    val completionStatus = varchar("completion_status", 20)
     val completedTime = long("completed_time").nullable()
     val executionsJson = text("executions_json")
 }
@@ -16,7 +17,7 @@ class TaskRun(id: EntityID<Int>) : IntEntity(id) {
 
     var taskName by TaskRuns.taskName
     var startTime by TaskRuns.startTime
-    var completedSuccessfully by TaskRuns.completedSuccessfully
+    var completionStatus by TaskRuns.completionStatus
     var completedTime by TaskRuns.completedTime
     var executionsJson by TaskRuns.executionsJson
 }
