@@ -68,6 +68,7 @@ class ZipAppTests {
         val task1CompleteCount = AtomicInteger(0)
         val alltask1aLatch = CountDownLatch(8)
         coEveryMatchTaskRun(executor) { it.dockerImage == "task1a" } coAnswers {
+            @Suppress("UNCHECKED_CAST")
             val task1s = (this.args[3] as TaskRunContext<Int, Int>).input
             if (task1s <= 6) {
                 task1aBeforeErrorLatch.countDown()
@@ -91,6 +92,7 @@ class ZipAppTests {
 
         val task1bBeforeErrorLatch = CountDownLatch(3)
         coEveryMatchTaskRun(executor) { it.dockerImage == "task1b" } coAnswers {
+            @Suppress("UNCHECKED_CAST")
             val task1s = (this.args[3] as TaskRunContext<Int, Int>).input
             if (task1s <= 3) {
                 task1bBeforeErrorLatch.countDown()

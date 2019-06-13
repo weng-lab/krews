@@ -41,9 +41,6 @@ class AppTests {
     fun `App run() should execute a simple workflow locally`() {
         run(localFilesWorkflow(), arrayOf("-o", "local", "-c", "$configFile"))
 
-        val dbPath = testDir.resolve(Paths.get("state", "cache.db"))
-        assertThat(dbPath).exists()
-
         assertThat(sampleFilesDir.resolve("test.txt")).exists()
         assertThat(base64Path.resolve("test.b64")).exists()
         assertThat(gzipPath.resolve("test.b64.gz")).exists()

@@ -76,7 +76,7 @@ class SlurmExecutorTests {
             Files.write(file, "I am test file #$i".toByteArray())
         }
 
-        val executor = runWorkflow(1, "task-param-1")
+        runWorkflow(1, "task-param-1")
 
         for (i in 1..3) {
             assertThat(base64Dir.resolve("test-$i.b64")).exists()

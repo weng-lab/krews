@@ -2,7 +2,6 @@ package krews.executor
 
 import krews.config.TaskConfig
 import krews.core.TaskRunContext
-import krews.file.*
 import java.nio.file.Path
 
 /**
@@ -28,12 +27,6 @@ interface LocallyDirectedExecutor {
      * @return True if the given file exists on the executor's file system, false otherwise.
      */
     fun fileExists(path: String): Boolean
-
-    /**
-     * @return The last modified date for the given path on the executor's file system.
-     * Throws Exception if file does not exist
-     */
-    fun fileLastModified(path: String): Long
 
     /**
      * Execute task for the environment. Will consist of running a docker container to complete the task, and another

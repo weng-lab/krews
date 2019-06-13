@@ -59,8 +59,6 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
     }
 
     override fun fileExists(path: String) = Files.exists(workflowBasePath.resolve(path))
-    override fun fileLastModified(path: String) = Files.getLastModifiedTime(workflowBasePath.resolve(path)).toMillis()
-
     override fun listFiles(baseDir: String): Set<String> = listLocalFiles(workflowBasePath.resolve(baseDir))
     override fun deleteFile(file: String) = Files.delete(workflowBasePath.resolve(file))
 

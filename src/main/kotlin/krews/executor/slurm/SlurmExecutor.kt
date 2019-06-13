@@ -58,8 +58,6 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
     }
 
     override fun fileExists(path: String): Boolean = Files.exists(workflowBasePath.resolve(path))
-    override fun fileLastModified(path: String): Long =
-        Files.getLastModifiedTime(workflowBasePath.resolve(path)).toMillis()
 
     override fun listFiles(baseDir: String): Set<String> = listLocalFiles(workflowBasePath.resolve(baseDir))
     override fun deleteFile(file: String) = Files.delete(workflowBasePath.resolve(file))

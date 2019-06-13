@@ -14,20 +14,7 @@ private val log = KotlinLogging.logger {}
  * @param path The relative path for this input file. It will be used as the storage path under the
  *      /run/$run-timestamp/inputs directory, as well as the local task docker container path.
  */
-abstract class InputFile(path: String) : File(path) {
-
-    val lastModified: Long by lazy {
-        val msg = "Fetching last modified date for InputFile with path $path"
-        log.debug { msg }
-        retry(msg, 3) {
-            fetchLastModified()
-        }
-    }
-
-    /**
-     * Retrieve the last modified timestamp
-     */
-    internal abstract fun fetchLastModified(): Long
+abstract class InputFile : File {
 
     /**
      * The docker image used to download the input file

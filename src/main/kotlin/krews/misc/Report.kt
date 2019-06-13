@@ -63,7 +63,7 @@ private fun createReport(workflowRun: WorkflowRun, taskRuns: Iterable<TaskRun>, 
                                 +"You can find your output files under /run/${workflowRun.startTime}/$OUTPUTS_DIR"
                             }
                         }
-                        Status.FAILED -> {
+                        else -> {
                             h4 { +"Run failed" }
                             p {
                                 +("Find out what went wrong by checking failed tasks below, logs " +

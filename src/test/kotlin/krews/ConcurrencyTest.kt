@@ -161,7 +161,7 @@ class ConcurrencyTest {
         val (executor, runner) = runWorkflow(baseConfig)
         val task1Count = AtomicInteger()
         val task1BeforeErrorLatch = CountDownLatch(5)
-        val alltasksLatch = CountDownLatch(14)
+        val allTasksLatch = CountDownLatch(14)
         coEveryMatchTaskRun(executor) { it.dockerImage == "task1" } coAnswers {
             val task1s = task1Count.incrementAndGet()
             if (task1s < 6) {
@@ -175,8 +175,8 @@ class ConcurrencyTest {
                 task1BeforeErrorLatch.await()
                 throw Exception("Test Error")
             } else {
-                alltasksLatch.countDown()
-                while (!alltasksLatch.await(100, TimeUnit.MILLISECONDS)) {
+                allTasksLatch.countDown()
+                while (!allTasksLatch.await(100, TimeUnit.MILLISECONDS)) {
                     delay(100)
                 }
                 delay(1000)

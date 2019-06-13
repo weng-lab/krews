@@ -68,7 +68,7 @@ class LocalExecutorTests {
             Files.write(file, "I am test file #$i".toByteArray())
         }
 
-        val executor = runWorkflow(1, "task-param-1")
+        runWorkflow(1, "task-param-1")
 
         val dbPath = testDir.resolve(Paths.get("state", "cache.db"))
         assertThat(dbPath).exists()

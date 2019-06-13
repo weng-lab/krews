@@ -62,10 +62,6 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
         return true
     }
 
-    override fun fileLastModified(path: String): Long {
-        return googleStorageClient.objects().get(bucket, gcsObjectPath(gcsBase, path)).execute().updated.value
-    }
-
     override suspend fun executeTask(
         workflowRunDir: String,
         taskRunId: Int,

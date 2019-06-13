@@ -65,11 +65,7 @@ class GoogleExecutorTests {
             writeFileToBucket(testBucket, "$inputFilesDir/test-$i.txt", "I am test file $i")
         }
 
-        val executor = runWorkflow((1..3).map { "test-$it.txt" }, grouping = 2, runTimestampOverride = 1)
-
-        // Make sure we copied in the cache
-        "state/cache.db".existsInGS(testBucket, workflowBaseDir)
-        "state/cache.db.backup".existsInGS(testBucket, workflowBaseDir)
+        runWorkflow((1..3).map { "test-$it.txt" }, grouping = 2, runTimestampOverride = 1)
 
         for (i in 1..3) {
             "outputs/base64/test-$i.b64".existsInGS(testBucket, workflowBaseDir)

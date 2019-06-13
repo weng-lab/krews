@@ -12,36 +12,13 @@ import java.nio.file.Paths
  * @param objectPath: GCS object
  * @param path: Unique relative path used by Krews for storage and in task containers. Set to objectPath by default.
  */
-class GSInputFile(val bucket: String,
+data class GSInputFile(val bucket: String,
                   val objectPath: String,
-                  path: String = objectPath) : InputFile(path) {
+                  override val path: String = objectPath) : InputFile() {
 
-    override fun fetchLastModified() = googleStorageClient.objects().get(bucket, objectPath).execute().updated.value
     override fun downloadFileImage() = CLOUD_SDK_IMAGE
     override fun downloadFileCommand(containerBaseDir: String) =
         "gsutil cp gs://$bucket/$objectPath $containerBaseDir/$path"
-
-    override fun toString() = "GSInputFile(bucket='$bucket', objectPath='$objectPath', path='$path')"
-
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-
-        other as GSInputFile
-
-        if (bucket != other.bucket) return false
-        if (objectPath != other.objectPath) return false
-        if (path != other.path) return false
-
-        return true
-    }
-
-    override fun hashCode(): Int {
-        var result = bucket.hashCode()
-        result = 31 * result + objectPath.hashCode()
-        result = 31 * result + path.hashCode()
-        return result
-    }
 }
 
 private val gsPathRegex = """gs://(.*?)/(.*)""".toRegex()

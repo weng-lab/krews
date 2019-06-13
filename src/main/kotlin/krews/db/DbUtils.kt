@@ -7,7 +7,6 @@ import org.jetbrains.exposed.sql.transactions.TransactionManager
 import java.nio.file.*
 import java.sql.Connection
 
-fun setupCacheDb(dbFile: Path) = migrateAndConnectDb(dbFile, "classpath:db/migration/cache")
 fun setupRunDb(dbFile: Path) = migrateAndConnectDb(dbFile, "classpath:db/migration/run")
 
 fun migrateAndConnectDb(dbFile: Path, migrationLocation: String): Database {

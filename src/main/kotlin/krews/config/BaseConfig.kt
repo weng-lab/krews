@@ -30,8 +30,8 @@ data class WorkflowConfig (
     val parallelism: Parallelism = UnlimitedParallelism,
     // The concurrency for task setup, status checking, and cleanup
     val executorConcurrency: Int = 16,
-    // Delay between uploading the latest database to project working storage
-    val dbUploadDelay: Long = 300,
     // Delay between generating updated status reports (in seconds)
-    val reportGenerationDelay: Long = 120
+    val reportGenerationDelay: Long = 120,
+    // Force task runs to run even if all output files exist
+    val forceRuns: Boolean = false
 )

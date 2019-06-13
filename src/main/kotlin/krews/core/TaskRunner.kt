@@ -6,7 +6,6 @@ import krews.db.*
 import krews.executor.LocallyDirectedExecutor
 import krews.misc.mapper
 import mu.KotlinLogging
-import org.jetbrains.exposed.sql.*
 import java.util.concurrent.*
 import kotlinx.coroutines.*
 import org.apache.commons.lang3.concurrent.BasicThreadFactory
@@ -28,12 +27,9 @@ class TaskRunFuture<I : Any, O : Any>(
 class TaskRunner(workflowRun: WorkflowRun,
                  private val workflowConfig: WorkflowConfig,
                  private val executor: LocallyDirectedExecutor,
-                 private val runRepo: RunRepo,
-                 cacheDb: Database) {
+                 private val runRepo: RunRepo) {
 
-    private val workflowRunId = workflowRun.id.value
     private val workflowStartTime = runRepo.workflowStartTime(workflowRun)
-    private val cache = Cache(cacheDb, executor)
 
     private val stopped = AtomicBoolean(false)
     private val coroutineExecutor = Executors.newFixedThreadPool(workflowConfig.executorConcurrency)
@@ -70,7 +66,8 @@ class TaskRunner(workflowRun: WorkflowRun,
 
         while (openSlots > 0) {
             openSlots--
-            // This MUST be a queue. The queue may be modified (in submit) concurrently, so it needs to be thread-safe, and cannot be iterated over.
+            // This MUST be a queue. The queue may be modified (in submit) concurrently,
+            // so it needs to be thread-safe, and cannot be iterated over.
             val queued = queue.poll() ?: break
             GlobalScope.launch (coroutineDispatcher) {
                 running.incrementAndGet()
@@ -83,7 +80,7 @@ class TaskRunner(workflowRun: WorkflowRun,
     /**
      * Submit a TaskRunContext.
      *
-     * The cache will be checked, if the cache is used the taskRunContext will skip and complete immediately.
+     * If all the output files already exist in the executor's file storage, the taskRunContext will skip and complete immediately.
      * Otherwise the taskRunContext will be added to a grouping buffer for the task. If the buffer is over a
      * configured grouping threshold, the group will be queued.
      */
@@ -92,14 +89,18 @@ class TaskRunner(workflowRun: WorkflowRun,
         groupingBuffers.putIfAbsent(taskName, Collections.synchronizedList(mutableListOf()))
 
         val taskRunFuture = TaskRunFuture(taskRunContext)
-        // Check the cache
-        val useCache = cache.checkCache(taskRunContext, workflowRunId)
-        if (useCache) {
-            log.info { "Valid cached execution found for the following. Skipping execution.\n$taskRunContext" }
-            taskRunFuture.complete()
-            return taskRunFuture
-        } else {
-            log.info { "Cache not used for the following. Queueing...\n$taskRunContext" }
+
+        // Check if all the output files exist and we should skip this run
+        val allOutputFilesPresent = taskRunContext.outputFilesOut.isNotEmpty() && taskRunContext.outputFilesOut
+            .all { executor.fileExists("$OUTPUTS_DIR/${it.path}") }
+        when {
+            workflowConfig.forceRuns -> log.info { "ForceRuns config set to true. Queueing...\n$taskRunContext" }
+            allOutputFilesPresent -> {
+                log.info { "All output files found for the following execution. Skipping...\n$taskRunContext" }
+                taskRunFuture.complete()
+                return taskRunFuture
+            }
+            else -> log.info { "Some output files not found. Queueing...\n$taskRunContext" }
         }
 
         val taskGroupingConfig = if (executor.supportsGrouping()) {
@@ -169,22 +170,14 @@ class TaskRunner(workflowRun: WorkflowRun,
             )
 
             var allContextsSuccessful = true
-            taskRunFutures.forEach {
-                val taskRunContext = it.taskRunContext
-                var allOutputsExist = true
-                // Add last modified timestamps to output files in task output
-                taskRunContext.outputFilesOut.forEach { file ->
-                    if (executor.fileExists("$OUTPUTS_DIR/${file.path}")) {
-                        file.lastModified = executor.fileLastModified("$OUTPUTS_DIR/${file.path}")
-                    } else {
-                        allOutputsExist = false
-                    }
-                }
-                cache.updateCache(it.taskRunContext, workflowRunId)
+            taskRunFutures.forEach { taskRunFuture ->
+                val taskRunContext = taskRunFuture.taskRunContext
+                val allOutputsExist = taskRunContext.outputFilesOut
+                    .all { executor.fileExists("$OUTPUTS_DIR/${it.path}") }
                 if (allOutputsExist) {
-                    it.complete()
+                    taskRunFuture.complete()
                 } else {
-                    it.completeExceptionally(Exception("All output files were not created."))
+                    taskRunFuture.completeExceptionally(Exception("All output files were not created."))
                     allContextsSuccessful = false
                 }
             }

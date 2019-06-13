@@ -7,13 +7,11 @@ import krews.misc.createReport
 import mu.KotlinLogging
 import org.apache.commons.lang3.concurrent.BasicThreadFactory
 import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.transactions.*
 import org.joda.time.DateTime
 import reactor.core.publisher.*
 import reactor.core.scheduler.Schedulers
 import java.nio.charset.StandardCharsets
 import java.nio.file.*
-import java.nio.file.attribute.PosixFilePermissions
 import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -28,19 +26,13 @@ class WorkflowRunner(
 ) {
     private val runRepo: RunRepo
     private val runDb: Database
-    private val cacheDb: Database
     private lateinit var workflowRun: WorkflowRun
     private val reportPool: ScheduledExecutorService
-    private val dbUploadPool: ScheduledExecutorService
-    private val workflowTime = if (runTimestampOverride != null) runTimestampOverride else DateTime.now().millis
+    private val workflowTime = runTimestampOverride ?: DateTime.now().millis
     private val workflowTmpDir = Paths.get(System.getProperty("java.io.tmpdir"), "workflow-${workflow.name}-$workflowTime")
     private val hasShutdown = AtomicBoolean(false)
 
     init {
-        val cacheDbFilePath = workflowTmpDir.resolve(CACHE_DB_FILENAME)
-        executor.downloadFile(CACHE_DB_FILENAME, cacheDbFilePath)
-        cacheDb = setupCacheDb(cacheDbFilePath)
-
         val runDbFilePath = workflowTmpDir.resolve(RUN_DB_FILENAME)
         if (Files.exists(runDbFilePath)) {
             Files.delete(runDbFilePath)
@@ -49,14 +41,6 @@ class WorkflowRunner(
         postConnectionSetup()
 
         runRepo = RunRepo(runDb)
-
-        val dbPermissions = PosixFilePermissions.fromString("rwxrwxrwx")
-        Files.setPosixFilePermissions(cacheDbFilePath, dbPermissions)
-        Files.setPosixFilePermissions(cacheDbFilePath.parent, dbPermissions)
-
-        val dbUploadThreadFactory = BasicThreadFactory.Builder().namingPattern("db-upload-%d").build()
-        dbUploadPool = Executors.newSingleThreadScheduledExecutor(dbUploadThreadFactory)
-
         val reportThreadFactory = BasicThreadFactory.Builder().namingPattern("report-gen-%d").build()
         reportPool = Executors.newSingleThreadScheduledExecutor(reportThreadFactory)
     }
@@ -67,11 +51,6 @@ class WorkflowRunner(
         workflowRun = runRepo.createWorkflowRun(workflow.name, workflowTime)
 
         log.info { "Workflow run created successfully!" }
-
-        // Create an executor service for periodically uploading the db file
-        val dbUploadDelay = Math.max(workflowConfig.dbUploadDelay, 30)
-        dbUploadPool.scheduleWithFixedDelay({ uploadDb() },
-                dbUploadDelay, dbUploadDelay, TimeUnit.SECONDS)
 
         // Create an executor service for periodically generating reports
         val reportGenerationDelay = Math.max(workflowConfig.reportGenerationDelay, 10)
@@ -85,7 +64,7 @@ class WorkflowRunner(
     }
 
     private fun runWorkflow(): Boolean {
-        val taskRunner = TaskRunner(workflowRun, workflowConfig, executor, runRepo, cacheDb)
+        val taskRunner = TaskRunner(workflowRun, workflowConfig, executor, runRepo)
         try {
             // Set execute function for each task.
             for (task in workflow.tasks.values) {
@@ -122,36 +101,15 @@ class WorkflowRunner(
         if (!hasShutdown.compareAndSet(false, true)) return
         log.info { "Shutting down..." }
         reportPool.shutdown()
-        dbUploadPool.shutdown()
-        // Stop the periodic db upload and report generation executor service and generate one final report.
+        // Stop the periodic report generation executor service and generate one final report.
         reportPool.awaitTermination(10, TimeUnit.SECONDS)
-        dbUploadPool.awaitTermination(10, TimeUnit.SECONDS)
 
-        uploadDb()
         generateReport()
 
         Files.walk(workflowTmpDir)
             .sorted(Comparator.reverseOrder())
             .forEach { Files.delete(it) }
         log.info { "Shutdown complete!" }
-    }
-
-    /*
-     * Backs up the sqlite database file and uploads the backup.
-     * This is needed because it's not safe to copy a file that's currently open for writes.
-     */
-    private fun uploadDb() {
-        log.info { "Uploading database..." }
-        // Create backup db file
-        val dbSnapshotPath = workflowTmpDir.resolve(CACHE_DB_SNAPSHOT_FILENAME)
-        log.info { "Backing up database..." }
-        transaction(cacheDb) {
-            TransactionManager.current().connection.createStatement().use { it.executeUpdate("backup to $dbSnapshotPath") }
-        }
-
-        log.info { "Uploading backup database file..." }
-        executor.uploadFile(dbSnapshotPath, CACHE_DB_FILENAME, backup = true)
-        log.info { "Database upload complete!" }
     }
 
     private fun generateReport() {

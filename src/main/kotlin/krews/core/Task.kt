@@ -1,7 +1,6 @@
 package krews.core
 
 import krews.config.*
-import krews.file.getOutputFilesForObject
 import mu.KotlinLogging
 import org.reactivestreams.Publisher
 import reactor.core.publisher.*
@@ -43,7 +42,6 @@ class Task<I : Any, O : Any> @PublishedApi internal constructor(
 
         processed.subscribe(outputPub as TopicProcessor)
     }
-
 
     private fun createTaskRunContext(input: I, rawTaskParams: Map<String, Any>): TaskRunContext<I, O> {
         val taskRunContextBuilder = TaskRunContextBuilder(name, input, rawTaskParams, inputClass, outputClass)
