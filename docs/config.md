@@ -27,14 +27,12 @@ The following are workflow configurations common for running against any executi
 config name | description | required | default
 --- | --- | --- | ---
 parallelism | The maximum number of tasks allowed to run concurrently. Set to an integer or "unlimited" | no | unlimited 
-db-upload-delay | Delay (in seconds) between uploading the latest database to project working storage | no | 60
 report-generation-delay | Delay (in seconds) between generating updated status reports | no | 60
 
 **Example**
 
 ```hocon
 parallelism = 10
-db-upload-delay = 120
 report-generation-delay = 180
 ```
 
@@ -42,7 +40,6 @@ report-generation-delay = 180
 
 name | description | required | default
 --- | --- | --- | ---
-local.workingDir | Working directory for local docker run | no | working-dir
 local.docker | Docker client configurations. In most cases you should not need to set these. | no | *none*
 local.docker.uri | URI of docker daemon | no | *none*
 local.docker.certificates-path | Path to certificate for TLS enabled docker daemon | no | *none*
@@ -54,7 +51,6 @@ local.docker.connection-pool-size | Connection pool size for docker client | no 
 
 ```hocon
 local {
-    working-dir = some-test/directory
     docker {
         uri = "localhost:1234"
         certificate-path = "~/my-path/my-cert.cert"
@@ -71,8 +67,7 @@ name | description | required | default
 --- | --- | --- | ---
 google.project-id | Google Cloud project ID | yes | *none*
 google.regions | List of regions in which we're allow to create VMs | no | *none*
-google.storage-bucket | Google Cloud Storage bucket where we will be keeping our workflow files | yes | *none*
-google.storage-base-dir | Google Cloud Storage base directory where we will be keeping our workflow files (in the given bucket) | yes | *none*
+google.bucket | Google Cloud Storage bucket where we will be keeping our workflow files | yes | *none*
 google.job-completion-poll-interval | Interval (in seconds) between checks for pipeline job completion | no | 10
 google.log-upload-interval | Interval (in seconds) between  pipeline job log uploads to storage | no | 60
 
@@ -82,8 +77,7 @@ google.log-upload-interval | Interval (in seconds) between  pipeline job log upl
 google {
     project-id = my-project
     regions = [us-east1, us-east2]
-    storage-bucket = my-bucket
-    storage-base-dir = my-base/directory
+    bucket = my-bucket
     job-completion-poll-interval = 60
     log-upload-interval = 120
 }
@@ -93,7 +87,6 @@ google {
 
 name | description | required | default
 --- | --- | --- | ---
-slurm.working-dir | Working directory for local docker run. Must be an NFS mounted directory accessible from workers | yes | *none*
 slurm.job-completion-poll-interval | Interval (in seconds) between checks for pipeline job completion | no | 10
 slurm.ssh | Used to connect to Slurm head node to run sbatch jobs and poll job status. Enables running remote machines that can ssh to slurm head node with passwordless login | no | *none*
 slurm.ssh.user | User for Slurm head node ssh | no | *none*
@@ -104,7 +97,6 @@ slurm.ssh.port | Slurm head node ssh port | no | 22
 
 ```hocon
 slurm {
-    working-dir = /data/my-dir
     job-completion-poll-interval = 30
     ssh {
         user = jbrooks
@@ -178,6 +170,9 @@ google.mem | Amount of memory. Can be used to override the runtime value. | no |
 google.mem-per-cpu | An optional memory per cpu ratio used when you don't have both fields available and don't want to use a machine class. | no | *none*
 google.disk-size | Disk capacity. Can be used to override the runtime value. | no | *none*
 google.disk-type | Type of disk, HDD vs SSD. | no | hdd
+
+*Please note most of these settings are mutually exclusive. For example, a machine-class is not needed if you have 
+a machine-type set.
 
 **Example**
 
