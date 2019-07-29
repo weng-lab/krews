@@ -1115,12 +1115,6 @@ that helps keep it concise and readable. These files conventionally use the exte
 <td>unlimited</td>
 </tr>
 <tr>
-<td>db-upload-delay</td>
-<td>Delay (in seconds) between uploading the latest database to project working storage</td>
-<td>no</td>
-<td>60</td>
-</tr>
-<tr>
 <td>report-generation-delay</td>
 <td>Delay (in seconds) between generating updated status reports</td>
 <td>no</td>
@@ -1130,7 +1124,6 @@ that helps keep it concise and readable. These files conventionally use the exte
 </table>
 <p><strong>Example</strong></p>
 <div class="codehilite"><pre><span></span>parallelism = 10
-db-upload-delay = 120
 report-generation-delay = 180
 </pre></div>
 
@@ -1145,12 +1138,6 @@ report-generation-delay = 180
 </tr>
 </thead>
 <tbody>
-<tr>
-<td>local.workingDir</td>
-<td>Working directory for local docker run</td>
-<td>no</td>
-<td>working-dir</td>
-</tr>
 <tr>
 <td>local.docker</td>
 <td>Docker client configurations. In most cases you should not need to set these.</td>
@@ -1191,7 +1178,6 @@ report-generation-delay = 180
 </table>
 <p><strong>Example</strong></p>
 <div class="codehilite"><pre><span></span>local {
-    working-dir = some-test/directory
     docker {
         uri = &quot;localhost:1234&quot;
         certificate-path = &quot;~/my-path/my-cert.cert&quot;
@@ -1226,14 +1212,8 @@ report-generation-delay = 180
 <td><em>none</em></td>
 </tr>
 <tr>
-<td>google.storage-bucket</td>
+<td>google.bucket</td>
 <td>Google Cloud Storage bucket where we will be keeping our workflow files</td>
-<td>yes</td>
-<td><em>none</em></td>
-</tr>
-<tr>
-<td>google.storage-base-dir</td>
-<td>Google Cloud Storage base directory where we will be keeping our workflow files (in the given bucket)</td>
 <td>yes</td>
 <td><em>none</em></td>
 </tr>
@@ -1255,8 +1235,7 @@ report-generation-delay = 180
 <div class="codehilite"><pre><span></span>google {
     project-id = my-project
     regions = [us-east1, us-east2]
-    storage-bucket = my-bucket
-    storage-base-dir = my-base/directory
+    bucket = my-bucket
     job-completion-poll-interval = 60
     log-upload-interval = 120
 }
@@ -1273,12 +1252,6 @@ report-generation-delay = 180
 </tr>
 </thead>
 <tbody>
-<tr>
-<td>slurm.working-dir</td>
-<td>Working directory for local docker run. Must be an NFS mounted directory accessible from workers</td>
-<td>yes</td>
-<td><em>none</em></td>
-</tr>
 <tr>
 <td>slurm.job-completion-poll-interval</td>
 <td>Interval (in seconds) between checks for pipeline job completion</td>
@@ -1313,7 +1286,6 @@ report-generation-delay = 180
 </table>
 <p><strong>Example</strong></p>
 <div class="codehilite"><pre><span></span>slurm {
-    working-dir = /data/my-dir
     job-completion-poll-interval = 30
     ssh {
         user = jbrooks
@@ -1440,6 +1412,8 @@ one in <code>task.my-task-name</code>, and one in <code>task.my-task-label</code
 </tr>
 </tbody>
 </table>
+<p>*Please note most of these settings are mutually exclusive. For example, a machine-class is not needed if you have 
+a machine-type set.</p>
 <p><strong>Example</strong></p>
 <div class="codehilite"><pre><span></span>task.my-task-name {
     google {
