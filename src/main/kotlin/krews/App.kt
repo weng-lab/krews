@@ -50,10 +50,10 @@ class KrewsApp(private val workflowBuilder: WorkflowBuilder) : CliktCommand() {
         if (config != null && !Files.exists(config)) throw Exception("Given config $config not found")
         val hoconConfig = if (config != null) ConfigFactory.parseFile(config!!.toFile()) else ConfigFactory.empty()
         val params = createParamsForConfig(hoconConfig)
-        val workflow = workflowBuilder.build(params)
-        val workflowConfig = createWorkflowConfig(hoconConfig, workflow)
 
         if (on.locallyDirected) {
+            val workflow = workflowBuilder.build(params)
+            val workflowConfig = createWorkflowConfig(hoconConfig, workflow)
             val executor = when(on) {
                 Executors.LOCAL -> LocalExecutor(workflowConfig)
                 Executors.GOOGLE_LOCAL -> GoogleLocalExecutor(workflowConfig)
@@ -76,6 +76,8 @@ class KrewsApp(private val workflowBuilder: WorkflowBuilder) : CliktCommand() {
 
             runner.run()
         } else {
+            // Create config without workflow because we don't need task configurations for this run
+            val workflowConfig = createWorkflowConfig(hoconConfig, null)
             val executor = when(on) {
                 Executors.GOOGLE -> GoogleExecutor(workflowConfig)
                 else -> throw Exception("Unsupported executor")

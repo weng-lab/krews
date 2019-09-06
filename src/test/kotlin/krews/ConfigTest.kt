@@ -226,4 +226,10 @@ class ConfigTests {
         ))
     }
 
+    @Test fun `createWorkflowConfig should create configuration without workflow`() {
+        val config = ConfigFactory.parseString(completeTestConfig)
+        val workflowConfig = createWorkflowConfig(config, null)
+        assertThat(workflowConfig).isNotNull
+    }
+
 }
