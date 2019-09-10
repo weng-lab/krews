@@ -47,13 +47,13 @@ class KrewsApp(private val workflowBuilder: WorkflowBuilder) : CliktCommand() {
         val workflowConfig = createWorkflowConfig(hoconConfig)
 
         if (on.locallyDirected) {
-            val workflow = workflowBuilder.build(params)
             val executor = when(on) {
                 Executors.LOCAL -> LocalExecutor(workflowConfig)
                 Executors.GOOGLE_LOCAL -> GoogleLocalExecutor(workflowConfig)
                 Executors.SLURM -> SlurmExecutor(workflowConfig)
                 else -> throw Exception("Unsupported executor")
             }
+            val workflow = workflowBuilder.build(executor, params)
 
             val maxHeapSize = Runtime.getRuntime().maxMemory()
             log.info { "Krews running with max heap size $maxHeapSize" }

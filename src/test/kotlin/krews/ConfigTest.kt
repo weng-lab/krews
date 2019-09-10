@@ -2,6 +2,7 @@ package krews
 
 import com.fasterxml.jackson.module.kotlin.MissingKotlinParameterException
 import com.typesafe.config.ConfigFactory
+import io.mockk.mockk
 import krews.config.*
 import krews.core.*
 import krews.file.*
@@ -155,21 +156,21 @@ class ConfigTests {
         val config = ConfigFactory.parseString(brokenParamsConfig)
         val params = createParamsForConfig(config)
         assertThatExceptionOfType(MissingKotlinParameterException::class.java).isThrownBy {
-            configSampleWorkflow().build(params)
+            configSampleWorkflow().build(mockk(), params)
         }
     }
 
     @Test fun `Parsing workflow params with defaults and nullability should work`() {
         val config = ConfigFactory.parseString(sparseParamsConfig)
         val params = createParamsForConfig(config)
-        configSampleWorkflow().build(params)
+        configSampleWorkflow().build(mockk(), params)
         assertThat(parsedParams).isEqualTo(parsedSparseParams)
     }
 
     @Test fun `Parsing workflow params with all fields should work`() {
         val config = ConfigFactory.parseString(completeParamsConfig)
         val params = createParamsForConfig(config)
-        configSampleWorkflow().build(params)
+        configSampleWorkflow().build(mockk(), params)
         assertThat(parsedParams!!.withDefault).isEqualTo(parsedCompleteParams.withDefault)
         assertThat(parsedParams!!.withoutDefault).isEqualTo(parsedCompleteParams.withoutDefault)
         assertThat(parsedParams!!.complex).isEqualTo(parsedCompleteParams.complex)
@@ -192,7 +193,7 @@ class ConfigTests {
     @Test fun `createTaskConfigs should create complex task configurations`() {
         val config = ConfigFactory.parseString(completeTestConfig)
         val params = createParamsForConfig(config)
-        val workflow = configSampleWorkflow().build(params)
+        val workflow = configSampleWorkflow().build(mockk(), params)
         val taskConfigs = createTaskConfigs(config, workflow)
         assertThat(taskConfigs["sample"]).isEqualTo(TaskConfig(
             params = mapOf(

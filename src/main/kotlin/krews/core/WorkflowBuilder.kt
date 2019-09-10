@@ -17,9 +17,9 @@ class WorkflowBuilder internal constructor(val name: String, private val init: W
     fun listFiles(baseDir: String) = executor.listFiles(baseDir)
     fun deleteFile(file: String) = executor.deleteFile(file)
 
-    fun importWorkflow(workflowBuilder: WorkflowBuilder, params: Any? = null): Workflow {
+    fun importWorkflow(workflowBuilder: WorkflowBuilder, executor: LocallyDirectedExecutor, params: Any? = null): Workflow {
         workflowBuilder.paramsOverride = params
-        val imported = workflowBuilder.build(mapOf())
+        val imported = workflowBuilder.build(executor, mapOf())
         this.tasks.putAll(imported.tasks)
         return imported
     }
@@ -47,7 +47,7 @@ class WorkflowBuilder internal constructor(val name: String, private val init: W
         return task.outputPub
     }
 
-    internal fun build(rawParams: Map<String, Any>): Workflow {
+    internal fun build(executor: LocallyDirectedExecutor, rawParams: Map<String, Any>): Workflow {
         this.tasks = mutableMapOf()
         this.paramsOverride = null
         this.rawParams = rawParams

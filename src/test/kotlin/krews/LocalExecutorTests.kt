@@ -81,24 +81,6 @@ class LocalExecutorTests {
         assertThat(runPath.resolve(REPORT_FILENAME)).exists()
     }
 
-    /*
-    @Test @Order(2)
-    fun `Can invalidate cache using different task parameters`() {
-        val executor = runWorkflow(2, "task-param-2")
-
-        for (i in 1..3) {
-            assertThat(base64Dir.resolve("test-$i.b64")).exists()
-            assertThat(gzipDir.resolve("test-$i.b64.gz")).exists()
-            verifyExecuteWithOutput(executor, "base64/test-$i.b64")
-            verifyExecuteWithOutput(executor, "gzip/test-$i.b64.gz")
-        }
-
-        // Confirm that logs and an html report were generated
-        val runPath = testDir.resolve("run/2/")
-        assertThat(Files.list(runPath.resolve(LOGS_DIR)).toList().size).isEqualTo(6)
-        assertThat(runPath.resolve(REPORT_FILENAME)).exists()
-    }
-*/
     @Test @Order(2)
     fun `Should use cache if output files exist`() {
         // Update file #1 and add a new File #4
@@ -162,10 +144,10 @@ class LocalExecutorTests {
      */
     private fun runWorkflow(runTimestampOverride: Long, taskParam: String): LocalExecutor {
         val parsedConfig = ConfigFactory.parseString(config(taskParam))
-        val workflow = localFilesWorkflow().build(createParamsForConfig(parsedConfig))
         val workflowConfig = createWorkflowConfig(parsedConfig)
-        val taskConfigs = createTaskConfigs(parsedConfig, workflow)
         val executor = spyk(LocalExecutor(workflowConfig))
+        val workflow = localFilesWorkflow().build(executor, createParamsForConfig(parsedConfig))
+        val taskConfigs = createTaskConfigs(parsedConfig, workflow)
         val runner = WorkflowRunner(workflow, workflowConfig, taskConfigs, executor, runTimestampOverride)
         runner.run()
         return executor

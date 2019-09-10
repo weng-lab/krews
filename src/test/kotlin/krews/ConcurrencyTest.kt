@@ -207,10 +207,10 @@ class ConcurrencyTest {
 
     private fun runWorkflow(config: String): ExecutorAndRunner {
         val parsedConfig = ConfigFactory.parseString(config)
-        val workflow = testWorkflow.build(createParamsForConfig(parsedConfig))
+        val executor = mockk<LocallyDirectedExecutor>(relaxed = true)
+        val workflow = testWorkflow.build(executor, createParamsForConfig(parsedConfig))
         val workflowConfig = createWorkflowConfig(parsedConfig)
         val taskConfigs = createTaskConfigs(parsedConfig, workflow)
-        val executor = mockk<LocallyDirectedExecutor>(relaxed = true)
         val runner = WorkflowRunner(workflow, workflowConfig, taskConfigs, executor)
         return ExecutorAndRunner(executor, runner)
     }
