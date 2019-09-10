@@ -106,9 +106,10 @@ class GoogleExecutorTests {
         val configStr = googleConfig(inputFiles, grouping)
         val config = ConfigFactory.parseString(configStr)
         val workflow = gsFilesWorkflow().build(createParamsForConfig(config))
-        val workflowConfig = createWorkflowConfig(config, workflow)
+        val workflowConfig = createWorkflowConfig(config)
+        val taskConfigs = createTaskConfigs(config, workflow)
         val executor = spyk(GoogleLocalExecutor(workflowConfig))
-        val runner = WorkflowRunner(workflow, workflowConfig, executor, runTimestampOverride)
+        val runner = WorkflowRunner(workflow, workflowConfig, taskConfigs, executor, runTimestampOverride)
         runner.run()
         return executor
     }

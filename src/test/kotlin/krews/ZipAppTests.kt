@@ -141,11 +141,12 @@ class ZipAppTests {
     private fun runWorkflow(config: String): ExecutorAndRunner {
         val parsedConfig = ConfigFactory.parseString(config)
         val workflow = testWorkflow.build(createParamsForConfig(parsedConfig))
-        val workflowConfig = createWorkflowConfig(parsedConfig, workflow)
+        val workflowConfig = createWorkflowConfig(parsedConfig)
+        val taskConfigs = createTaskConfigs(parsedConfig, workflow)
         val executor = mockk<LocallyDirectedExecutor>(relaxed = true)
         // Don't spy on WorkflowRunner. It seems to mask errors.
         //val runner = spyk(WorkflowRunner(workflow, workflowConfig, executor))
-        val runner = WorkflowRunner(workflow, workflowConfig, executor)
+        val runner = WorkflowRunner(workflow, workflowConfig, taskConfigs, executor)
         return ExecutorAndRunner(executor, runner)
     }
 

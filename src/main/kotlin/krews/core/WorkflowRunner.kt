@@ -1,6 +1,6 @@
 package krews.core
 
-import krews.config.WorkflowConfig
+import krews.config.*
 import krews.db.*
 import krews.executor.*
 import krews.misc.createReport
@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.*
 import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.max
 
 
 private val log = KotlinLogging.logger {}
@@ -21,6 +22,7 @@ private val log = KotlinLogging.logger {}
 class WorkflowRunner(
     private val workflow: Workflow,
     private val workflowConfig: WorkflowConfig,
+    private val taskConfigs: Map<String, TaskConfig>,
     private val executor: LocallyDirectedExecutor,
     runTimestampOverride: Long? = null
 ) {
@@ -53,7 +55,7 @@ class WorkflowRunner(
         log.info { "Workflow run created successfully!" }
 
         // Create an executor service for periodically generating reports
-        val reportGenerationDelay = Math.max(workflowConfig.reportGenerationDelay, 10)
+        val reportGenerationDelay = max(workflowConfig.reportGenerationDelay, 10)
         reportPool.scheduleWithFixedDelay({ generateReport() },
             reportGenerationDelay, reportGenerationDelay, TimeUnit.SECONDS)
 
@@ -64,11 +66,11 @@ class WorkflowRunner(
     }
 
     private fun runWorkflow(): Boolean {
-        val taskRunner = TaskRunner(workflowRun, workflowConfig, executor, runRepo)
+        val taskRunner = TaskRunner(workflowRun, workflowConfig, taskConfigs, executor, runRepo)
         try {
             // Set execute function for each task.
             for (task in workflow.tasks.values) {
-                task.connect(workflowConfig.tasks[task.name], taskRunner)
+                task.connect(taskConfigs[task.name], taskRunner)
             }
 
             // Get "leafOutputs", meaning this workflow's task.output fluxes that don't have other task.outputs as parents

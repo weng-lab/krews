@@ -26,6 +26,7 @@ class TaskRunFuture<I : Any, O : Any>(
 
 class TaskRunner(workflowRun: WorkflowRun,
                  private val workflowConfig: WorkflowConfig,
+                 private val taskConfigs: Map<String, TaskConfig>,
                  private val executor: LocallyDirectedExecutor,
                  private val runRepo: RunRepo) {
 
@@ -104,7 +105,7 @@ class TaskRunner(workflowRun: WorkflowRun,
         }
 
         val taskGroupingConfig = if (executor.supportsGrouping()) {
-            workflowConfig.tasks.getValue(taskName).grouping
+            taskConfigs.getValue(taskName).grouping
         } else 1
         val taskGroupingBuffer = groupingBuffers.getValue(taskName)
         taskGroupingBuffer += taskRunFuture
@@ -146,7 +147,7 @@ class TaskRunner(workflowRun: WorkflowRun,
     private suspend fun run(taskRunFutures: List<TaskRunFuture<*, *>>) {
         val taskRunContexts = taskRunFutures.map { it.taskRunContext }
         val taskName = taskRunContexts.first().taskName
-        val taskConfig = workflowConfig.tasks.getValue(taskName)
+        val taskConfig = taskConfigs.getValue(taskName)
 
         val taskRunExecutions = taskRunContexts
             .map { TaskRunExecution(it.dockerImage, it.command) }

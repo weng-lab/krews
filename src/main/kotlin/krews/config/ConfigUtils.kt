@@ -33,27 +33,30 @@ fun createParamsForConfig(config: Config): Map<String, Any> {
  * Creates workflow config object from raw deserialized HOCON config
  *
  * @param config: Raw HOCON config object from the Typesafe lib
- * @param workflow: The workflow the configuration is being applied to. If null, the config will be created
- * without deserializing tasks.
- *
- * @return
  */
-@Suppress("UNCHECKED_CAST")
-fun createWorkflowConfig(config: Config, workflow: Workflow?): WorkflowConfig {
+fun createWorkflowConfig(config: Config): WorkflowConfig {
     val configRoot = mutableMapOf<String, Any>()
     deepOverrideConfig(configRoot, config.root())
-    val rawTaskConfigs = if (configRoot["task"] != null) configRoot["task"] as MutableMap<String, Map<String, Any>> else mutableMapOf()
     configRoot.remove("task")
-
-    configRoot["tasks"] =
-        if (workflow != null) createTaskConfigs(rawTaskConfigs, workflow.tasks.values)
-        else mapOf<String, Any>()
 
     if (configRoot["params"] == null) {
         configRoot["params"] = mapOf<String, Any>()
     }
 
     return noDefaultTypesMapper.convertValue(configRoot)
+}
+
+/**
+ * Creates map of task config objects from raw deserialized HOCON config
+ */
+@Suppress("UNCHECKED_CAST")
+fun createTaskConfigs(config: Config, workflow: Workflow): Map<String, TaskConfig> {
+    val configRoot = mutableMapOf<String, Any>()
+    deepOverrideConfig(configRoot, config.root())
+    val rawTaskConfigs = if (configRoot["task"] != null) configRoot["task"] as MutableMap<String, Map<String, Any>> else mutableMapOf()
+
+    val configTasks = createTaskConfigs(rawTaskConfigs, workflow.tasks.values)
+    return noDefaultTypesMapper.convertValue(configTasks)
 }
 
 /**

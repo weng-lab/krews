@@ -179,17 +179,22 @@ class ConfigTests {
         assertThat(parsedParams!!.map).isEqualTo(parsedCompleteParams.map)
     }
 
-    @Test fun `createWorkflowConfig should create complete complex task-based configurations`() {
+    @Test fun `createWorkflowConfig should create complete complex configurations`() {
         val config = ConfigFactory.parseString(completeTestConfig)
-        val params = createParamsForConfig(config)
-        val workflow = configSampleWorkflow().build(params)
-        val workflowConfig = createWorkflowConfig(config, workflow)
+        val workflowConfig = createWorkflowConfig(config)
         assertThat(workflowConfig.google).isEqualTo(GoogleWorkflowConfig(
             projectId = "test-project",
             bucket = "test-bucket"
         ))
         assertThat(workflowConfig.local).isNull()
-        assertThat(workflowConfig.tasks["sample"]).isEqualTo(TaskConfig(
+    }
+
+    @Test fun `createTaskConfigs should create complex task configurations`() {
+        val config = ConfigFactory.parseString(completeTestConfig)
+        val params = createParamsForConfig(config)
+        val workflow = configSampleWorkflow().build(params)
+        val taskConfigs = createTaskConfigs(config, workflow)
+        assertThat(taskConfigs["sample"]).isEqualTo(TaskConfig(
             params = mapOf(
                 "my-shared-thing" to "override",
                 "db-url" to "postgresql://somewhere:5432/mydb",
@@ -203,7 +208,7 @@ class ConfigTests {
             grouping = 1
         ))
 
-        assertThat(workflowConfig.tasks["sample2"]).isEqualTo(TaskConfig(
+        assertThat(taskConfigs["sample2"]).isEqualTo(TaskConfig(
             params = mapOf(
                 "my-shared-thing" to "someval"
             ),
@@ -214,7 +219,7 @@ class ConfigTests {
             grouping = 3
         ))
 
-        assertThat(workflowConfig.tasks["sample3"]).isEqualTo(TaskConfig(
+        assertThat(taskConfigs["sample3"]).isEqualTo(TaskConfig(
             params = mapOf(
                 "my-shared-thing" to "someval"
             ),
@@ -224,12 +229,6 @@ class ConfigTests {
             ),
             grouping = 3
         ))
-    }
-
-    @Test fun `createWorkflowConfig should create configuration without workflow`() {
-        val config = ConfigFactory.parseString(completeTestConfig)
-        val workflowConfig = createWorkflowConfig(config, null)
-        assertThat(workflowConfig).isNotNull
     }
 
 }

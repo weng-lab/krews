@@ -44,17 +44,11 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
         }
     }
 
-    override fun uploadFile(fromPath: Path, toPath: String, backup: Boolean) {
+    override fun uploadFile(fromPath: Path, toPath: String) {
         val toFile = workflowBasePath.resolve(toPath)
         log.info { "Copying file $fromPath to $toFile" }
         Files.createDirectories(toFile.parent)
         FileUtils.copyFile(fromPath.toFile(), toFile.toFile())
-
-        if (backup) {
-            val backupFile = workflowBasePath.resolve("$toFile.backup")
-            log.info { "Backing up file $toFile to $backupFile" }
-            FileUtils.copyFile(toFile.toFile(), backupFile.toFile())
-        }
     }
 
     override fun fileExists(path: String): Boolean = Files.exists(workflowBasePath.resolve(path))

@@ -97,9 +97,10 @@ class SlurmExecutorTests {
     private fun runWorkflow(runTimestampOverride: Long, taskParam: String): SlurmExecutor {
         val parsedConfig = ConfigFactory.parseString(config(taskParam))
         val workflow = localFilesWorkflow().build(createParamsForConfig(parsedConfig))
-        val workflowConfig = createWorkflowConfig(parsedConfig, workflow)
+        val workflowConfig = createWorkflowConfig(parsedConfig)
+        val taskConfigs = createTaskConfigs(parsedConfig, workflow)
         val executor = spyk(SlurmExecutor(workflowConfig))
-        val runner = WorkflowRunner(workflow, workflowConfig, executor, runTimestampOverride)
+        val runner = WorkflowRunner(workflow, workflowConfig, taskConfigs, executor, runTimestampOverride)
         runner.run()
         return executor
     }

@@ -1,13 +1,21 @@
 package krews.core
 
 import krews.config.convertConfigMap
+import krews.executor.LocallyDirectedExecutor
 import org.reactivestreams.Publisher
 import reactor.core.publisher.Flux
+import java.nio.file.Path
 
 class WorkflowBuilder internal constructor(val name: String, private val init: WorkflowBuilder.() -> Unit) {
     @PublishedApi internal lateinit var tasks: MutableMap<String, Task<*, *>>
     @PublishedApi internal lateinit var rawParams: Map<String, Any>
     @PublishedApi internal var paramsOverride: Any? = null
+    private lateinit var executor: LocallyDirectedExecutor
+
+    fun downloadFile(fromPath: String, toPath: Path) = executor.downloadFile(fromPath, toPath)
+    fun uploadFile(fromPath: Path, toPath: String) = executor.uploadFile(fromPath, toPath)
+    fun listFiles(baseDir: String) = executor.listFiles(baseDir)
+    fun deleteFile(file: String) = executor.deleteFile(file)
 
     fun importWorkflow(workflowBuilder: WorkflowBuilder, params: Any? = null): Workflow {
         workflowBuilder.paramsOverride = params

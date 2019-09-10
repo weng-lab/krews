@@ -45,17 +45,11 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
             log.info { "$fromFile not found. It will not be copied." }
         }
     }
-    override fun uploadFile(fromPath: Path, toPath: String, backup: Boolean) {
+    override fun uploadFile(fromPath: Path, toPath: String) {
         val toFile = workflowBasePath.resolve(toPath)
         log.info { "Copying file $fromPath to $toFile" }
         Files.createDirectories(toFile.parent)
         Files.copy(fromPath, toFile, StandardCopyOption.REPLACE_EXISTING)
-
-        if (backup) {
-            val backupFile = workflowBasePath.resolve("$toFile.backup")
-            log.info { "Backing up file $toFile to $backupFile" }
-            Files.copy(toFile, backupFile, StandardCopyOption.REPLACE_EXISTING)
-        }
     }
 
     override fun fileExists(path: String) = Files.exists(workflowBasePath.resolve(path))
@@ -176,8 +170,9 @@ fun createContainer(dockerClient: DockerClient, taskRunContext: TaskRunContext<*
         taskRunContext.inputFiles
             .filterIsInstance<LocalInputFile>()
             .map {
+                val absoluteLocalPath = Paths.get(it.localPath).toAbsolutePath()
                 val volume = Volume(taskRunContext.inputsDir + "/${it.path}" )
-                val bind = Bind(it.localPath, volume, AccessMode.ro)
+                val bind = Bind(absoluteLocalPath.toString(), volume, AccessMode.ro)
                 bind
             },
         taskRunContext.inputFiles
@@ -203,7 +198,7 @@ fun createContainer(dockerClient: DockerClient, taskRunContext: TaskRunContext<*
         .withHostConfig(HostConfig().withBinds(Binds(*binds.toTypedArray())))
     if (taskRunContext.command != null) containerCreationCmd.withCmd("/bin/sh", "-c", taskRunContext.command)
     if (taskRunContext.env?.isNotEmpty() == true)
-        containerCreationCmd.withEnv(taskRunContext.env.map { "${it.key}=${it.value}" })
+        containerCreationCmd.withEnv(taskRunContext.env!!.map { "${it.key}=${it.value}" })
     val createContainerResponse = containerCreationCmd.exec()
     return createContainerResponse.id!!
 }

@@ -1,23 +1,17 @@
 package krews
 
 import com.github.ajalt.clikt.core.CliktCommand
-import com.github.ajalt.clikt.parameters.options.convert
-import com.github.ajalt.clikt.parameters.options.default
-import com.github.ajalt.clikt.parameters.options.flag
-import com.github.ajalt.clikt.parameters.options.option
+import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.types.choice
 import com.typesafe.config.ConfigFactory
-import krews.config.createParamsForConfig
-import krews.config.createWorkflowConfig
+import krews.config.*
 import krews.core.*
-import krews.executor.google.GoogleExecutor
-import krews.executor.google.GoogleLocalExecutor
+import krews.executor.google.*
 import krews.executor.local.LocalExecutor
 import krews.executor.slurm.SlurmExecutor
 import mu.KotlinLogging
 import java.io.File
-import java.nio.file.Files
-import java.nio.file.Paths
+import java.nio.file.*
 
 
 private val log = KotlinLogging.logger {}
@@ -50,10 +44,10 @@ class KrewsApp(private val workflowBuilder: WorkflowBuilder) : CliktCommand() {
         if (config != null && !Files.exists(config)) throw Exception("Given config $config not found")
         val hoconConfig = if (config != null) ConfigFactory.parseFile(config!!.toFile()) else ConfigFactory.empty()
         val params = createParamsForConfig(hoconConfig)
+        val workflowConfig = createWorkflowConfig(hoconConfig)
 
         if (on.locallyDirected) {
             val workflow = workflowBuilder.build(params)
-            val workflowConfig = createWorkflowConfig(hoconConfig, workflow)
             val executor = when(on) {
                 Executors.LOCAL -> LocalExecutor(workflowConfig)
                 Executors.GOOGLE_LOCAL -> GoogleLocalExecutor(workflowConfig)
@@ -65,7 +59,8 @@ class KrewsApp(private val workflowBuilder: WorkflowBuilder) : CliktCommand() {
             log.info { "Krews running with max heap size $maxHeapSize" }
 
             val runTimestampOverride = System.getenv(WORKFLOW_RUN_TIMESTAMP_ENV_VAR)?.toLong()
-            val runner = WorkflowRunner(workflow, workflowConfig, executor, runTimestampOverride)
+            val taskConfigs = createTaskConfigs(hoconConfig, workflow)
+            val runner = WorkflowRunner(workflow, workflowConfig, taskConfigs, executor, runTimestampOverride)
 
             // Add shutdown hook to stop all running tasks and other cleanup work if master is stopped.
             Runtime.getRuntime().addShutdownHook(Thread {
@@ -76,8 +71,6 @@ class KrewsApp(private val workflowBuilder: WorkflowBuilder) : CliktCommand() {
 
             runner.run()
         } else {
-            // Create config without workflow because we don't need task configurations for this run
-            val workflowConfig = createWorkflowConfig(hoconConfig, null)
             val executor = when(on) {
                 Executors.GOOGLE -> GoogleExecutor(workflowConfig)
                 else -> throw Exception("Unsupported executor")
