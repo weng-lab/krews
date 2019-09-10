@@ -197,8 +197,8 @@ fun createContainer(dockerClient: DockerClient, taskRunContext: TaskRunContext<*
         .withVolumes(mountVolume, filesVolume)
         .withHostConfig(HostConfig().withBinds(Binds(*binds.toTypedArray())))
     if (taskRunContext.command != null) containerCreationCmd.withCmd("/bin/sh", "-c", taskRunContext.command)
-    if (taskRunContext.env?.isNotEmpty() == true)
-        containerCreationCmd.withEnv(taskRunContext.env!!.map { "${it.key}=${it.value}" })
+    val env = taskRunContext.env
+    if (env?.isNotEmpty() == true) containerCreationCmd.withEnv(env.map { "${it.key}=${it.value}" })
     val createContainerResponse = containerCreationCmd.exec()
     return createContainerResponse.id!!
 }

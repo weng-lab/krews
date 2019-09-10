@@ -48,6 +48,7 @@ class WorkflowBuilder internal constructor(val name: String, private val init: W
     }
 
     internal fun build(executor: LocallyDirectedExecutor, rawParams: Map<String, Any>): Workflow {
+        this.executor = executor
         this.tasks = mutableMapOf()
         this.paramsOverride = null
         this.rawParams = rawParams
