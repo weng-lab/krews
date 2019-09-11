@@ -176,7 +176,7 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
                     }
                     log.info { "Pipeline job for $context ($opName) completed successfully. Results: ${op.toPrettyString()}" }
                 } else {
-                    log.info { "Pipeline job for task run $context ($opName) still running..." }
+                    log.debug { "Pipeline job for task run $context ($opName) still running..." }
                 }
                 done = op.done
             } catch(e: GoogleJsonResponseException) {
