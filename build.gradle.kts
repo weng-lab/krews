@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "io.krews"
-version = "0.8.3"
+version = "0.9.0"
 
 repositories {
     maven { setUrl("http://dl.bintray.com/kotlin/kotlin-eap") }
@@ -39,7 +39,7 @@ dependencies {
     compile( "org.jetbrains.kotlinx", "kotlinx-coroutines-core", "1.1.1")
     testImplementation("org.junit.jupiter", "junit-jupiter", "5.4.0")
     testCompile("org.assertj", "assertj-core", "3.11.1")
-    testImplementation("io.mockk", "mockk", "1.9.1")
+    testImplementation("io.mockk", "mockk", "1.9.3")
 }
 
 tasks.withType<Test> {

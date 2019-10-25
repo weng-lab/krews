@@ -12,10 +12,7 @@ import java.nio.file.Paths
  * @param objectPath: GCS object
  * @param path: Unique relative path used by Krews for storage and in task containers. Set to objectPath by default.
  */
-data class GSInputFile(val bucket: String,
-                  val objectPath: String,
-                  override val path: String = objectPath) : InputFile() {
-
+data class GSInputFile(val bucket: String, val objectPath: String, override val path: String = objectPath) : InputFile() {
     override fun downloadFileImage() = CLOUD_SDK_IMAGE
     override fun downloadFileCommand(containerBaseDir: String) =
         "gsutil cp gs://$bucket/$objectPath $containerBaseDir/$path"

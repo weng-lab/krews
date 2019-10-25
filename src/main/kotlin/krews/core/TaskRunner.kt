@@ -8,6 +8,7 @@ import krews.misc.mapper
 import mu.KotlinLogging
 import java.util.concurrent.*
 import kotlinx.coroutines.*
+import krews.file.NONE_SUFFIX
 import org.apache.commons.lang3.concurrent.BasicThreadFactory
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
@@ -92,8 +93,10 @@ class TaskRunner(workflowRun: WorkflowRun,
         val taskRunFuture = TaskRunFuture(taskRunContext)
 
         // Check if all the output files exist and we should skip this run
-        val allOutputFilesPresent = taskRunContext.outputFilesOut.isNotEmpty() && taskRunContext.outputFilesOut
-            .all { executor.fileExists("$OUTPUTS_DIR/${it.path}") }
+        val allOutputFilesPresent = taskRunContext.outputFilesOut.isNotEmpty() && taskRunContext.outputFilesOut.all {
+            executor.fileExists("$OUTPUTS_DIR/${it.path}") ||
+                    (it.optional && executor.fileExists("$OUTPUTS_DIR/${it.path}.$NONE_SUFFIX"))
+        }
         when {
             workflowConfig.forceRuns -> log.info { "ForceRuns config set to true. Queueing...\n$taskRunContext" }
             allOutputFilesPresent -> {
@@ -173,8 +176,10 @@ class TaskRunner(workflowRun: WorkflowRun,
             var allContextsSuccessful = true
             taskRunFutures.forEach { taskRunFuture ->
                 val taskRunContext = taskRunFuture.taskRunContext
-                val allOutputsExist = taskRunContext.outputFilesOut
-                    .all { executor.fileExists("$OUTPUTS_DIR/${it.path}") }
+                val allOutputsExist = taskRunContext.outputFilesOut.all {
+                    executor.fileExists("$OUTPUTS_DIR/${it.path}") ||
+                            (it.optional && executor.fileExists("$OUTPUTS_DIR/${it.path}.$NONE_SUFFIX"))
+                }
                 if (allOutputsExist) {
                     taskRunFuture.complete()
                 } else {

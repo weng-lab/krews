@@ -16,6 +16,7 @@ class WorkflowBuilder internal constructor(val name: String, private val init: W
     fun uploadFile(fromPath: Path, toPath: String) = executor.uploadFile(fromPath, toPath)
     fun listFiles(baseDir: String) = executor.listFiles(baseDir)
     fun deleteFile(file: String) = executor.deleteFile(file)
+    fun fileExists(file: String) = executor.fileExists(file)
 
     fun importWorkflow(workflowBuilder: WorkflowBuilder, executor: LocallyDirectedExecutor, params: Any? = null): Workflow {
         workflowBuilder.paramsOverride = params

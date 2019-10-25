@@ -15,7 +15,9 @@ package krews.file
  * For example, an input type of `data class MyData(val myMap: Map<String, WFile>)` would copy all WFiles in
  * MyData.myMap values.
  */
-data class OutputFile(override val path: String) : File
+data class OutputFile(override val path: String, val optional: Boolean = false) : File
+
+const val NONE_SUFFIX = "none"
 
 /* TODO: finish implementing
 class WildcardOutputFiles(val path: String) {

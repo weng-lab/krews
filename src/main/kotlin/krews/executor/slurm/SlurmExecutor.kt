@@ -180,9 +180,14 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
                 sbatchScript.append("# Copy output files out of mounted directory.\n")
 
                 for (outputFile in outputFilesOut) {
-                    val cachedFilePath = outputsPath.resolve(outputFile.path)
+                    val outFilePath = outputsPath.resolve(outputFile.path)
                     val mountDirFilePath = "$mountOuputsDir/${outputFile.path}"
-                    sbatchScript.append(copyCommand(mountDirFilePath, cachedFilePath.toString()))
+                    val presentCopyCmd = copyCommand(mountDirFilePath, outFilePath.toString())
+                    val copyCmd = if (outputFile.optional) {
+                        val missingCopyCmd = "mkdir -p \$(dirname $outFilePath) && touch $outFilePath"
+                        "if [ -f $mountDirFilePath ]; then $presentCopyCmd; else $missingCopyCmd; fi"
+                    } else presentCopyCmd
+                    sbatchScript.append(copyCmd)
                 }
             }
         }

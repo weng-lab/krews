@@ -73,6 +73,7 @@ class LocalExecutorTests {
         for (i in 1..3) {
             assertThat(base64Dir.resolve("test-$i.b64")).exists()
             assertThat(gzipDir.resolve("test-$i.b64.gz")).exists()
+            assertThat(gzipDir.resolve("test-$i.b64.fake.none")).exists()
         }
 
         // Confirm that logs and an html report were generated
@@ -95,6 +96,7 @@ class LocalExecutorTests {
         for (i in 1..4) {
             assertThat(base64Dir.resolve("test-$i.b64")).exists()
             assertThat(gzipDir.resolve("test-$i.b64.gz")).exists()
+            assertThat(gzipDir.resolve("test-$i.b64.fake.none")).exists()
         }
 
         // Verify tasks were run for test-4 and NOT for test-1, 2, and 3
@@ -118,11 +120,13 @@ class LocalExecutorTests {
     fun `Cache should be invalidated if output file is removed`() {
         Files.delete(outputsDir.resolve("base64/test-2.b64"))
         Files.delete(outputsDir.resolve("gzip/test-2.b64.gz"))
+        Files.delete(outputsDir.resolve("gzip/test-3.b64.fake.none"))
         val executor = runWorkflow(3, "task-param-2")
 
         for (i in 2..4) {
             assertThat(base64Dir.resolve("test-$i.b64")).exists()
             assertThat(gzipDir.resolve("test-$i.b64.gz")).exists()
+            assertThat(gzipDir.resolve("test-$i.b64.fake.none")).exists()
         }
 
         verifyExecuteWithOutput(executor, "base64/test-2.b64")
@@ -130,12 +134,12 @@ class LocalExecutorTests {
         verifyExecuteWithOutput(executor, "base64/test-4.b64", 0)
 
         verifyExecuteWithOutput(executor, "gzip/test-2.b64.gz")
-        verifyExecuteWithOutput(executor, "gzip/test-3.b64.gz", 0)
+        verifyExecuteWithOutput(executor, "gzip/test-3.b64.gz")
         verifyExecuteWithOutput(executor, "gzip/test-4.b64.gz", 0)
 
         // Confirm that logs and an html report were generated
         val runPath = testDir.resolve("run/3/")
-        assertThat(Files.list(runPath.resolve(LOGS_DIR)).toList().size).isEqualTo(2)
+        assertThat(Files.list(runPath.resolve(LOGS_DIR)).toList().size).isEqualTo(3)
         assertThat(runPath.resolve(REPORT_FILENAME)).exists()
     }
 

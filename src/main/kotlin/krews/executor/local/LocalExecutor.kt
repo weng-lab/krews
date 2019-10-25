@@ -141,10 +141,19 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
             } else {
                 log.info { "No output files to copy for this task run." }
             }
-            taskRunContext.outputFilesOut.map { it.path }.forEach {
-                val to = outputsPath.resolve(it)
-                Files.createDirectories(to.parent)
-                Files.copy(outputsDir.resolve(it), to, StandardCopyOption.REPLACE_EXISTING)
+            taskRunContext.outputFilesOut.forEach {
+                val from = outputsDir.resolve(it.path)
+                val to = outputsPath.resolve(it.path)
+
+                if (Files.exists(from)) {
+                    Files.createDirectories(to.parent)
+                    Files.copy(from, to, StandardCopyOption.REPLACE_EXISTING)
+                } else {
+                    if(!it.optional) throw Exception("Expected output file $from was not created.")
+                    val noneTo = Paths.get("$to.$NONE_SUFFIX")
+                    Files.createDirectories(to.parent)
+                    if(!Files.exists(noneTo)) Files.createFile(noneTo)
+                }
             }
         } finally {
             // Clean up temporary mount dir

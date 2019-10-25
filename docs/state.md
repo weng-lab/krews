@@ -1,28 +1,13 @@
 # Output and State
 
-## Caching
+## Avoiding Repeats
 
-Tasks can often be expensive, so we don't want to repeat them if we don't need to. That's where caching comes in.
+Tasks can often be expensive, so we don't want to repeat them if we don't need to. That's why every time we 
+execute a task run, we first check if all the output files already exist in the `outputs/` directory. If they do,
+that run gets skipped.
 
-For every file created by a task run found in the "outputs" directory, we save the following data 
-related to the file and task runs that created it:
-
-- File path
-- File last modified time (for tracking changes)
-- Task name
-- Docker Image
-- Command
-- Inputs (as JSON)
-- Params (as JSON) 
-
-For each task run, if these fields match was we have saved and the file still exists in the outputs directory 
-with the same last modified time, we skip the running the task.
-
-
-## State File
-
-Krews keeps it's cache in a SQLite file database. This file is periodically copied into your 
-working directory under state/cache.db. It should NOT be deleted if you want to make full use of caching.
+In the cases where output files are marked as optional, a special `.none` file will be checked instead. These files 
+get created if a task run is successful, but an optional output file is not found.
 
 ## Reports
 
@@ -46,8 +31,7 @@ The the top level in the working directory (provided in config) we have the foll
 </div>
 
 - `outputs/` contains files created by our tasks.
-- `state/` contains a file with our cache data.
-- `output/` contains all files related to a single run. 
+- `run/` contains all files related to a single run.
 
 Each output run directory looks like the following
 

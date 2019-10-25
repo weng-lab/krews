@@ -24,7 +24,7 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
         { "google workflow config must be present to use Google Local Executor" }
     private val bucket = googleConfig.bucket
     private val gcsBase = workflowConfig.workingDir
-    private val runningOperations: MutableSet<String> = ConcurrentHashMap.newKeySet<String>()
+    private val runningOperations: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     private val allShutdown = AtomicBoolean(false)
 
@@ -128,7 +128,7 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
             // Create the actions to upload each task output OutputFile
             val uploadActions = taskRunContext.outputFilesOut.map {
                 val outputFileObject = gcsPath(bucket, gcsBase, OUTPUTS_DIR, it.path)
-                createUploadAction(outputFileObject, taskRunContext.outputsDir, it.path)
+                createUploadAction(outputFileObject, taskRunContext.outputsDir, it.path, it.optional)
             }
             actions.addAll(uploadActions)
         }

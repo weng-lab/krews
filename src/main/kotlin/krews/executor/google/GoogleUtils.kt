@@ -10,10 +10,9 @@ import com.google.api.services.genomics.v2alpha1.model.*
 import com.google.api.services.storage.Storage
 import com.google.api.services.storage.model.StorageObject
 import krews.config.GoogleWorkflowConfig
+import krews.file.NONE_SUFFIX
 import mu.KotlinLogging
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.StandardCopyOption
+import java.nio.file.*
 
 private val log = KotlinLogging.logger {}
 
@@ -43,9 +42,9 @@ internal fun createRunPipelineRequest(googleConfig: GoogleWorkflowConfig): RunPi
 
     val resources = Resources()
     pipeline.resources = resources
-    if (!googleConfig.zones.isEmpty()) {
+    if (googleConfig.zones.isNotEmpty()) {
         resources.zones = googleConfig.zones
-    } else if (!googleConfig.regions.isEmpty()) {
+    } else if (googleConfig.regions.isNotEmpty()) {
         resources.regions = googleConfig.regions
     }
 
@@ -113,11 +112,19 @@ internal fun createDiagnosticUploadAction(diagnosticsGSPath: String, dataDir: St
 /**
  * Create a pipeline action that will upload a file from the Pipelines VM to the specified google storage object.
  */
-internal fun createUploadAction(objectToUpload: String, dataDir: String, file: String): Action {
+internal fun createUploadAction(objectToUpload: String, dataDir: String, file: String, optional: Boolean): Action {
     val action = Action()
     action.imageUri = CLOUD_SDK_IMAGE
-    val copyCmd = shellRetry("gsutil -q cp $dataDir/$file $objectToUpload")
-    action.commands = listOf("sh", "-c", "set -x; $copyCmd")
+    val filePath = "$dataDir/$file"
+    // If it's present upload the file
+    // If it's missing (and optional) upload an empty file with suffix indicating it wasn't created
+    val presentCopyCmd = "gsutil -q cp $filePath $objectToUpload"
+    val copyCmd = if (optional) {
+        val missingCopyCmd = "echo \"\" | gsutil -q cp - $objectToUpload.$NONE_SUFFIX"
+        "if [ -f $filePath ]; then $presentCopyCmd; else $missingCopyCmd; fi"
+    } else presentCopyCmd
+    val copyCmdWithRetry = shellRetry(copyCmd)
+    action.commands = listOf("sh", "-c", "set -x; $copyCmdWithRetry")
     action.mounts = listOf(createMount(dataDir))
     return action
 }

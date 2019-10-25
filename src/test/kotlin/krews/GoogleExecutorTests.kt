@@ -70,6 +70,7 @@ class GoogleExecutorTests {
         for (i in 1..3) {
             "outputs/base64/test-$i.b64".existsInGS(testBucket, workflowBaseDir)
             "outputs/gzip/test-$i.b64.gz".existsInGS(testBucket, workflowBaseDir)
+            "outputs/gzip/test-$i.b64.fake.none".existsInGS(testBucket, workflowBaseDir)
         }
 
         // Confirm that an html report was generated
@@ -84,19 +85,24 @@ class GoogleExecutorTests {
         // Delete base64 output file 2 so we rerun tasks for file 2
         googleStorageClient.objects().delete(testBucket, "$workflowBaseDir/outputs/base64/test-2.b64").execute()
 
+        // Delete optional "none" file for run 3 so we rerun second step for file 3
+        googleStorageClient.objects().delete(testBucket, "$workflowBaseDir/outputs/gzip/test-3.b64.fake.none").execute()
+
         // We're adding grouping of 3 even though we won't have more than 1 task run to run at a time and
         // making sure it still works.
         val executor = runWorkflow((1..3).map { "test-$it.txt" }, grouping = 3, runTimestampOverride = 2)
 
-        // Verify cache is not used on files 1 and 2
-        for (i in 1..2) {
-            verifyExecuteWithOutput(executor, "base64/test-$i.b64")
-            verifyExecuteWithOutput(executor, "gzip/test-$i.b64.gz")
-        }
+        // Verify cache is used on operations for file 1
+        verifyExecuteWithOutput(executor, "base64/test-1.b64", 0)
+        verifyExecuteWithOutput(executor, "gzip/test-1.b64.gz", 0)
 
-        // Verify cache is used on operations for file 3
+        // Verify cache is not used on files 2
+        verifyExecuteWithOutput(executor, "base64/test-2.b64")
+        verifyExecuteWithOutput(executor, "gzip/test-2.b64.gz", 0)
+
+        // Verify cache is used in only first part of run 3
         verifyExecuteWithOutput(executor, "base64/test-3.b64", 0)
-        verifyExecuteWithOutput(executor, "gzip/test-3.b64.gz", 0)
+        verifyExecuteWithOutput(executor, "gzip/test-3.b64.gz")
     }
 
     /**
