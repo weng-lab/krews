@@ -759,15 +759,8 @@
     <ul class="md-nav__list" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#caching" title="Caching" class="md-nav__link">
-    Caching
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#state-file" title="State File" class="md-nav__link">
-    State File
+  <a href="#avoiding-repeats" title="Avoiding Repeats" class="md-nav__link">
+    Avoiding Repeats
   </a>
   
 </li>
@@ -859,15 +852,8 @@
     <ul class="md-nav__list" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#caching" title="Caching" class="md-nav__link">
-    Caching
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#state-file" title="State File" class="md-nav__link">
-    State File
+  <a href="#avoiding-repeats" title="Avoiding Repeats" class="md-nav__link">
+    Avoiding Repeats
   </a>
   
 </li>
@@ -906,24 +892,12 @@
                 
                 
                 <h1 id="output-and-state">Output and State<a class="headerlink" href="#output-and-state" title="Permanent link">&para;</a></h1>
-<h2 id="caching">Caching<a class="headerlink" href="#caching" title="Permanent link">&para;</a></h2>
-<p>Tasks can often be expensive, so we don&rsquo;t want to repeat them if we don&rsquo;t need to. That&rsquo;s where caching comes in.</p>
-<p>For every file created by a task run found in the &ldquo;outputs&rdquo; directory, we save the following data 
-related to the file and task runs that created it:</p>
-<ul>
-<li>File path</li>
-<li>File last modified time (for tracking changes)</li>
-<li>Task name</li>
-<li>Docker Image</li>
-<li>Command</li>
-<li>Inputs (as JSON)</li>
-<li>Params (as JSON) </li>
-</ul>
-<p>For each task run, if these fields match was we have saved and the file still exists in the outputs directory 
-with the same last modified time, we skip the running the task.</p>
-<h2 id="state-file">State File<a class="headerlink" href="#state-file" title="Permanent link">&para;</a></h2>
-<p>Krews keeps it&rsquo;s cache in a SQLite file database. This file is periodically copied into your 
-working directory under state/cache.db. It should NOT be deleted if you want to make full use of caching.</p>
+<h2 id="avoiding-repeats">Avoiding Repeats<a class="headerlink" href="#avoiding-repeats" title="Permanent link">&para;</a></h2>
+<p>Tasks can often be expensive, so we don&rsquo;t want to repeat them if we don&rsquo;t need to. That&rsquo;s why every time we 
+execute a task run, we first check if all the output files already exist in the <code>outputs/</code> directory. If they do,
+that run gets skipped.</p>
+<p>In the cases where output files are marked as optional, a special <code>.none</code> file will be checked instead. These files 
+get created if a task run is successful, but an optional output file is not found.</p>
 <h2 id="reports">Reports<a class="headerlink" href="#reports" title="Permanent link">&para;</a></h2>
 <p>As tasks are run, you can go into your working directory and find your status/report.html file. It will contain 
 information on every task that was run, including whether it completed successfully, in error, or is still in 
@@ -942,8 +916,7 @@ mostly the same.</p>
 
 <ul>
 <li><code>outputs/</code> contains files created by our tasks.</li>
-<li><code>state/</code> contains a file with our cache data.</li>
-<li><code>output/</code> contains all files related to a single run. </li>
+<li><code>run/</code> contains all files related to a single run.</li>
 </ul>
 <p>Each output run directory looks like the following</p>
 <div class="img-container">
