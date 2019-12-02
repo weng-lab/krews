@@ -12,7 +12,7 @@ package krews.file
  *
  * OutputFile objects in task inputs and outputs can be detected if the input / output types are WFiles themselves,
  * any type of collection or map containing WFiles, a data class with a WFile field, or any combination of the above.
- * For example, an input type of `data class MyData(val myMap: Map<String, WFile>)` would copy all WFiles in
+ * For example, an input type of `data class MyData(val myMap: Map<String, File>)` would copy all WFiles in
  * MyData.myMap values.
  */
 data class OutputFile(override val path: String, val optional: Boolean = false) : File
