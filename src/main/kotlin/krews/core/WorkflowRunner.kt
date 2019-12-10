@@ -4,6 +4,7 @@ import krews.config.*
 import krews.db.*
 import krews.executor.*
 import krews.misc.createReport
+import krews.misc.createStatusJson
 import mu.KotlinLogging
 import org.apache.commons.lang3.concurrent.BasicThreadFactory
 import org.jetbrains.exposed.sql.*
@@ -56,7 +57,7 @@ class WorkflowRunner(
 
         // Create an executor service for periodically generating reports
         val reportGenerationDelay = max(workflowConfig.reportGenerationDelay, 10)
-        reportPool.scheduleWithFixedDelay({ generateReport() },
+        reportPool.scheduleWithFixedDelay({ generateStatusReports() },
             reportGenerationDelay, reportGenerationDelay, TimeUnit.SECONDS)
 
         val workflowRunSuccessful = runWorkflow()
@@ -106,7 +107,7 @@ class WorkflowRunner(
         // Stop the periodic report generation executor service and generate one final report.
         reportPool.awaitTermination(10, TimeUnit.SECONDS)
 
-        generateReport()
+        generateStatusReports()
 
         Files.walk(workflowTmpDir)
             .sorted(Comparator.reverseOrder())
@@ -114,25 +115,41 @@ class WorkflowRunner(
         log.info { "Shutdown complete!" }
     }
 
-    private fun generateReport() {
+    /**
+     * Create and upload human-readable html status report and machine-readable json status file.
+     */
+    private fun generateStatusReports() {
         if (!runRepo.taskUpdatedSinceLastReport.get()) {
             log.info { "No updates since last report generation. Skipping..." }
             return
         }
         runRepo.taskUpdatedSinceLastReport.set(false)
 
-        log.info { "Generating report..." }
-        val workingReportPath = workflowTmpDir.resolve(REPORT_FILENAME)
-        val uploadReportFile = "$RUN_DIR/${workflowRun.startTime}/$REPORT_FILENAME"
+        log.info { "Generating html report..." }
+        val workingHtmlPath = workflowTmpDir.resolve(REPORT_FILENAME)
+        val uploadHtmlFile = "$RUN_DIR/${workflowRun.startTime}/$REPORT_FILENAME"
 
-        Files.createDirectories(workingReportPath.parent)
-        val writer = Files.newBufferedWriter(workingReportPath, StandardCharsets.UTF_8, StandardOpenOption.CREATE,
+        Files.createDirectories(workingHtmlPath.parent)
+        val htmlWriter = Files.newBufferedWriter(workingHtmlPath, StandardCharsets.UTF_8, StandardOpenOption.CREATE,
             StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)
-        createReport(runDb, workflowRun, writer)
-        writer.flush()
-        log.info { "Report generation complete (see: $workingReportPath)! Uploading..." }
+        createReport(runDb, workflowRun, htmlWriter)
+        htmlWriter.flush()
+        log.info { "Html Report generation complete (see: $workingHtmlPath)!" }
 
-        executor.uploadFile(workingReportPath, uploadReportFile)
-        log.info { "Report upload complete!" }
+        log.info { "Generating json status file..." }
+        val workingJsonPath = workflowTmpDir.resolve(STATUS_JSON_FILENAME)
+        val uploadJsonFile = "$RUN_DIR/${workflowRun.startTime}/$STATUS_JSON_FILENAME"
+
+        Files.createDirectories(workingJsonPath.parent)
+        val jsonWriter = Files.newBufferedWriter(workingJsonPath, StandardCharsets.UTF_8, StandardOpenOption.CREATE,
+            StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)
+        createStatusJson(runDb, workflowRun, jsonWriter)
+
+        log.info { "Json status file generation complete (see: $workingJsonPath)!" }
+
+        log.info { "Uploading status files..." }
+        executor.uploadFile(workingHtmlPath, uploadHtmlFile)
+        executor.uploadFile(workingJsonPath, uploadJsonFile)
+        log.info { "Status files upload complete!" }
     }
 }

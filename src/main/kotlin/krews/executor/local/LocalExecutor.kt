@@ -83,7 +83,7 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
 
             // Pull image from remote
             log.info { "Pulling image \"${taskRunContext.dockerImage}\" from remote..." }
-            dockerClient.pullImageCmd(taskRunContext.dockerImage).exec(PullImageResultCallback()).awaitSuccess()
+            dockerClient.pullImageCmd(taskRunContext.dockerImage).exec(PullImageResultCallback()).awaitCompletion()
 
             // Download InputFiles from remote sources
             for (downloadInputFile in taskRunContext.inputFiles) {

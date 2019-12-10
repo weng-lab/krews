@@ -80,6 +80,7 @@ class LocalExecutorTests {
         val runPath = testDir.resolve("run/1/")
         assertThat(Files.list(runPath.resolve(LOGS_DIR)).toList().size).isEqualTo(6)
         assertThat(runPath.resolve(REPORT_FILENAME)).exists()
+        assertThat(runPath.resolve(STATUS_JSON_FILENAME)).exists()
     }
 
     @Test @Order(2)
@@ -114,6 +115,7 @@ class LocalExecutorTests {
         val runPath = testDir.resolve("run/2/")
         assertThat(Files.list(runPath.resolve(LOGS_DIR)).toList().size).isEqualTo(2)
         assertThat(runPath.resolve(REPORT_FILENAME)).exists()
+        assertThat(runPath.resolve(STATUS_JSON_FILENAME)).exists()
     }
 
     @Test @Order(3)
@@ -141,6 +143,7 @@ class LocalExecutorTests {
         val runPath = testDir.resolve("run/3/")
         assertThat(Files.list(runPath.resolve(LOGS_DIR)).toList().size).isEqualTo(3)
         assertThat(runPath.resolve(REPORT_FILENAME)).exists()
+        assertThat(runPath.resolve(STATUS_JSON_FILENAME)).exists()
     }
 
     /**
