@@ -25,7 +25,7 @@ workflow or even just your containers will not have to worry about installing or
 
 ## Cloud Native
 
-Krews currently supports the [Google Genomics Pipelines API](https://cloud.google.com/genomics/) as a first 
+Krews currently supports the [Google Cloud Life Sciences](https://cloud.google.com/life-sciences/) pipelines API as a first 
 class citizen. It was the first integration written, and support was not shoe-horned into a model that does not 
 support it well. It will take full advantage of the Pipelines API's ability to create and use exactly the VM 
 you need for every task. It can also group many small tasks to run together easily.

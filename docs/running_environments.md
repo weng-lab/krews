@@ -15,7 +15,7 @@ The following is a complete list of arguments for Krews applications.
 
 ## Google Cloud
 
-Krews uses the Google Cloud Genomics Pipelines API to run on Google Cloud. In a nutshell, this API is just a 
+Krews uses the Google Cloud Life Sciences Pipelines API to run on Google Cloud. In a nutshell, this API is just a 
 service that creates custom VMs on-the-fly to run docker containers. Our implementation stores files on
 Google Cloud Storage.
 

@@ -6,6 +6,9 @@ import kotlin.math.roundToInt
 
 data class GoogleWorkflowConfig(
     val projectId: String,
+    // Required region where your life sciences where operation metadata is stored
+    // Default for backwards compatibility. It's currently the only supported location anyway.
+    val lifeSciencesLocation: String = "us-central1",
     val regions: List<String> = listOf(),
     val zones: List<String> = listOf(),
     val bucket: String,

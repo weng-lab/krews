@@ -46,6 +46,6 @@ java -jar my-app.jar --on local --config path/to/my-config.conf
 ```
 
 # Supported Platforms
-- [Google Genomics Pipelines API](https://cloud.google.com/genomics/)
+- [Google Cloud Life Sciences](https://cloud.google.com/life-sciences/)
 - [Slurm](https://slurm.schedmd.com/)
 - Local Docker (Single Machine)

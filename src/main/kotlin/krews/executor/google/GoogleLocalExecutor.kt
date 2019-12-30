@@ -1,7 +1,7 @@
 package krews.executor.google
 
 import com.google.api.client.googleapis.json.GoogleJsonResponseException
-import com.google.api.services.genomics.v2alpha1.model.*
+import com.google.api.services.lifesciences.v2beta.model.*
 import kotlinx.coroutines.delay
 import krews.config.*
 import krews.core.*
@@ -152,10 +152,10 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
 
         val context = "task run $taskRunId"
         log.info { "Submitting pipeline job for task run: $run" }
-        googleGenomicsClient.projects().operations()
         val initialOp: Operation = retry("Pipeline job submit",
             retryCondition = { e -> e is GoogleJsonResponseException && e.statusCode == 503 }) {
-            googleGenomicsClient.pipelines().run(run).execute()
+            val parent = "projects/${googleConfig.projectId}/locations/${googleConfig.lifeSciencesLocation}"
+            googleLifeSciencesClient.projects().locations().pipelines().run(parent, run).execute()
         }
         val opName = initialOp.name
         runningOperations.add(opName)
@@ -168,8 +168,9 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
             var done = false
             delay(googleConfig.jobCompletionPollInterval * 1000L)
             try {
-                val op: Operation = googleGenomicsClient.projects().operations().get(opName).execute()
-                if (op.done) {
+                val op: Operation = googleLifeSciencesClient.projects().locations().operations().get(opName).execute()
+                done = op.done == true
+                if (done) {
                     runningOperations.remove(opName)
                     if (op.error != null) {
                         throw Exception("Error occurred during $context ($opName) execution. Operation Response: ${op.toPrettyString()}")
@@ -178,7 +179,6 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
                 } else {
                     log.debug { "Pipeline job for task run $context ($opName) still running..." }
                 }
-                done = op.done
             } catch(e: GoogleJsonResponseException) {
                 if (e.statusCode != 503) {
                     throw e
@@ -191,7 +191,7 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
         allShutdown.set(true)
         for (op in runningOperations) {
             log.info { "Canceling operation $op..." }
-            googleGenomicsClient.projects().operations().cancel(op, null)
+            googleLifeSciencesClient.projects().locations().operations().cancel(op, null)
         }
     }
 

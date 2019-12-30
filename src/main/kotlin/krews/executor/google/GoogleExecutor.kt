@@ -1,6 +1,6 @@
 package krews.executor.google
 
-import com.google.api.services.genomics.v2alpha1.model.*
+import com.google.api.services.lifesciences.v2beta.model.*
 import krews.WORKFLOW_RUN_TIMESTAMP_ENV_VAR
 import krews.config.WorkflowConfig
 import krews.core.*
@@ -42,13 +42,11 @@ class GoogleExecutor(workflowConfig: WorkflowConfig) : RemoteDirectedExecutor {
 
         val resources = Resources()
         pipeline.resources = resources
-        if (!googleConfig.zones.isEmpty()) {
+        if (googleConfig.zones.isNotEmpty()) {
             resources.zones = googleConfig.zones
-        } else if (!googleConfig.regions.isEmpty()) {
+        } else if (googleConfig.regions.isNotEmpty()) {
             resources.regions = googleConfig.regions
         }
-
-        resources.projectId = googleConfig.projectId
 
         val virtualMachine = VirtualMachine()
         resources.virtualMachine = virtualMachine
@@ -85,8 +83,8 @@ class GoogleExecutor(workflowConfig: WorkflowConfig) : RemoteDirectedExecutor {
         actions.add(createLogsAction(logPath))
 
         log.info { "Submitting pipeline job for workflow run with timestamp ${workflowTime.millis}:\n$run" }
-        googleGenomicsClient.projects().operations()
-        val initialOp: Operation = googleGenomicsClient.pipelines().run(run).execute()
+        val parent = "projects/${googleConfig.projectId}/locations/${googleConfig.lifeSciencesLocation}"
+        val initialOp: Operation = googleLifeSciencesClient.projects().locations().pipelines().run(parent, run).execute()
 
         val reportPath = gcsPath(bucket, bucket, runObjectPath, REPORT_FILENAME)
         log.info {
@@ -101,7 +99,7 @@ class GoogleExecutor(workflowConfig: WorkflowConfig) : RemoteDirectedExecutor {
             |    - The master logs at $logPath
             |
             |You can stop the pipeline (both master and all running task nodes) with the following:
-            |   gcloud alpha genomics operations cancel ${initialOp.name}
+            |   gcloud beta lifesciences operations cancel ${initialOp.name}
             |""".trimMargin()
         }
     }

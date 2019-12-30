@@ -5,8 +5,8 @@ import com.google.api.client.googleapis.json.GoogleJsonResponseException
 import com.google.api.client.http.InputStreamContent
 import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.client.json.jackson2.JacksonFactory
-import com.google.api.services.genomics.v2alpha1.Genomics
-import com.google.api.services.genomics.v2alpha1.model.*
+import com.google.api.services.lifesciences.v2beta.CloudLifeSciences
+import com.google.api.services.lifesciences.v2beta.model.*
 import com.google.api.services.storage.Storage
 import com.google.api.services.storage.model.StorageObject
 import krews.config.GoogleWorkflowConfig
@@ -24,8 +24,8 @@ const val DISK_NAME = "disk"
 internal val googleClientTransport by lazy { NetHttpTransport() }
 internal val googleClientJsonFactory by lazy { JacksonFactory.getDefaultInstance() }
 internal val googleClientCredentials by lazy { GoogleCredential.getApplicationDefault() }
-internal val googleGenomicsClient by lazy {
-    Genomics.Builder(googleClientTransport, googleClientJsonFactory, googleClientCredentials)
+internal val googleLifeSciencesClient by lazy {
+    CloudLifeSciences.Builder(googleClientTransport, googleClientJsonFactory, googleClientCredentials)
         .setApplicationName(APPLICATION_NAME)
         .build()
 }
@@ -48,8 +48,6 @@ internal fun createRunPipelineRequest(googleConfig: GoogleWorkflowConfig): RunPi
         resources.regions = googleConfig.regions
     }
 
-    resources.projectId = googleConfig.projectId
-
     val actions = mutableListOf<Action>()
     run.pipeline.actions = actions
 
@@ -68,7 +66,7 @@ internal fun createPeriodicLogsAction(logPath: String, frequency: Int): Action {
     val action = Action()
     action.imageUri = CLOUD_SDK_IMAGE
     action.commands = listOf("sh", "-c", "while true; do sleep $frequency; gsutil -q cp /google/logs/output $logPath || true; done")
-    action.flags = listOf("RUN_IN_BACKGROUND")
+    action.runInBackground = true
     return action
 }
 
@@ -79,7 +77,7 @@ internal fun createLogsAction(logPath: String): Action {
     val action = Action()
     action.imageUri = CLOUD_SDK_IMAGE
     action.commands = listOf("sh", "-c", shellRetry("gsutil -q cp /google/logs/output $logPath"))
-    action.flags = listOf("ALWAYS_RUN")
+    action.alwaysRun = true
     return action
 }
 
@@ -105,7 +103,7 @@ internal fun createDiagnosticUploadAction(diagnosticsGSPath: String, dataDir: St
     val copyCmd = shellRetry("gsutil -m cp -r $dataDir $diagnosticsGSPath")
     action.commands = listOf("sh", "-c", "if [[ \"\$GOOGLE_PIPELINE_FAILED\" = \"1\" ]]; then $copyCmd; fi")
     action.mounts = listOf(createMount(dataDir))
-    action.flags = listOf("ALWAYS_RUN")
+    action.alwaysRun = true
     return action
 }
 

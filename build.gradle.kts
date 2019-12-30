@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "io.krews"
-version = "0.9.3"
+version = "0.10.0"
 
 repositories {
     maven { setUrl("http://dl.bintray.com/kotlin/kotlin-eap") }
@@ -32,7 +32,7 @@ dependencies {
     compile("org.xerial", "sqlite-jdbc", "3.25.2")
     compile("org.flywaydb", "flyway-core", "5.2.0")
     compile("com.zaxxer", "HikariCP", "3.1.0")
-    compile("com.google.apis", "google-api-services-genomics", "v2alpha1-rev20181017-1.26.0")
+    compile("com.google.apis", "google-api-services-lifesciences", "v2beta-rev5-1.25.0")
     compile("com.google.apis", "google-api-services-storage", "v1-rev20180905-1.26.0")
     compile("com.github.ajalt","clikt", "1.5.0")
     compile( "org.jetbrains.kotlinx", "kotlinx-html-jvm", "0.6.11")
