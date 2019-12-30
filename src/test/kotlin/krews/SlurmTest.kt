@@ -81,6 +81,7 @@ class SlurmExecutorTests {
         for (i in 1..3) {
             assertThat(base64Dir.resolve("test-$i.b64")).exists()
             assertThat(gzipDir.resolve("test-$i.b64.gz")).exists()
+            assertThat(gzipDir.resolve("test-$i.b64.fake.none")).exists()
 
             // Confirm that logs and an html report were generated
             val runPath = testDir.resolve("run/1/")

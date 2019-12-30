@@ -184,7 +184,8 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
                     val mountDirFilePath = "$mountOuputsDir/${outputFile.path}"
                     val presentCopyCmd = copyCommand(mountDirFilePath, outFilePath.toString())
                     val copyCmd = if (outputFile.optional) {
-                        val missingCopyCmd = "mkdir -p \$(dirname $outFilePath) && touch $outFilePath"
+                        val noneFilePath = "$outFilePath.$NONE_SUFFIX"
+                        val missingCopyCmd = "mkdir -p \$(dirname $noneFilePath) && touch $noneFilePath"
                         "if [ -f $mountDirFilePath ]; then $presentCopyCmd; else $missingCopyCmd; fi"
                     } else presentCopyCmd
                     sbatchScript.append(copyCmd)

@@ -1,20 +1,12 @@
 package krews.misc
 
-import com.fasterxml.jackson.databind.*
 import com.fasterxml.jackson.module.kotlin.*
 import krews.db.*
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.io.Writer
 
-val statusMapper by lazy {
-    val mapper = jacksonObjectMapper()
-
-    mapper.propertyNamingStrategy = PropertyNamingStrategy.KEBAB_CASE
-    mapper.enable(MapperFeature.ACCEPT_CASE_INSENSITIVE_ENUMS)
-    mapper
-}
-
+val statusMapper by lazy { jacksonObjectMapper() }
 
 internal fun createStatusJson(db: Database, workflowRun: WorkflowRun, out: Writer) {
     transaction(db) {
