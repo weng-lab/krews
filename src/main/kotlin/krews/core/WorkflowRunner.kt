@@ -57,8 +57,13 @@ class WorkflowRunner(
 
         // Create an executor service for periodically generating reports
         val reportGenerationDelay = max(workflowConfig.reportGenerationDelay, 10)
-        reportPool.scheduleWithFixedDelay({ generateStatusReports() },
-            reportGenerationDelay, reportGenerationDelay, TimeUnit.SECONDS)
+        reportPool.scheduleWithFixedDelay({
+            try {
+                generateStatusReports()
+            } catch (e: Exception) {
+                log.error(e) { "Exception caught generating status reports." }
+            }
+        }, reportGenerationDelay, reportGenerationDelay, TimeUnit.SECONDS)
 
         val workflowRunSuccessful = runWorkflow()
 

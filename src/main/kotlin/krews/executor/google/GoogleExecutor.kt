@@ -86,7 +86,7 @@ class GoogleExecutor(workflowConfig: WorkflowConfig) : RemoteDirectedExecutor {
         val parent = "projects/${googleConfig.projectId}/locations/${googleConfig.lifeSciencesLocation}"
         val initialOp: Operation = googleLifeSciencesClient.projects().locations().pipelines().run(parent, run).execute()
 
-        val reportPath = gcsPath(bucket, bucket, runObjectPath, REPORT_FILENAME)
+        val reportPath = gcsPath(bucket, runObjectPath, REPORT_FILENAME)
         log.info {
             """
             |Master pipeline job submitted
