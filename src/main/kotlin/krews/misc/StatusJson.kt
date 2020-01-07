@@ -25,10 +25,14 @@ data class WorkflowRunStatus(
 data class TaskRunStatus(
     val taskName: String,
     var startTime: Long,
-    var completionStatus: String,
+    var completionStatus: TaskCompletionStatus,
     var completedTime: Long?,
     val executions: List<TaskRunExecution>
 )
+
+enum class TaskCompletionStatus {
+    IN_PROGRESS, SUCCEEDED, PARTIALLY_SUCCEEDED, FAILED
+}
 
 data class Report(
     val workflowRunStatus: WorkflowRunStatus,
@@ -39,7 +43,13 @@ private fun createStatusJson(workflowRun: WorkflowRun, taskRuns: Iterable<TaskRu
     val workflowRunStatus = with(workflowRun) { WorkflowRunStatus(workflowName, startTime, completedSuccessfully, completedTime) }
     val taskRunStatuses = taskRuns.map { tr ->
         val taskRunExecutions = mapper.readValue<List<TaskRunExecution>>(tr.executionsJson)
-        TaskRunStatus(tr.taskName, tr.startTime, tr.completionStatus, tr.completedTime, taskRunExecutions)
+        val taskCompletionStatus = when {
+            tr.completedTime == null -> TaskCompletionStatus.IN_PROGRESS
+            tr.completionStatus == "completed" -> TaskCompletionStatus.SUCCEEDED
+            tr.completionStatus == "partially completed" -> TaskCompletionStatus.PARTIALLY_SUCCEEDED
+            else -> TaskCompletionStatus.FAILED
+        }
+        TaskRunStatus(tr.taskName, tr.startTime, taskCompletionStatus, tr.completedTime, taskRunExecutions)
     }
     statusMapper.writeValue(out, Report(workflowRunStatus, taskRunStatuses))
 }
