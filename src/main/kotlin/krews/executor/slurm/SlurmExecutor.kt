@@ -14,6 +14,7 @@ import java.util.UUID.randomUUID
 import retrySuspend
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.pow
+import kotlin.streams.*
 
 private val log = KotlinLogging.logger {}
 
@@ -191,6 +192,20 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
                     sbatchScript.append(copyCmd)
                 }
             }
+
+            val outputDirectoriesOut = taskRunContext.outputDirectoriesOut
+            // Copy output directories out of docker container into run outputs dir
+            if (outputDirectoriesOut.isNotEmpty()) {
+                sbatchScript.append("\n")
+                sbatchScript.append("# Copy output directories out of mounted directory.\n")
+
+                for (outputDirectory in outputDirectoriesOut) {
+                    val outDirectoryPath = outputsPath.resolve(outputDirectory.path)
+                    val mountDirFilePath = "$mountOuputsDir/${outputDirectory.path}"
+                    val copyCmd = copyRecursiveOverwriteCommand(mountDirFilePath, outDirectoryPath.toString())
+                    sbatchScript.append(copyCmd)
+                }
+            }
         }
 
         val sbatchScriptAsBase64 = Base64.getEncoder().encodeToString(sbatchScript.toString().toByteArray())
@@ -229,6 +244,22 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
                 }
             }
         } while (!done)
+
+        for (taskRunContext in taskRunContexts) {
+            taskRunContext.outputDirectoriesOut.forEach { outDir ->
+                val to = outputsPath.resolve(outDir.path)
+
+                outDir.filesFuture.complete(
+                    Files
+                        .walk(to)
+                        .asSequence()
+                        .map { outputsPath.relativize(it) }
+                        .map { OutputFile(it.toString())}
+                        .toList()
+                )
+            }
+        }
+
         log.info { "Job $jobId complete!" }
     }
 
@@ -252,6 +283,11 @@ private fun appendSbatchParam(sbatchScript: StringBuilder, paramName: String, va
  * Utility function to create a copy command that also creates any parent directories that don't already exist.
  */
 private fun copyCommand(from: String, to: String) = "mkdir -p $(dirname $to) && cp $from $to\n"
+
+/**
+ * Utility function to create a copy command that also creates any parent directories that don't already exist.
+ */
+private fun copyRecursiveOverwriteCommand(from: String, to: String) = "mkdir -p $(dirname $to) cp -rf $from $to\n"
 
 enum class SlurmJobState(val category: SlurmJobStateCategory) {
     BOOT_FAIL(SlurmJobStateCategory.FAILED),

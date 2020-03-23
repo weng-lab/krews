@@ -131,6 +131,13 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
                 createUploadAction(outputFileObject, taskRunContext.outputsDir, it.path, it.optional)
             }
             actions.addAll(uploadActions)
+
+            // Create the actions to upload each task output OutputDirectory
+            val uploadDirectoryActions = taskRunContext.outputDirectoriesOut.map {
+                val outputFileObject = gcsPath(bucket, gcsBase, OUTPUTS_DIR, it.path)
+                createUploadDirectoryAction(outputFileObject, taskRunContext.outputsDir, it.path)
+            }
+            actions.addAll(uploadDirectoryActions)
         }
 
         // Create the action to upload all data dir files to diagnostic-output directory if execution fails
@@ -185,6 +192,15 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
                 }
             }
         } while (!done)
+
+        for (taskRunContext in taskRunContexts) {
+            taskRunContext.outputDirectoriesOut.forEach { outDir ->
+                val path = gcsObjectPath(gcsBase, OUTPUTS_DIR, outDir.path)
+                outDir.filesFuture.complete(listFiles(googleStorageClient, bucket, path).map {
+                    OutputFile(gcsObjectPath(gcsBase, OUTPUTS_DIR, outDir.path, it))
+                })
+            }
+        }
     }
 
     override fun shutdownRunningTasks() {
