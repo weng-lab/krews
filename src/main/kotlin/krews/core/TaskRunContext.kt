@@ -45,9 +45,14 @@ class TaskRunContextBuilder<I : Any, O : Any> internal constructor(
         }
     }
 
+    val OutputDirectory.dockerPath: String get() {
+        return "$outputsDir/${this.path}"
+    }
+
     internal fun build(): TaskRunContext<I, O> {
         val inputFiles = getInputFilesForObject(input) + getInputFilesForObject(taskParams)
         val outputFilesOut = getOutputFilesForObject(output)
+        val outputDirectoriesOut = getOutputDirectoriesForObject(output)
 
         if (inputsDir == outputsDir) {
             throw Exception("The inputsDir and outputsDir cannot be the same due to container limitations.")
@@ -72,6 +77,7 @@ class TaskRunContextBuilder<I : Any, O : Any> internal constructor(
             taskParamsClass = taskParamsClass,
             outputFilesIn = outputFilesIn,
             outputFilesOut = outputFilesOut,
+            outputDirectoriesOut = outputDirectoriesOut,
             inputFiles = inputFiles
         )
     }
@@ -96,5 +102,6 @@ data class TaskRunContext<I: Any, O: Any>(
     val taskParamsClass: Class<*>?,
     val outputFilesIn: Set<OutputFile>,
     val outputFilesOut: Set<OutputFile>,
+    val outputDirectoriesOut: Set<OutputDirectory>,
     val inputFiles: Set<InputFile>
 )

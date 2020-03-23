@@ -5,6 +5,7 @@ import com.github.dockerjava.api.model.*
 import com.github.dockerjava.api.model.AccessMode
 import com.github.dockerjava.core.command.*
 import kotlinx.coroutines.delay
+import kotlin.streams.*
 import krews.config.*
 import krews.core.*
 import krews.executor.*
@@ -153,6 +154,32 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
                     val noneTo = Paths.get("$to.$NONE_SUFFIX")
                     Files.createDirectories(to.parent)
                     if(!Files.exists(noneTo)) Files.createFile(noneTo)
+                }
+            }
+
+            // Copy output directories out of docker container into run outputs dir
+            if (taskRunContext.outputDirectoriesOut.isNotEmpty()) {
+                log.info { "Copying output directories ${taskRunContext.outputDirectoriesOut} for task output out of mounted outputsDir $outputsDir" }
+            } else {
+                log.info { "No output directories to copy for this task run." }
+            }
+            taskRunContext.outputDirectoriesOut.forEach { outDir ->
+                val from = outputsDir.resolve(outDir.path)
+                val to = outputsPath.resolve(outDir.path)
+
+                if (Files.exists(from)) {
+                    from.toFile().copyRecursively(to.toFile(), overwrite = true)
+                    outDir.filesFuture.complete(
+                        Files
+                            .walk(to)
+                            .asSequence()
+                            .map { outputsPath.relativize(it) }
+                            .map { OutputFile(it.toString())}
+                            .toList()
+                    )
+                    Unit
+                } else {
+                    throw Exception("Expected output directory $from was not created.")
                 }
             }
         } finally {

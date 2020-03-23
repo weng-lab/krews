@@ -128,6 +128,20 @@ internal fun createUploadAction(objectToUpload: String, dataDir: String, file: S
 }
 
 /**
+ * Create a pipeline action that will upload a directory from the Pipelines VM to the specified google storage object.
+ */
+internal fun createUploadDirectoryAction(objectToUpload: String, dataDir: String, file: String): Action {
+    val action = Action()
+    action.imageUri = CLOUD_SDK_IMAGE
+    val filePath = "$dataDir/$file"
+    val copyCmd = "gsutil -q cp -r $filePath $objectToUpload"
+    val copyCmdWithRetry = shellRetry(copyCmd)
+    action.commands = listOf("sh", "-c", "set -x; $copyCmdWithRetry")
+    action.mounts = listOf(createMount(dataDir))
+    return action
+}
+
+/**
  * Utility function to create a GCS path for the given GCS bucket and path components
  */
 internal fun gcsPath(bucket: String, vararg pathParts: String?): String {
@@ -214,4 +228,21 @@ internal fun uploadObject(googleStorageClient: Storage, bucket: String, obj: Str
     contentStream.length = Files.size(uploadFromPath)
     val objectMetadata = StorageObject().setName(obj)
     googleStorageClient.objects().insert(bucket, objectMetadata, contentStream).execute()
+}
+
+/**
+ * Returns a list of files in a given directory. This is recursive.
+ */
+internal fun listFiles(googleStorageClient: Storage, bucket: String, dir: String): List<String> {
+    val fullDir = if (dir.endsWith("/")) {
+        dir
+    } else {
+        dir + "/"
+    }
+    val list = googleStorageClient
+        .objects()
+        .list(bucket)
+        .setPrefix(fullDir)
+        .execute()
+    return list.getItems().map { it.name.replace(fullDir, "") }
 }

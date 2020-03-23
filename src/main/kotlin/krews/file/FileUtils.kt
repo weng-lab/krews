@@ -31,6 +31,27 @@ internal fun getOutputFilesForObject(obj: Any?): Set<OutputFile> {
 }
 
 /**
+ * Finds all Krews OutputDirectory objects in the given object by recursively looking through the given object graph.
+ */
+@Suppress("UNCHECKED_CAST")
+internal fun getOutputDirectoriesForObject(obj: Any?): Set<OutputDirectory> {
+    return when (obj) {
+        null, is String, is Number, is Boolean, is Char -> setOf()
+        is OutputDirectory -> setOf(obj)
+        is Array<*> -> obj.flatMap { getOutputDirectoriesForObject(it) }.toSet()
+        is Collection<*> -> obj.flatMap { getOutputDirectoriesForObject(it) }.toSet()
+        is Map<*,*> -> obj.values.flatMap { getOutputDirectoriesForObject(it) }.toSet()
+        else ->
+            try {
+                obj::class.memberProperties.flatMap { getOutputDirectoriesForObject((it as KProperty1<Any, *>).get(obj)) }
+                    .toSet()
+            } catch (e: Throwable) {
+                Collections.emptySet<OutputDirectory>()
+            }
+    }
+}
+
+/**
  * Finds all Krews InputFile objects in the given object by recursively looking through the given object graph.
  */
 @Suppress("UNCHECKED_CAST")
