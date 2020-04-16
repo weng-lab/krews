@@ -9,6 +9,9 @@ import com.google.api.services.lifesciences.v2beta.CloudLifeSciences
 import com.google.api.services.lifesciences.v2beta.model.*
 import com.google.api.services.storage.Storage
 import com.google.api.services.storage.model.StorageObject
+import com.google.auth.http.HttpCredentialsAdapter
+import com.google.auth.oauth2.GoogleCredentials
+import com.google.cloud.storage.StorageOptions
 import krews.config.GoogleWorkflowConfig
 import krews.file.NONE_SUFFIX
 import mu.KotlinLogging
@@ -23,17 +26,13 @@ const val DISK_NAME = "disk"
 
 internal val googleClientTransport by lazy { NetHttpTransport() }
 internal val googleClientJsonFactory by lazy { JacksonFactory.getDefaultInstance() }
-internal val googleClientCredentials by lazy { GoogleCredential.getApplicationDefault() }
+internal val googleClientCredentials by lazy { GoogleCredentials.getApplicationDefault() }
 internal val googleLifeSciencesClient by lazy {
-    CloudLifeSciences.Builder(googleClientTransport, googleClientJsonFactory, googleClientCredentials)
+    CloudLifeSciences.Builder(googleClientTransport, googleClientJsonFactory, HttpCredentialsAdapter(googleClientCredentials))
         .setApplicationName(APPLICATION_NAME)
         .build()
 }
-internal val googleStorageClient by lazy {
-    Storage.Builder(googleClientTransport, googleClientJsonFactory, googleClientCredentials)
-        .setApplicationName(APPLICATION_NAME)
-        .build()
-}
+internal val googleStorageClient by lazy { StorageOptions.getDefaultInstance().service }
 
 internal fun createRunPipelineRequest(googleConfig: GoogleWorkflowConfig): RunPipelineRequest {
     val run = RunPipelineRequest()
