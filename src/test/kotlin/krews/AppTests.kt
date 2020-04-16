@@ -44,9 +44,9 @@ class AppTests {
 
         assertThat(sampleFilesDir.resolve("test.txt")).exists()
         assertThat(base64Path.resolve("test.b64")).exists()
+        assertThat(gzipPath.resolve("one.txt.gz")).exists()
+        assertThat(gzipPath.resolve("two.txt.gz")).exists()
         assertThat(gzipPath.resolve("test.b64.gz")).exists()
         assertThat(extraPath.resolve("one.txt")).exists()
-        assertThat(outputsDir.resolve("one.gz")).exists()
-        assertThat(outputsDir.resolve("two.gz")).exists()
     }
 }

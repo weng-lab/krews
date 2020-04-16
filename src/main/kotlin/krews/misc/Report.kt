@@ -143,6 +143,7 @@ private fun TD.createExecutionDetails(taskRun: TaskRun) {
             }
         }
         tbody {
+            log.info { taskRun.executionsJson }
             val taskRunExecutions = mapper.readValue<List<TaskRunExecution>>(taskRun.executionsJson)
             for (taskRunExecution in taskRunExecutions) {
                 tr {
