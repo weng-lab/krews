@@ -24,14 +24,17 @@ const val DISK_NAME = "disk"
 
 internal val googleClientTransport by lazy { NetHttpTransport() }
 internal val googleClientJsonFactory by lazy { JacksonFactory.getDefaultInstance() }
-internal val googleClientCredentials by lazy { HttpCredentialsAdapter(GoogleCredentials.getApplicationDefault()) }
 internal val googleLifeSciencesClient by lazy {
-    CloudLifeSciences.Builder(googleClientTransport, googleClientJsonFactory, googleClientCredentials)
+    val credentials = HttpCredentialsAdapter(GoogleCredentials.getApplicationDefault()
+            .createScoped("https://www.googleapis.com/auth/cloud-platform"))
+    CloudLifeSciences.Builder(googleClientTransport, googleClientJsonFactory, credentials)
         .setApplicationName(APPLICATION_NAME)
         .build()
 }
 internal val googleStorageClient by lazy {
-    Storage.Builder(googleClientTransport, googleClientJsonFactory, googleClientCredentials)
+    val credentials = HttpCredentialsAdapter(GoogleCredentials.getApplicationDefault()
+        .createScoped("https://www.googleapis.com/auth/cloud-platform"))
+    Storage.Builder(googleClientTransport, googleClientJsonFactory, credentials)
         .setApplicationName(APPLICATION_NAME)
         .build()
 }
