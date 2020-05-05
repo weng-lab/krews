@@ -153,7 +153,7 @@ class TaskRunner(workflowRun: WorkflowRun,
         val taskConfig = taskConfigs.getValue(taskName)
 
         val taskRunExecutions = taskRunContexts
-            .map { TaskRunExecution(it.dockerImage, it.command, it.input, it.output) }
+            .map { TaskRunExecution(it.dockerImage, it.command) }
 
         val taskRunExecutionsJson = mapper
             .writer()
