@@ -189,7 +189,7 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
                         val missingCopyCmd = "mkdir -p \$(dirname $noneFilePath) && touch $noneFilePath"
                         "if [ -f $mountDirFilePath ]; then $presentCopyCmd; else $missingCopyCmd; fi"
                     } else presentCopyCmd
-                    sbatchScript.append(copyCmd)
+                    sbatchScript.append("${copyCmd}\n")
                 }
             }
 
@@ -203,7 +203,7 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
                     val outDirectoryPath = outputsPath.resolve(outputDirectory.path)
                     val mountDirFilePath = "$mountOuputsDir/${outputDirectory.path}"
                     val copyCmd = copyRecursiveOverwriteCommand(mountDirFilePath, outDirectoryPath.toString())
-                    sbatchScript.append(copyCmd)
+                    sbatchScript.append("${copyCmd}\n")
                 }
             }
         }
@@ -222,7 +222,7 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
         // Wait until status
         do {
             var done = false
-            delay(workflowConfig.slurm!!.jobCompletionPollInterval * 1000L)
+            delay((workflowConfig.slurm?.jobCompletionPollInterval ?: 10) * 1000L)
 
             retrySuspend("Slurm status check for job $jobId", 4, { it is SlurmCheckEmptyResponseException }) { attempt ->
                 // Exponential backoff
@@ -253,6 +253,7 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
                     Files
                         .walk(to)
                         .asSequence()
+                        .filter { !Files.isDirectory(it) }
                         .map { outputsPath.relativize(it) }
                         .map { OutputFile(it.toString())}
                         .toList()
@@ -282,12 +283,12 @@ private fun appendSbatchParam(sbatchScript: StringBuilder, paramName: String, va
 /**
  * Utility function to create a copy command that also creates any parent directories that don't already exist.
  */
-private fun copyCommand(from: String, to: String) = "mkdir -p $(dirname $to) && cp $from $to\n"
+private fun copyCommand(from: String, to: String) = "mkdir -p $(dirname $to) && cp $from $to"
 
 /**
  * Utility function to create a copy command that also creates any parent directories that don't already exist.
  */
-private fun copyRecursiveOverwriteCommand(from: String, to: String) = "mkdir -p $(dirname $to) cp -rf $from $to\n"
+private fun copyRecursiveOverwriteCommand(from: String, to: String) = "mkdir -p $(dirname $to) && cp -rf $from/* $to"
 
 enum class SlurmJobState(val category: SlurmJobStateCategory) {
     BOOT_FAIL(SlurmJobStateCategory.FAILED),
