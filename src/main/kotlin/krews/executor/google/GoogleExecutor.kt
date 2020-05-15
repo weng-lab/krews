@@ -24,7 +24,6 @@ class GoogleExecutor(workflowConfig: WorkflowConfig) : RemoteDirectedExecutor {
     private val bucket = googleConfig.bucket
     private val gcsBase = workflowConfig.workingDir
 
-
     override fun execute(executablePath: Path, configPath: Path) {
         val workflowTime = DateTime.now()
 
@@ -32,6 +31,7 @@ class GoogleExecutor(workflowConfig: WorkflowConfig) : RemoteDirectedExecutor {
         val executableObject = gcsObjectPath(gcsBase, RUN_DIR, workflowTime.millis.toString(), REMOTE_BIN_DIR, executableFilename)
         val configFilename = configPath.fileName!!.toString()
         val configObject = gcsObjectPath(gcsBase, RUN_DIR, workflowTime.millis.toString(), REMOTE_BIN_DIR, configFilename)
+
 
         uploadObject(googleStorageClient, bucket, executableObject, executablePath)
         uploadObject(googleStorageClient, bucket, configObject, configPath)

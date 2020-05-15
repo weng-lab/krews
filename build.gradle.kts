@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "io.krews"
-version = "0.10.7"
+version = "0.10.8"
 
 repositories {
     maven { setUrl("http://dl.bintray.com/kotlin/kotlin-eap") }
@@ -49,7 +49,6 @@ tasks.withType<Test> {
         events("passed", "skipped", "failed")
     }
 }
-
 
 tasks.withType<KotlinCompile> {
     kotlinOptions.jvmTarget = "1.8"

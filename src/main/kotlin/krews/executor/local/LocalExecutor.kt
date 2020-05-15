@@ -10,6 +10,7 @@ import krews.config.*
 import krews.core.*
 import krews.executor.*
 import krews.file.*
+import krews.misc.*
 import mu.KotlinLogging
 import java.nio.file.*
 import java.util.*
@@ -229,9 +230,11 @@ fun createContainer(dockerClient: DockerClient, taskRunContext: TaskRunContext<*
     val filesVolume = Volume(taskRunContext.inputsDir)
     val mountBind = Bind(outputsDir.toString(), mountVolume)
     binds.add(mountBind)
+    val uid = CommandExecutor().exec("id -u").trim()
     val containerCreationCmd = dockerClient.createContainerCmd(taskRunContext.dockerImage)
         .withVolumes(mountVolume, filesVolume)
         .withHostConfig(HostConfig().withBinds(Binds(*binds.toTypedArray())))
+        .withUser(uid)
     if (taskRunContext.command != null) containerCreationCmd.withCmd("/bin/sh", "-c", taskRunContext.command)
     val env = taskRunContext.env
     if (env?.isNotEmpty() == true) containerCreationCmd.withEnv(env.map { "${it.key}=${it.value}" })

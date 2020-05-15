@@ -9,7 +9,6 @@ import krews.config.DockerConfig
 import krews.file.*
 import java.nio.file.*
 
-
 /**
  * Build a DockerClient from a given DockerConfig
  */

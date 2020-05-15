@@ -8,7 +8,7 @@ private val log = KotlinLogging.logger {}
 /**
  * Runs arbitrary shell commands, optionally via ssh.
  */
-class CommandExecutor(private val sshConfig: SshConfig?) {
+class CommandExecutor(private val sshConfig: SshConfig? = null) {
 
     fun exec(command: String): String {
         log.info { "Executing command:\n$command" }
