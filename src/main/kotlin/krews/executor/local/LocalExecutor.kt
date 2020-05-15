@@ -257,13 +257,19 @@ private fun copyDiagnosticFiles(mountDir: Path, taskDiagnosticsDir: Path) {
 private fun copyLogsFromContainer(dockerClient: DockerClient, containerId: String, logBasePath: Path) {
     log.info { "Copying logs from container $containerId" }
     Files.createDirectories(logBasePath)
+    logBasePath.resolve("stdout.txt").toFile().createNewFile()
+    logBasePath.resolve("stderr.txt").toFile().createNewFile()
     val logCallback = object : LogContainerResultCallback() {
         override fun onNext(item: Frame?) {
             if (item?.streamType == StreamType.STDOUT) {
-                Files.newOutputStream(logBasePath.resolve("stdout.txt")).use { it.write(item.payload) }
+                Files.newOutputStream(logBasePath.resolve("stdout.txt"), StandardOpenOption.APPEND).use {
+                    it.write(item.payload)
+                }
             }
             if (item?.streamType == StreamType.STDERR) {
-                Files.newOutputStream(logBasePath.resolve("stderr.txt")).use { it.write(item.payload) }
+                Files.newOutputStream(logBasePath.resolve("stderr.txt"), StandardOpenOption.APPEND).use {
+                    it.write(item.payload)
+                }
             }
         }
     }
