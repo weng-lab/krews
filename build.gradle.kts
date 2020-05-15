@@ -67,6 +67,16 @@ publishing {
             artifact(sourcesJar)
         }
     }
+    repositories {
+        maven {
+	    name = "GitHubPackages"
+	    url = uri("https://maven.pkg.github.com/weng-lab/krews")
+	    credentials {
+                username = System.getenv("GITHUB_ACTOR")
+		password = System.getenv("GITHUB_TOKEN")
+            }
+	}
+    }
 }
 
 bintray {
