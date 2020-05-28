@@ -25,5 +25,7 @@ class TaskRun(id: EntityID<Int>) : IntEntity(id) {
 // TaskRuns.executionsJson is just a json serialized list of these objects.
 data class TaskRunExecution(
     val image: String,
-    val command: String?
+    val command: String?,
+    val input: Any,
+    val output: Any
 )
