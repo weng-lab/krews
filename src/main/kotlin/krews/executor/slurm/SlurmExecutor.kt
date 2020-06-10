@@ -161,11 +161,13 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
 
             val inputFiles = taskRunContext.inputFiles
             val outputFilesIn = taskRunContext.outputFilesIn
+            val tmpBind = "$mountTmpDir:/tmp"
             val outputsBind = "$mountOuputsDir:${taskRunContext.outputsDir}"
             val localInputsBind = inputFiles.filterIsInstance<LocalInputFile>().joinToString(",") { "${it.localPath}:${taskRunContext.inputsDir}/${it.path}:ro" }
             val remoteInputsBind = inputFiles.filter { it !is LocalInputFile }.joinToString(",") { "$mountDownloadedDir/${it.path}:${taskRunContext.inputsDir}/${it.path}:ro" }
             val outputFilesInBinds = outputFilesIn.joinToString(",") { "${outputsPath.resolve(it.path)}:${taskRunContext.inputsDir}/${it.path}:ro" }
-            val binds = listOfNotNull(outputsBind, localInputsBind, remoteInputsBind, outputFilesInBinds, scriptBind).filter { !it.isEmpty() }.joinToString(",")
+            val binds = listOfNotNull(tmpBind, outputsBind, localInputsBind, remoteInputsBind, outputFilesInBinds, scriptBind)
+                .filter { it.isNotEmpty() }.joinToString(",")
             sbatchScript.append("export SINGULARITY_BIND=\"$binds\"\n")
 
             // Add running the task to script
