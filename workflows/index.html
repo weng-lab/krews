@@ -1104,10 +1104,11 @@ variable &ldquo;input&rdquo; in the function.</p>
 <p>Within the function, you may set the following fields:</p>
 <ul>
 <li>dockerImage (Required): The name of the docker image the task will run with.</li>
-<li>dockerDataDir: The working directory that should contain input and output files.</li>
 <li>output (Required): The output object. (More on this below)</li>
 <li>command: The command that will be executed on the given docker image.</li>
 <li>env: a map of optional environment variables to run the docker container with.</li>
+<li>inputsDir: The working directory that should contain input files.</li>
+<li>outputsDir: THe working directory that should contain output files.</li>
 <li>cpus: number of cpus required for each task run.</li>
 <li>memory: amount of memory required for each task run.</li>
 <li>diskSize: disk space required for each task run.</li>
@@ -1148,7 +1149,9 @@ is accomplished by using them in task Input and Output types. This can happen 3 
 <p>Files contain a <code>path</code> field. This is a partial path (ie. <code>some-dir/file.txt</code>) that can be used to determine real 
 file paths as the file gets copied to and from docker containers.</p>
 <p>When referencing a file in a task docker container, use the <code>File.dockerPath</code> utility to get the real path inside 
-docker. This path will be equal to <code>"${task.dockerDataDir}/${file.path}"</code></p>
+docker. This path will be equal to <code>"${task.inputsDir}/${file.path}"</code> if the file is from your task input and 
+<code>"${task.outputsDir}/${file.path}"</code> otherwise. <code>inputsDir</code> and <code>outputsDir</code> can be set but are 
+<code>/inputs</code> and <code>/outputs</code> by default respectively.</p>
 <p>Files also contain the following utility functions:</p>
 <ul>
 <li>parentDir(): gets the parent directory in the File&rsquo;s partial path if one exists. </li>
