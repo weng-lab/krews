@@ -106,10 +106,11 @@ variable "input" in the function.
 Within the function, you may set the following fields:
 
 - dockerImage (Required): The name of the docker image the task will run with.
-- dockerDataDir: The working directory that should contain input and output files.
 - output (Required): The output object. (More on this below)
 - command: The command that will be executed on the given docker image.
 - env: a map of optional environment variables to run the docker container with.
+- inputsDir: The working directory that should contain input files.
+- outputsDir: THe working directory that should contain output files.
 - cpus: number of cpus required for each task run.
 - memory: amount of memory required for each task run.
 - diskSize: disk space required for each task run.
@@ -153,7 +154,9 @@ Files contain a `path` field. This is a partial path (ie. `some-dir/file.txt`) t
 file paths as the file gets copied to and from docker containers.
 
 When referencing a file in a task docker container, use the `File.dockerPath` utility to get the real path inside 
-docker. This path will be equal to `"${task.dockerDataDir}/${file.path}"`
+docker. This path will be equal to `"${task.inputsDir}/${file.path}"` if the file is from your task input and 
+`"${task.outputsDir}/${file.path}"` otherwise. `inputsDir` and `outputsDir` can be set but are 
+`/inputs` and `/outputs` by default respectively.
 
 Files also contain the following utility functions:
 
