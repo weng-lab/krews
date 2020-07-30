@@ -61,7 +61,7 @@ java -jar my-app.jar --on local --config path/to/my-config.conf
 ### Gradle
 ```kotlin
 dependencies {
-    compile("io.krews", "krews", "0.7.0")
+    compile("io.krews", "krews", "0.10.10")
 }
 ```
 
@@ -70,6 +70,6 @@ dependencies {
 <dependency>
   <groupId>io.krews</groupId>
   <artifactId>krews</artifactId>
-  <version>0.7.0</version>
+  <version>0.10.10</version>
 </dependency>
 ```
