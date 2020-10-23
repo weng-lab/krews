@@ -176,9 +176,16 @@ class TaskRunner(workflowRun: WorkflowRun,
             var allContextsSuccessful = true
             taskRunFutures.forEach { taskRunFuture ->
                 val taskRunContext = taskRunFuture.taskRunContext
-                val allOutputsExist = taskRunContext.outputFilesOut.all {
+                var allOutputsExist = taskRunContext.outputFilesOut.all {
                     executor.fileExists("$OUTPUTS_DIR/${it.path}") ||
                             (it.optional && executor.fileExists("$OUTPUTS_DIR/${it.path}.$NONE_SUFFIX"))
+                }
+                if (!allOutputsExist) {
+                    delay(3000);
+                    allOutputsExist = taskRunContext.outputFilesOut.all {
+                        executor.fileExists("$OUTPUTS_DIR/${it.path}") ||
+                                (it.optional && executor.fileExists("$OUTPUTS_DIR/${it.path}.$NONE_SUFFIX"))
+                    }   
                 }
                 if (allOutputsExist) {
                     taskRunFuture.complete()
