@@ -33,7 +33,7 @@ jobs:
         GITHUB_TOKEN: ${{ github.token }}
 
     - name: Bintray Publish
-      run: ./gradlew scripts/publish.sh
+      run: scripts/publish.sh
       env:
         BINTRAY_USER: ${{ secrets.BINTRAY_USER }}
         BINTRAY_KEY: ${{ secrets.BINTRAY_KEY }}
