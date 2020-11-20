@@ -10,7 +10,9 @@ data class TaskConfig (
     // The maximum allowed parallelism for this task
     val parallelism: Parallelism = UnlimitedParallelism,
     // The number of tasks "executions" that will be run with the same job / vm.
-    val grouping: Int = 1
+    val grouping: Int = 1,
+    // Docker image; defaults to one provided by task
+    val dockerImage: String? = null
 )
 
 data class WorkflowConfig (

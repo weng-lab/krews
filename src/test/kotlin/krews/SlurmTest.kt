@@ -55,6 +55,12 @@ class SlurmExecutorTests {
                 comment = "\"This is just a test.\""
             }
         }
+        task.echo {
+            params {
+                value = "test"
+            }
+            docker-image = "krewstest:latest"
+        }
 
         """.trimIndent()
 

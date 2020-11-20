@@ -14,11 +14,15 @@ data class TestComplexInputType (
     override val file: File
 ) : TestBaseInputType
 
-data class Bast64TaskParams(val someVal: String, val someFiles: List<File>?)
+data class Base64TaskParams(val someVal: String, val someFiles: List<File>?)
+
+data class EchoTaskParams(val value: String)
 
 data class LocalGzipOutput(val gzip: File, val missingOptional: File)
 
 data class Base64TaskOutput(val base64: File, val extra: OutputDirectory)
+
+data class EchoTaskOutput(val output: File)
 
 fun localFilesWorkflow() = workflow("local-files-workflow") {
     val params = params<LocalWorkflowParams>()
@@ -29,7 +33,7 @@ fun localFilesWorkflow() = workflow("local-files-workflow") {
         .toFlux()
 
     val base64 = task<TestBaseInputType, Base64TaskOutput>("base64", sampleFiles) {
-        val taskParams = taskParams<Bast64TaskParams>()
+        val taskParams = taskParams<Base64TaskParams>()
         val file = input.file
         dockerImage = "alpine:3.8"
         output = Base64TaskOutput(OutputFile("base64/${file.filenameNoExt()}.b64"), OutputDirectory("extra"))
@@ -41,6 +45,17 @@ fun localFilesWorkflow() = workflow("local-files-workflow") {
             mkdir -p ${output!!.extra.dockerPath}
             echo "one" > ${output!!.extra.dockerPath}/one.txt
             echo "two" > ${output!!.extra.dockerPath}/two.txt
+            """
+    }
+
+    task<Any, EchoTaskOutput>("echo", listOf(0).toFlux()) {
+        val taskParams = taskParams<EchoTaskParams>()
+        dockerImage = "krewstest"
+        output = EchoTaskOutput(OutputFile("echo/output.txt"))
+        command =
+            """
+            mkdir -p $(dirname ${output!!.output.dockerPath})
+            /test.sh ${taskParams.value} ${output!!.output.dockerPath}
             """
     }
 
@@ -66,6 +81,7 @@ fun localFilesWorkflow() = workflow("local-files-workflow") {
             gzip -c ${input.dockerPath} > ${output!!.dockerPath}
             """
     }
+
 }
 
 private data class GSWorkflowParams(

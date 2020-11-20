@@ -11,7 +11,6 @@ import org.junit.jupiter.api.*
 import java.nio.file.*
 import kotlin.streams.toList
 
-@Disabled
 @TestMethodOrder(MethodOrderer.OrderAnnotation::class)
 class LocalExecutorTests {
     private val testDir = Paths.get("local-workflow-test")!!
@@ -20,6 +19,7 @@ class LocalExecutorTests {
     private val unusedFilesDir = testDir.resolve("unused-files")
     private val base64Dir = outputsDir.resolve("base64")
     private val gzipDir = outputsDir.resolve("gzip")
+    private val echoDir = outputsDir.resolve("echo")
 
     private fun config(taskParam: String) =
         """
@@ -41,6 +41,12 @@ class LocalExecutorTests {
                     path = unused-2.txt
                 }
             ]
+        }
+        task.echo {
+            params {
+                value = "test"
+            }
+            docker-image = "krewstest:latest"
         }
         task.default {
             grouping = 2
@@ -75,10 +81,11 @@ class LocalExecutorTests {
             assertThat(gzipDir.resolve("test-$i.b64.gz")).exists()
             assertThat(gzipDir.resolve("test-$i.b64.fake.none")).exists()
         }
+        assertThat(echoDir.resolve("output.txt")).exists()
 
         // Confirm that logs and an html report were generated
         val runPath = testDir.resolve("run/1/")
-        assertThat(Files.list(runPath.resolve(LOGS_DIR)).toList().size).isEqualTo(6)
+        assertThat(runPath.resolve(LOGS_DIR)).exists()
         assertThat(runPath.resolve(REPORT_FILENAME)).exists()
         assertThat(runPath.resolve(STATUS_JSON_FILENAME)).exists()
     }

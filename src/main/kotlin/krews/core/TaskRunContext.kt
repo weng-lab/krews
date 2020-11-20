@@ -60,7 +60,7 @@ class TaskRunContextBuilder<I : Any, O : Any> internal constructor(
 
         return TaskRunContext(
             taskName = taskName,
-            dockerImage = checkNotNull(dockerImage),
+            dockerImage = checkNotNull(rawTaskParams.get("dockerImage") as String? ?: dockerImage),
             inputsDir = inputsDir,
             outputsDir = outputsDir,
             input = input,

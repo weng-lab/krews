@@ -24,6 +24,13 @@ class AppTests {
         task.base64.params = {
             some-val = test
         }
+        
+        task.echo {
+            params {
+                value = "test"
+            }
+            docker-image = "krewstest:latest"
+        }
         """.trimIndent()
 
     @BeforeAll

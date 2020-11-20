@@ -84,8 +84,13 @@ class LocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecutor {
             val runBasePath = workflowBasePath.resolve(workflowRunDir)
 
             // Pull image from remote
-            log.info { "Pulling image \"${taskRunContext.dockerImage}\" from remote..." }
-            dockerClient.pullImageCmd(taskRunContext.dockerImage).exec(PullImageResultCallback()).awaitCompletion()
+            try {
+                dockerClient.inspectImageCmd(taskRunContext.dockerImage).exec()
+                log.info { "Found ${taskRunContext.dockerImage} locally; skipping pull." }
+            } catch (e: Throwable) {
+                log.info { "Pulling image \"${taskRunContext.dockerImage}\" from remote..." }
+                dockerClient.pullImageCmd(taskRunContext.dockerImage).exec(PullImageResultCallback()).awaitCompletion()
+            }
 
             // Download InputFiles from remote sources
             for (downloadInputFile in taskRunContext.inputFiles) {

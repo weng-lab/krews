@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "io.krews"
-version = "0.10.12"
+version = "0.11.0"
 
 repositories {
     maven { setUrl("http://dl.bintray.com/kotlin/kotlin-eap") }
