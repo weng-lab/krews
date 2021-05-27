@@ -7,7 +7,9 @@ data class SlurmWorkflowConfig(
     val jobCompletionPollInterval: Int = 10,
     // Optional ssh configuration. Will cause all slurm command to be passed through ssh.
     // Only available for password-less login.
-    val ssh: SshConfig? = null
+    val ssh: SshConfig? = null,
+
+    val httpInputDockerImage: String? = null
 )
 
 data class SshConfig(
