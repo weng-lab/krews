@@ -32,7 +32,6 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
 
     private var allShutdown = AtomicBoolean(false)
 
-    //private val httpInputDockerImage = workflowConfig.slurm?.httpInputDockerImage
 
     override fun downloadFile(fromPath: String, toPath: Path) {
         val fromFile = workflowBasePath.resolve(fromPath)
@@ -139,11 +138,6 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
                 val downloadCommand = remoteDownloadInputFile.downloadFileCommand("/download")
                 var downloadImageName = remoteDownloadInputFile.downloadFileImage()
 
-                /*if(httpInputDockerImage != null)
-                {
-                    downloadImageName= httpInputDockerImage
-                }*/
-                
                 sbatchScript.append("singularity exec --containall docker://$downloadImageName $downloadCommand\n")
                 sbatchScript.append("echo Exit status of download $singUUID: $?\n")
             }
