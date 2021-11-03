@@ -138,7 +138,12 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
                 val downloadCommand = remoteDownloadInputFile.downloadFileCommand("/download")
                 var downloadImageName = remoteDownloadInputFile.downloadFileImage()
 
-                sbatchScript.append("singularity exec --containall docker://$downloadImageName $downloadCommand\n")
+                if(remoteDownloadInputFile is GeoInputFile)
+                {
+                    sbatchScript.append("singularity exec docker://$downloadImageName $downloadCommand\n")
+                } else {
+                    sbatchScript.append("singularity exec --containall docker://$downloadImageName $downloadCommand\n")
+                }
                 sbatchScript.append("echo Exit status of download $singUUID: $?\n")
             }
         }
