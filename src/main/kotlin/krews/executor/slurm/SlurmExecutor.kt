@@ -141,6 +141,23 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
                 if(remoteDownloadInputFile is GeoInputFile)
                 {
                     sbatchScript.append("singularity exec docker://$downloadImageName $downloadCommand\n")
+                    var fileName = "${remoteDownloadInputFile.sraaccession}.fastq"
+                    if(remoteDownloadInputFile.read===ReadCategory.READ_1)
+                    {
+                        fileName = "${remoteDownloadInputFile.sraaccession}_1.fastq"
+                    } else if(remoteDownloadInputFile.read===ReadCategory.READ_2)
+                    {
+                        fileName = "${remoteDownloadInputFile.sraaccession}_2.fastq"
+                    }
+
+                    val renameFastqCommand = "mv /download/${fileName} /download/${remoteDownloadInputFile.path}"
+
+                    //generate fastq file from sra accession
+                    sbatchScript.append("singularity exec docker://$downloadImageName $downloadCommand\n")
+
+                    //Rename output File based on read
+                    sbatchScript.append("singularity exec docker://$downloadImageName $renameFastqCommand\n")
+
                 } else {
                     sbatchScript.append("singularity exec --containall docker://$downloadImageName $downloadCommand\n")
                 }
