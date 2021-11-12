@@ -140,7 +140,6 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
 
                 if(remoteDownloadInputFile is GeoInputFile)
                 {
-                    sbatchScript.append("singularity exec docker://$downloadImageName $downloadCommand\n")
                     var fileName = "${remoteDownloadInputFile.sraaccession}_${remoteDownloadInputFile.read}.fastq"
                     if(remoteDownloadInputFile.read===ReadCategory.READ_1)
                     {
