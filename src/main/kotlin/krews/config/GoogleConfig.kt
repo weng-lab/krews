@@ -36,7 +36,9 @@ data class GoogleTaskConfig(
     // GPUs to attach to the VM
     val gpus: GoogleGPUConfig? = null,
     // Image for the machine boot disk
-    val bootImage: String? = null
+    val bootImage: String? = null,
+    // Size of the boot disk
+    val bootDiskSizeGb: Int? = null
 )
 
 data class GoogleGPUConfig(
