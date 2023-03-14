@@ -32,7 +32,20 @@ data class GoogleTaskConfig(
     // Disk Size. Can be used to override the runtime value.
     val diskSize: Capacity? = null,
     // Type of disk, HDD vs SSD.
-    val diskType: GoogleDiskType = GoogleDiskType.HDD
+    val diskType: GoogleDiskType = GoogleDiskType.HDD,
+    // GPUs to attach to the VM
+    val gpus: GoogleGPUConfig? = null,
+    // Image for the machine boot disk
+    val bootImage: String? = null
+)
+
+data class GoogleGPUConfig(
+    // The type of GPU to attach
+    val gpuType: String,
+    // The number of GPUs to attach
+    val gpuCount: Long,
+    // Boot image to use
+    val bootImage: String? = null
 )
 
 enum class GoogleDiskType(val value: String) {

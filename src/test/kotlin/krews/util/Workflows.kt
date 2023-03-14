@@ -111,6 +111,18 @@ fun gsFilesWorkflow() = workflow("gs-files-workflow") {
             """
     }
 
+    val gpus = task<File, OutputFile>("gpus", inputFiles) {
+        dockerImage = "nvidia/cuda:12.1.0-devel-ubuntu18.04"
+        output = OutputFile("nvidia-smi/${input.filenameNoExt()}.nvidia-smi-output.txt")
+        command = 
+            """
+            mkdir -p $(dirname ${output!!.dockerPath})
+            apt -y update
+            apt -y install lshw
+            lshw -C display > ${output!!.dockerPath}
+            """
+    }
+
     task<File, GSGzipOutput>("gzip", base64.map { it.base64 }) {
         dockerImage = "alpine:3.8"
         val outGz = OutputFile("gzip/${input.filename()}.gz")

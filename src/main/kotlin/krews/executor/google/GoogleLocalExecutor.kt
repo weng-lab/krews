@@ -75,6 +75,15 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
         val maxMemory = taskRunContexts.map { it.memory }.maxBy { it?.bytes ?: -1 } ?: taskConfig.google?.mem
         virtualMachine.machineType = googleMachineType(taskConfig.google, maxCpus, maxMemory)
 
+        if (taskConfig.google?.gpus != null) {
+            val acceleratorConfig = Accelerator()
+            acceleratorConfig.type = taskConfig.google?.gpus!!.gpuType
+            acceleratorConfig.count = taskConfig.google?.gpus!!.gpuCount
+            virtualMachine.accelerators = listOf(acceleratorConfig)
+            if (taskConfig.google?.gpus!!.bootImage != null)
+                virtualMachine.bootImage = taskConfig.google?.gpus!!.bootImage
+        }
+
         val serviceAccount = ServiceAccount()
         virtualMachine.serviceAccount = serviceAccount
         serviceAccount.scopes = listOf(STORAGE_READ_WRITE_SCOPE)
@@ -121,7 +130,8 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
                     taskRunContext.inputsDir,
                     taskRunContext.outputsDir,
                     taskRunContext.command,
-                    taskRunContext.env
+                    taskRunContext.env,
+                    taskConfig.google?.gpus != null
                 )
             )
 
@@ -223,6 +233,13 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
 
 }
 
+val NVIDIA_DOCKER_COMMANDS =
+    """
+    sudo cos-extensions install gpu;
+    sudo mount --bind /var/lib/nvidia /var/lib/nvidia;
+    sudo mount -o remount,exec /var/lib/nvidia
+    """
+
 /**
  * Create a pipeline action that will execute the task
  */
@@ -231,7 +248,8 @@ internal fun createExecuteTaskAction(
     inputsDir: String,
     outputsDir: String,
     command: String?,
-    env: Map<String, String>?
+    env: Map<String, String>?,
+    gpus: Boolean
 ): Action {
     val action = Action()
     action.imageUri = dockerImage
@@ -240,7 +258,10 @@ internal fun createExecuteTaskAction(
     val actionEnv = mutableMapOf("TMPDIR" to tmpDir)
     if (env != null) actionEnv.putAll(env)
     action.environment = actionEnv
-    if (command != null) action.commands = listOf("/bin/sh", "-c", "[ ! -d $tmpDir ] && mkdir $tmpDir;\n $command")
+    if (command != null) {
+        if (gpus) action.commands = listOf("/bin/sh", "-c", "$NVIDIA_DOCKER_COMMANDS\n [ ! -d $tmpDir ] && mkdir $tmpDir;\n $command")
+        else action.commands = listOf("/bin/sh", "-c", "[ ! -d $tmpDir ] && mkdir $tmpDir;\n $command")
+    }
     return action
 }
 

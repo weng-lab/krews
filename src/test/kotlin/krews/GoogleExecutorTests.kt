@@ -13,7 +13,6 @@ import org.junit.jupiter.api.*
 import java.io.*
 import java.util.*
 
-
 @Disabled
 @TestMethodOrder(MethodOrderer.OrderAnnotation::class)
 class GoogleExecutorTests {
@@ -27,6 +26,14 @@ class GoogleExecutorTests {
         working-dir = $workflowBaseDir
         task.default {
             grouping = $grouping
+        }
+        task.gpus {
+            google {
+                gpus {
+                    gpu-type = "nvidia-tesla-k80"
+                    gpu-count = 1
+                }
+            }
         }
         google {
             bucket = "$testBucket"
@@ -71,6 +78,7 @@ class GoogleExecutorTests {
             "outputs/base64/test-$i.b64".existsInGS(testBucket, workflowBaseDir)
             "outputs/gzip/test-$i.b64.gz".existsInGS(testBucket, workflowBaseDir)
             "outputs/gzip/test-$i.b64.fake.none".existsInGS(testBucket, workflowBaseDir)
+            "outputs/nvidia-smi/test-$i.nvidia-smi-output.txt".existsInGS(testBucket, workflowBaseDir)
         }
 
         // Confirm that an html report was generated
