@@ -31,7 +31,8 @@ class KrewsApp(private val workflowBuilder: WorkflowBuilder) : CliktCommand() {
             "local" to Executors.LOCAL,
             "google" to Executors.GOOGLE,
             "google-local" to Executors.GOOGLE_LOCAL,
-            "slurm" to Executors.SLURM
+            "slurm" to Executors.SLURM,
+            "bsub" to Executors.BSUB
         )
         .default(Executors.LOCAL)
     private val executable by option("-e", "--executable",
@@ -51,6 +52,7 @@ class KrewsApp(private val workflowBuilder: WorkflowBuilder) : CliktCommand() {
                 Executors.LOCAL -> LocalExecutor(workflowConfig)
                 Executors.GOOGLE_LOCAL -> GoogleLocalExecutor(workflowConfig)
                 Executors.SLURM -> SlurmExecutor(workflowConfig)
+                Executors.BSUB -> BsubExecutor(workflowConfig)
                 else -> throw Exception("Unsupported executor")
             }
             val workflow = workflowBuilder.build(executor, params)
