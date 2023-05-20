@@ -9,6 +9,7 @@ import krews.core.*
 import krews.executor.google.*
 import krews.executor.local.LocalExecutor
 import krews.executor.slurm.SlurmExecutor
+import krews.executor.bsub.BsubExecutor
 import mu.KotlinLogging
 import java.io.File
 import java.nio.file.*
@@ -85,5 +86,5 @@ class KrewsApp(private val workflowBuilder: WorkflowBuilder) : CliktCommand() {
 }
 
 enum class Executors(val locallyDirected: Boolean) {
-    LOCAL(true), GOOGLE(false), GOOGLE_LOCAL(true), SLURM(true)
+    LOCAL(true), GOOGLE(false), GOOGLE_LOCAL(true), SLURM(true), BSUB(true)
 }
