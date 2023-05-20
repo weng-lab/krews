@@ -13,7 +13,7 @@ plugins {
 }
 
 group = "io.krews"
-version = "0.14.1"
+version = "0.14.2"
 
 repositories {
     maven { setUrl("https://dl.bintray.com/kotlin/kotlin-eap") }
@@ -26,7 +26,7 @@ dependencies {
     implementation(kotlin("reflect"))
     implementation("io.github.microutils","kotlin-logging","1.6.10")
     implementation("ch.qos.logback", "logback-classic","1.2.3")
-    implementation("io.projectreactor", "reactor-core", "3.2.6.RELEASE")
+    implementation("io.projectreactor", "reactor-core", "3.4.11")
     implementation("com.github.docker-java", "docker-java", "3.3.0")
     // This one is needed to fix a warning from docker-java
     implementation("javax.activation", "activation", "1.1.1")
