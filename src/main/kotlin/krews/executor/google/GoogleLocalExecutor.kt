@@ -75,15 +75,15 @@ class GoogleLocalExecutor(workflowConfig: WorkflowConfig) : LocallyDirectedExecu
         val maxMemory = taskRunContexts.map { it.memory }.maxBy { it?.bytes ?: -1 } ?: taskConfig.google?.mem
         virtualMachine.machineType = googleMachineType(taskConfig.google, maxCpus, maxMemory)
         if (taskConfig.google?.bootDiskSizeGb != null)
-            virtualMachine.setBootDiskSizeGb(taskConfig.google?.bootDiskSizeGb)
+            virtualMachine.setBootDiskSizeGb(taskConfig.google.bootDiskSizeGb)
 
         if (taskConfig.google?.gpus != null) {
             val acceleratorConfig = Accelerator()
-            acceleratorConfig.type = taskConfig.google?.gpus!!.gpuType
-            acceleratorConfig.count = taskConfig.google?.gpus!!.gpuCount
+            acceleratorConfig.type = taskConfig.google.gpus.gpuType
+            acceleratorConfig.count = taskConfig.google.gpus.gpuCount
             virtualMachine.accelerators = listOf(acceleratorConfig)
-            if (taskConfig.google?.gpus!!.bootImage != null)
-                virtualMachine.bootImage = taskConfig.google?.gpus!!.bootImage
+            if (taskConfig.google.gpus.bootImage != null)
+                virtualMachine.bootImage = taskConfig.google.gpus.bootImage
         }
 
         val serviceAccount = ServiceAccount()

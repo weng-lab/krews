@@ -144,7 +144,7 @@ fun createTaskConfigs(rawTaskConfigs: Map<String, Map<String, Any>>, tasks: Coll
  * "MySampleValue_te5t test*&test" should become "mysamplevalue-te5t-test--test"
  */
 private fun kebabify(value: String): String {
-    return Regex("[^a-z0-9]").replace(value.toLowerCase(), "-")
+    return Regex("[^a-z0-9]").replace(value.lowercase(), "-")
 }
 
 /**

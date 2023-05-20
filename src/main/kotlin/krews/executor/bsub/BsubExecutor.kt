@@ -85,7 +85,7 @@ class BsubExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirected
         appendBsubParam(bsubScript, "W", time)
         appendBsubParam(bsubScript, "q", taskConfig.bsub?.partition)
         for ((argName, argVal) in taskConfig.bsub?.sbatchArgs ?: mapOf()) {
-            appendSbatchParam(bsubScript, argName, argVal)
+            appendBsubParam(bsubScript, argName, argVal)
         }
 
         bsubScript.append("\n")
@@ -235,7 +235,7 @@ class BsubExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirected
         delay(kotlin.random.Random.nextLong(0, 5000))
 
         val bsubCommand = "echo $bsubScriptAsBase64 | base64 --decode | bsub"
-        val bsubResponse = commandExecutor.exec(bsubScript)
+        val bsubResponse = commandExecutor.exec(bsubCommand)
         val jobId = "\\d+\$".toRegex().find(bsubResponse)?.value
             ?: throw Exception("JobID not found in response for bsub command")
 

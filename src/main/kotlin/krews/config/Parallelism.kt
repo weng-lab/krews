@@ -21,7 +21,7 @@ class ParallelismDeserializer : StdDeserializer<Parallelism>(Parallelism::class.
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): Parallelism {
         val mapper = p.codec as ObjectMapper
         val obj = mapper.readTree<TreeNode>(p) as JsonNode
-        if (obj.nodeType == JsonNodeType.STRING && obj.asText().toLowerCase() == "unlimited") return UnlimitedParallelism
+        if (obj.nodeType == JsonNodeType.STRING && obj.asText().lowercase() == "unlimited") return UnlimitedParallelism
         if (obj.nodeType == JsonNodeType.NUMBER) return LimitedParallelism(obj.asInt())
         throw JsonMappingException(p, "Invalid parallelism. Must be either a number or \"unlimited\"")
     }

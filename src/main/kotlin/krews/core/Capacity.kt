@@ -41,7 +41,7 @@ val Number.TB: Capacity get() = Capacity(this, CapacityType.TB)
 
 internal fun stringToCapacity(str: String): Capacity {
     val regex = """(\d+)\s*([KMGT]?B)""".toRegex()
-    val matchResult = regex.find(str.toUpperCase())
+    val matchResult = regex.find(str.uppercase())
     val (value, type) = matchResult!!.destructured
     return Capacity(value.toDouble(), CapacityType.valueOf(type))
 }
