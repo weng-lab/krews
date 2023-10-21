@@ -16,7 +16,7 @@ data class BsubTaskConfig(
     // Whether or not to request a GPU.
     val gpu: Boolean? = null,
     // Memory capacity. Can be used to override the runtime value.
-    val mem: Capacity? = null,
+    val mem: String? = null,
     // Time limit on the run time for the job in minutes.
     val time: Int? = null,
     // SBatch partition to use.
