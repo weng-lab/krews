@@ -13,12 +13,14 @@ data class BsubWorkflowConfig(
 data class BsubTaskConfig(
     // Number of cpus. Can be used to override the runtime value.
     val cpus: Int? = null,
+    // Whether or not to request a GPU.
+    val gpu: Boolean? = null,
     // Memory capacity. Can be used to override the runtime value.
     val mem: Capacity? = null,
     // Time limit on the run time for the job in minutes.
     val time: Int? = null,
     // SBatch partition to use.
     val partition: String? = null,
-    // Additional sbatch arguments
+    // Additional bsub arguments
     val sbatchArgs: Map<String, String>? = null
 )

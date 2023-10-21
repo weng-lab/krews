@@ -76,6 +76,7 @@ class BsubExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirected
         val cpus = taskConfig.bsub?.cpus ?: taskRunContexts.map { it.cpus }.maxBy { it ?: -1 }
         val timePerTask = taskConfig.bsub?.time ?: taskRunContexts.map { it.cpus }.maxBy { it ?: -1 }
         val time = if (timePerTask != null) timePerTask * taskRunContexts.size else null
+        val gpus = taskConfig.bsub?.gpu ?: "\"\""
 
         appendBsubParam(bsubScript, "J", bsubWorkflowJobName)
         appendBsubParam(bsubScript, "o", logsPath.resolve("out.txt"))
@@ -84,6 +85,7 @@ class BsubExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirected
         appendBsubParam(bsubScript, "n", cpus)
         appendBsubParam(bsubScript, "W", time)
         appendBsubParam(bsubScript, "q", taskConfig.bsub?.partition)
+        appendBsubParam(bsubScript, "gpu", gpus)
         for ((argName, argVal) in taskConfig.bsub?.sbatchArgs ?: mapOf()) {
             appendBsubParam(bsubScript, argName, argVal)
         }
