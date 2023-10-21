@@ -8,7 +8,7 @@ data class TaskConfig (
     // Task level Slurm executor configuration
     val slurm: SlurmTaskConfig? = null,
     // Task level Slurm executor configuration
-    val bsub: SlurmTaskConfig? = null,
+    val bsub: BsubTaskConfig? = null,
     // The maximum allowed parallelism for this task
     val parallelism: Parallelism = UnlimitedParallelism,
     // The number of tasks "executions" that will be run with the same job / vm.
@@ -29,7 +29,7 @@ data class WorkflowConfig (
     // Slurm executor configuration
     val slurm: SlurmWorkflowConfig? = null,
     // BSUB executor configuration
-    val bsub: SlurmWorkflowConfig? = null,
+    val bsub: BsubWorkflowConfig? = null,
     // The maximum allowed parallelism for the system as a whole. Also see per-task parallelism
     val parallelism: Parallelism = UnlimitedParallelism,
     // The concurrency for task setup, status checking, and cleanup
