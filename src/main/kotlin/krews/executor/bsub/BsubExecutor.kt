@@ -81,7 +81,7 @@ class BsubExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirected
         appendBsubParam(bsubScript, "J", bsubWorkflowJobName)
         appendBsubParam(bsubScript, "o", logsPath.resolve("out.txt"))
         appendBsubParam(bsubScript, "e", logsPath.resolve("err.txt"))
-        appendBsubParam(bsubScript, "M", mem)
+        appendBsubParam(bsubScript, "R", taskConfig.bsub?.rUsage)
         appendBsubParam(bsubScript, "n", cpus)
         appendBsubParam(bsubScript, "W", time)
         appendBsubParam(bsubScript, "q", taskConfig.bsub?.partition)

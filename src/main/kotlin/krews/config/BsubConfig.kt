@@ -22,5 +22,7 @@ data class BsubTaskConfig(
     // SBatch partition to use.
     val partition: String? = null,
     // Additional bsub arguments
-    val sbatchArgs: Map<String, String>? = null
+    val sbatchArgs: Map<String, String>? = null,
+    // Additional rusage parameters
+    val rUsage: String? = null
 )
