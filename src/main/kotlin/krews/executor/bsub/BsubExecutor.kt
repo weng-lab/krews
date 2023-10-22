@@ -236,8 +236,9 @@ class BsubExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirected
 
         val bsubCommand = "echo $bsubScriptAsBase64 | base64 --decode | bsub"
         val bsubResponse = commandExecutor.exec(bsubCommand)
-        val jobId = "\\d+\$".toRegex().find(bsubResponse)?.value
-            ?: throw Exception("JobID not found in response for bsub command")
+        val jobIdRegex = Regex("""Job <(\d+)>""")
+        val matchResult = jobIdRegex.find(bsubResponse)
+        val jobId = matchResult?.groupValues?.get(1) ?: throw Exception("JobID not found in response for bsub command")
 
         log.info { "Job ID $jobId found for bsub command" }
 
