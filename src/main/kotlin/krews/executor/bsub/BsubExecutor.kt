@@ -74,8 +74,6 @@ class BsubExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirected
 
         val mem = taskConfig.bsub?.mem ?: taskRunContexts.map { it.memory }.maxBy { it?.bytes ?: -1 }
         val cpus = taskConfig.bsub?.cpus ?: taskRunContexts.map { it.cpus }.maxBy { it ?: -1 }
-        val timePerTask = taskConfig.bsub?.time ?: taskRunContexts.map { it.cpus }.maxBy { it ?: -1 }
-        val time = if (timePerTask != null) timePerTask * taskRunContexts.size else null
         val gpus = taskConfig.bsub?.gpu ?: "\"\""
 
         appendBsubParam(bsubScript, "J", bsubWorkflowJobName)
@@ -83,7 +81,7 @@ class BsubExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirected
         appendBsubParam(bsubScript, "e", logsPath.resolve("err.txt"))
         appendBsubParam(bsubScript, "R", taskConfig.bsub?.rUsage)
         appendBsubParam(bsubScript, "n", cpus)
-        appendBsubParam(bsubScript, "W", time)
+        appendBsubParam(bsubScript, "W", taskConfig.bsub?.time)
         appendBsubParam(bsubScript, "q", taskConfig.bsub?.partition)
         appendBsubParam(bsubScript, "gpu", gpus)
         for ((argName, argVal) in taskConfig.bsub?.sbatchArgs ?: mapOf()) {
