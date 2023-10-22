@@ -18,7 +18,7 @@ data class BsubTaskConfig(
     // Memory capacity. Can be used to override the runtime value.
     val mem: String? = null,
     // Time limit on the run time for the job in minutes.
-    val time: Int? = null,
+    val time: String? = null,
     // SBatch partition to use.
     val partition: String? = null,
     // Additional bsub arguments
