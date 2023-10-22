@@ -23,7 +23,8 @@ class CommandExecutor(private val sshConfig: SshConfig? = null) {
         log.info { "Command results:\n$result" }
 
         val error = process.errorStream.reader().readText()
-        if (error.isNotBlank()) throw Exception("Encountered error during command execution: $error")
+        val exitCode = process.waitFor()
+        if (exitCode != 0) throw Exception("Encountered error during command execution: $error")
         return result
     }
 
