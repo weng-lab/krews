@@ -74,7 +74,7 @@ class BsubExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirected
 
         val mem = taskConfig.bsub?.mem ?: taskRunContexts.map { it.memory }.maxBy { it?.bytes ?: -1 }
         val cpus = taskConfig.bsub?.cpus ?: taskRunContexts.map { it.cpus }.maxBy { it ?: -1 }
-        val gpus = taskConfig.bsub?.gpu ? "\"\"" : null
+        val gpus = if (taskConfig.bsub?.gpu == true) "\"\"" else null
 
         appendBsubParam(bsubScript, "J", bsubWorkflowJobName)
         appendBsubParam(bsubScript, "o", logsPath.resolve("out.txt"))
