@@ -1,5 +1,9 @@
 package krews.config
 
+data class SingularityConfig (
+    val localImage: String? = null
+)
+
 data class TaskConfig (
     // Task level input parameters
     val params: Map<String, Any> = mapOf(),
@@ -14,7 +18,9 @@ data class TaskConfig (
     // The number of tasks "executions" that will be run with the same job / vm.
     val grouping: Int = 1,
     // Docker image; defaults to one provided by task
-    val dockerImage: String? = null
+    val dockerImage: String? = null,
+    // optional Singularity config
+    val singularity: SingularityConfig? = null
 )
 
 data class WorkflowConfig (

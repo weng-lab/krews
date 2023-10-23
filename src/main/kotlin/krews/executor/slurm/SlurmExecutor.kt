@@ -195,9 +195,11 @@ class SlurmExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirecte
             sbatchScript.append("export SINGULARITY_BIND=\"$binds\"\n")
 
             // Add running the task to script
+            val trueImage = taskConfig.singularity?.localImage ?: taskRunContext.dockerImage
+            val remoteImage = !trueImage.endsWith(".sif")
             sbatchScript.append("\n")
             sbatchScript.append("# Run task command.\n")
-            sbatchScript.append("singularity exec --containall docker://${taskRunContext.dockerImage} $containerCommand")
+            sbatchScript.append("singularity exec --containall ${if (remoteImage) "docker://" else ""}${trueImage} $containerCommand")
             sbatchScript.append("\n")
 
             // Add copying output files into output dir to script

@@ -191,10 +191,11 @@ class BsubExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirected
             bsubScript.append("export SINGULARITY_BIND=\"$binds\"\n")
 
             // Add running the task to script
-            val remoteImage = !taskRunContext.dockerImage.endsWith(".sif")
+            val trueImage = taskConfig.singularity?.localImage ?: taskRunContext.dockerImage
+            val remoteImage = !trueImage.endsWith(".sif")
             bsubScript.append("\n")
             bsubScript.append("# Run task command.\n")
-            bsubScript.append("singularity exec --containall ${if (remoteImage) "docker://" else ""}${taskRunContext.dockerImage} $containerCommand")
+            bsubScript.append("singularity exec --containall ${if (remoteImage) "docker://" else ""}${trueImage} $containerCommand")
             bsubScript.append("\n")
 
             // Add copying output files into output dir to script
