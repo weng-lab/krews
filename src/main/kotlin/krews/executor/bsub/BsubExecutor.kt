@@ -319,6 +319,7 @@ enum class BsubJobState(val category: BsubJobStateCategory) {
     EXIT(BsubJobStateCategory.FAILED),
     DONE(BsubJobStateCategory.SUCCEEDED),
     PEND(BsubJobStateCategory.INCOMPLETE),
+    RUN(BsubJobStateCategory.INCOMPLETE),
     PSUSP(BsubJobStateCategory.INCOMPLETE),
     USUSP(BsubJobStateCategory.INCOMPLETE),
     SSUSP(BsubJobStateCategory.INCOMPLETE),
