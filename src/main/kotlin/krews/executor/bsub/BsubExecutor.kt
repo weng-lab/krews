@@ -195,7 +195,7 @@ class BsubExecutor(private val workflowConfig: WorkflowConfig) : LocallyDirected
             val remoteImage = !trueImage.endsWith(".sif")
             bsubScript.append("\n")
             bsubScript.append("# Run task command.\n")
-            bsubScript.append("singularity exec --containall ${if (remoteImage) "docker://" else ""}${trueImage} $containerCommand")
+            bsubScript.append("singularity exec ${if (taskConfig.bsub?.gpu == true) "--nv" else ""} --containall ${if (remoteImage) "docker://" else ""}$trueImage $containerCommand")
             bsubScript.append("\n")
 
             // Add copying output files into output dir to script
