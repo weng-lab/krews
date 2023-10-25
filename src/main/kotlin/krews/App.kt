@@ -3,6 +3,7 @@ package krews
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.types.choice
+import com.github.ajalt.clikt.parameters.types.int
 import com.typesafe.config.ConfigFactory
 import krews.config.*
 import krews.core.*
@@ -41,6 +42,8 @@ class KrewsApp(private val workflowBuilder: WorkflowBuilder) : CliktCommand() {
         .convert { Paths.get(it) }
     private val config by option("-c", "--config")
         .convert { Paths.get(it) }
+    private val httpPort by option("-p", "--http-port", help = "optional port on which to serve status reports")
+        .int()
 
     override fun run() {
         if (config != null && !Files.exists(config)) throw Exception("Given config $config not found")
@@ -63,7 +66,7 @@ class KrewsApp(private val workflowBuilder: WorkflowBuilder) : CliktCommand() {
 
             val runTimestampOverride = System.getenv(WORKFLOW_RUN_TIMESTAMP_ENV_VAR)?.toLong()
             val taskConfigs = createTaskConfigs(hoconConfig, workflow)
-            val runner = WorkflowRunner(workflow, workflowConfig, taskConfigs, executor, runTimestampOverride)
+            val runner = WorkflowRunner(workflow, workflowConfig, taskConfigs, executor, runTimestampOverride, httpPort)
 
             // Add shutdown hook to stop all running tasks and other cleanup work if master is stopped.
             Runtime.getRuntime().addShutdownHook(Thread {

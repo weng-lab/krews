@@ -13,7 +13,7 @@ plugins {
 }
 
 group = "io.krews"
-version = "0.15.2"
+version = "0.16.0"
 
 repositories {
     maven { setUrl("https://dl.bintray.com/kotlin/kotlin-eap") }
@@ -47,6 +47,9 @@ dependencies {
     testImplementation("org.junit.jupiter", "junit-jupiter", "5.4.0")
     testImplementation("org.assertj", "assertj-core", "3.11.1")
     testImplementation("io.mockk", "mockk", "1.9.3")
+    implementation("io.ktor", "ktor-server-netty", "1.6.2")
+    implementation("io.ktor", "ktor-server-core", "1.6.2")
+    implementation("io.ktor", "ktor-html-builder", "1.6.2")
 }
 
 tasks.withType<Test> {

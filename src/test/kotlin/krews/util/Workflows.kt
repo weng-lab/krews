@@ -111,7 +111,7 @@ fun gsFilesWorkflow() = workflow("gs-files-workflow") {
             """
     }
 
-    val gpus = task<File, OutputFile>("gpus", inputFiles) {
+    task<File, OutputFile>("gpus", inputFiles) {
         dockerImage = "nvidia/cuda:12.1.0-devel-ubuntu18.04"
         output = OutputFile("nvidia-smi/${input.filenameNoExt()}.nvidia-smi-output.txt")
         command = 

@@ -16,7 +16,12 @@ import java.nio.file.*
 import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
-
+import io.ktor.application.*
+import io.ktor.features.ContentNegotiation
+import io.ktor.http.content.*
+import io.ktor.routing.*
+import io.ktor.server.engine.embeddedServer
+import io.ktor.server.netty.Netty
 
 private val log = KotlinLogging.logger {}
 
@@ -25,7 +30,8 @@ class WorkflowRunner(
     private val workflowConfig: WorkflowConfig,
     private val taskConfigs: Map<String, TaskConfig>,
     private val executor: LocallyDirectedExecutor,
-    runTimestampOverride: Long? = null
+    runTimestampOverride: Long? = null,
+    private val httpPort: Int? = null
 ) {
     private val runRepo: RunRepo
     private val runDb: Database
@@ -46,6 +52,8 @@ class WorkflowRunner(
         runRepo = RunRepo(runDb)
         val reportThreadFactory = BasicThreadFactory.Builder().namingPattern("report-gen-%d").build()
         reportPool = Executors.newSingleThreadScheduledExecutor(reportThreadFactory)
+
+        if (httpPort != null) runHTTPServer(httpPort)
     }
 
     fun run() {
@@ -69,6 +77,16 @@ class WorkflowRunner(
 
         runRepo.completeWorkflowRun(workflowRun, workflowRunSuccessful)
         onShutdown()
+    }
+
+    private fun runHTTPServer(port: Int = 8080) {
+        embeddedServer(Netty, port) {
+            routing {
+                static("/") {
+                    files("$RUN_DIR/${workflowRun.startTime}")
+                }
+            }
+        }.start(wait = true)
     }
 
     private fun runWorkflow(): Boolean {
