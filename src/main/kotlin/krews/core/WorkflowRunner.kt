@@ -52,8 +52,6 @@ class WorkflowRunner(
         runRepo = RunRepo(runDb)
         val reportThreadFactory = BasicThreadFactory.Builder().namingPattern("report-gen-%d").build()
         reportPool = Executors.newSingleThreadScheduledExecutor(reportThreadFactory)
-
-        if (httpPort != null) runHTTPServer(httpPort)
     }
 
     fun run() {
@@ -73,6 +71,7 @@ class WorkflowRunner(
             }
         }, reportGenerationDelay, reportGenerationDelay, TimeUnit.SECONDS)
 
+        if (httpPort != null) runHTTPServer(httpPort)
         val workflowRunSuccessful = runWorkflow()
 
         runRepo.completeWorkflowRun(workflowRun, workflowRunSuccessful)
